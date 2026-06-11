@@ -1,0 +1,31 @@
+{
+  "short_name": "SL TI",
+  "name": "SL Grupo - Sistema de Controle de TI",
+  "description": "Sistema de Controle de TI - SL Grupo",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#F0A500",
+  "background_color": "#2D2D2D",
+  "categories": ["business", "productivity"],
+  "lang": "pt-BR"
+}
