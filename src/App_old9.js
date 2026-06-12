@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const API_URL = "http://localhost:3001";
+const API_URL = "https://sl-ti-api.onrender.com";
 
 // ── Responsive hook ──────────────────────────────────────────
 function useIsMobile(){ 
@@ -1106,18 +1106,11 @@ function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
 const screenTitles={home:"Início",s1:"Cadastros › Perfis",s2:"Cadastros › Usuários",s3:"Cadastros › Empresas",s4:"Cadastros › Equipes",s5:"Movimentações › Sobreaviso/Extra",s6:"Relatórios › Relatório de Horas",s7:"Movimentações › Extra"};
 
 export default function App(){
-  const[user,setUser]=useState(null);
-  const[screen,setScreen]=useState("home");
-  const isMobile=useIsMobile();
-  const[sidebarOpen,setSidebarOpen]=useState(false);
-
+  const[user,setUser]=useState(null);const[screen,setScreen]=useState("home");
   useEffect(()=>{const saved=localStorage.getItem("sl_session");if(saved){try{const{user,token}=JSON.parse(saved);api.setToken(token);setUser(user);}catch{localStorage.removeItem("sl_session");}}},[]);
-
   const handleLogin=(user,token)=>{localStorage.setItem("sl_session",JSON.stringify({user,token}));setUser(user);setScreen("home");};
   const handleLogout=()=>{localStorage.removeItem("sl_session");api.setToken(null);setUser(null);};
-
   if(!user)return<Login onLogin={handleLogin}/>;
-
   const screenMap={
     home:<HomeScreen user={user} navigate={setScreen}/>,
     s1:<ProfilesScreen user={user}/>,s2:<UsersScreen user={user}/>,
@@ -1125,6 +1118,8 @@ export default function App(){
     s4:<SimpleListScreen user={user} screenId="s4" title="Equipes"  icon="👷" apiPath="/teams"/>,
     s5:<ControleHorasScreen user={user}/>,s6:<RelatorioHorasScreen user={user}/>,s7:<ExtraAvulsoScreen user={user}/>,
   };
+  const isMobile=useIsMobile();
+  const[sidebarOpen,setSidebarOpen]=useState(false);
 
   return(
     <div style={S.layout}>
