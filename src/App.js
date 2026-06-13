@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 const API_URL = process.env.REACT_APP_API_URL || "https://sl-ti-api.onrender.com";
 
@@ -1337,6 +1340,7 @@ function RelatorioKmScreen({user}){
   };
 
   const fmtMoney=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+  const fmtNum=v=>Number(v||0).toLocaleString("pt-BR");
 
   // Group by user
   const groups=rows.reduce((acc,r)=>{
@@ -1347,10 +1351,36 @@ function RelatorioKmScreen({user}){
   },{});
   const grandTotal=rows.reduce((s,r)=>s+parseFloat(r.valorTotalKm||0),0);
 
+  const exportKmPDF=()=>{
+    const doc=new jsPDF({orientation:"landscape"});
+    doc.setFontSize(14);doc.text("Controle de Km",14,14);
+    const body=[];
+    Object.values(groups).forEach(g=>{
+      body.push([{content:`Usuário: ${g.userName}`,colSpan:5,styles:{fillColor:[240,165,0],textColor:[255,255,255],fontStyle:"bold",fontSize:10}}]);
+      g.rows.forEach(r=>body.push([r.vehicleTypeName,fmtNum(r.totalKm),fmtMoney(r.valorKm),fmtMoney(r.valorTotalKm),r.justificativa||"—"]));
+      body.push([{content:`Total ${g.userName}`,colSpan:3,styles:{fillColor:[255,248,225],fontStyle:"bold"}},{content:fmtMoney(g.totalValorTotal),styles:{fillColor:[255,248,225],fontStyle:"bold",halign:"right"}},{content:"",styles:{fillColor:[255,248,225]}}]);
+    });
+    body.push([{content:"TOTAL GERAL",colSpan:3,styles:{fillColor:[45,45,45],textColor:[255,255,255],fontStyle:"bold"}},{content:fmtMoney(grandTotal),styles:{fillColor:[240,165,0],fontStyle:"bold",halign:"right"}},{content:"",styles:{fillColor:[45,45,45]}}]);
+    autoTable(doc,{startY:20,head:[["Tipo Veículo","Total km","Valor km","Valor Total km","Justificativa"]],body,styles:{fontSize:9},headStyles:{fillColor:[97,97,97]}});
+    doc.save("controle-km.pdf");
+  };
+
+  const exportKmExcel=()=>{
+    const ws=[["Usuário","Tipo Veículo","Total km","Valor km","Valor Total km","Justificativa"]];
+    Object.values(groups).forEach(g=>{
+      g.rows.forEach(r=>ws.push([g.userName,r.vehicleTypeName,Number(r.totalKm),Number(r.valorKm),Number(r.valorTotalKm),r.justificativa||""]));
+      ws.push([`TOTAL ${g.userName}`,"","","",Number(g.totalValorTotal),""]);
+    });
+    ws.push(["TOTAL GERAL","","","",Number(grandTotal),""]);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ws),"Controle de Km");
+    XLSX.writeFile(wb,"controle-km.xlsx");
+  };
+
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   return(
     <div style={S.card}>
-      <div style={S.cardHeader}><span style={S.cardTitle}>📊 Controle de Kilometragem</span></div>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📊 Controle de Km</span></div>
       {/* Filtros */}
       <div style={{background:C.bg,borderRadius:8,padding:16,marginBottom:20,border:`1px solid ${C.border}`}}>
         <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,letterSpacing:.5}}>FILTROS</div>
@@ -1404,6 +1434,10 @@ function RelatorioKmScreen({user}){
           <div style={{background:C.dark,color:C.white,padding:"12px 16px",borderRadius:6,display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:14,fontWeight:700}}>
             <span>TOTAL GERAL</span>
             <span style={{color:C.primary,fontSize:16}}>{fmtMoney(grandTotal)}</span>
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"flex-end"}}>
+            <button style={{...S.btnCancel,display:"flex",alignItems:"center",gap:6}} onClick={exportKmPDF}>📄 Baixar PDF</button>
+            <button style={{...S.btnAdd,display:"flex",alignItems:"center",gap:6,background:"#1D6F42"}} onClick={exportKmExcel}>📊 Baixar Excel</button>
           </div>
         </div>
       )}
@@ -1659,6 +1693,27 @@ function RelatorioContratosScreen({user}){
 
   const fmtMoney=v=>v?Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}):"—";
 
+  const exportContratosPDF=()=>{
+    const doc=new jsPDF({orientation:"landscape"});
+    doc.setFontSize(14);doc.text("Relatório de Contratos",14,14);
+    autoTable(doc,{
+      startY:20,
+      head:[["Fornecedor","Nº Contrato","Data Início","Data Término","Frequência","Status","Valor","Valor Atual","Observação"]],
+      body:rows.map(r=>[r.supplierName,r.contractNumber||"—",r.dataInicio||"—",r.dataFim||"—",r.frequencia||"—",r.status,fmtMoney(r.valor),fmtMoney(r.valorAtual),r.observacao||"—"]),
+      styles:{fontSize:8},headStyles:{fillColor:[97,97,97]},
+      columnStyles:{8:{cellWidth:50}},
+    });
+    doc.save("relatorio-contratos.pdf");
+  };
+
+  const exportContratosExcel=()=>{
+    const ws=[["Fornecedor","Nº Contrato","Data Início","Data Término","Frequência","Status","Valor","Valor Atual","Observação"]];
+    rows.forEach(r=>ws.push([r.supplierName,r.contractNumber||"",r.dataInicio||"",r.dataFim||"",r.frequencia||"",r.status,Number(r.valor)||"",Number(r.valorAtual)||"",r.observacao||""]));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ws),"Contratos");
+    XLSX.writeFile(wb,"relatorio-contratos.xlsx");
+  };
+
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   return(
     <div style={S.card}>
@@ -1699,6 +1754,12 @@ function RelatorioContratosScreen({user}){
             <td style={S.td}><span style={{fontSize:12,color:C.textLight,whiteSpace:"pre-wrap"}}>{r.observacao||"—"}</span></td>
           </tr>
         );})}</tbody></table>
+        </div>
+      )}
+      {rows.length>0&&(
+        <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"flex-end"}}>
+          <button style={{...S.btnCancel,display:"flex",alignItems:"center",gap:6}} onClick={exportContratosPDF}>📄 Baixar PDF</button>
+          <button style={{...S.btnAdd,display:"flex",alignItems:"center",gap:6,background:"#1D6F42"}} onClick={exportContratosExcel}>📊 Baixar Excel</button>
         </div>
       )}
     </div>
@@ -1770,12 +1831,12 @@ const navConfig=[
   {id:"movimentacoes",label:"Movimentações",icon:"🔄",children:[
     {id:"s5", label:"Sobreaviso/Extra",         icon:"⏱️"},
     {id:"s7", label:"Extra Avulso",             icon:"⚡"},
-    {id:"s10",label:"Registro de Kilometragem", icon:"🛣️"},
+    {id:"s10",label:"Registro de Km", icon:"🛣️"},
     {id:"s13",label:"Contratos",                icon:"📄"},
   ]},
   {id:"relatorios",label:"Relatórios",icon:"📊",children:[
     {id:"s6", label:"Relatório de Horas",        icon:"📋"},
-    {id:"s11",label:"Controle de Kilometragem",  icon:"📊"},
+    {id:"s11",label:"Controle de Km", icon:"📊"},
     {id:"s14",label:"Relatório de Contratos",    icon:"📑"},
   ]},
 ];
@@ -1837,7 +1898,7 @@ const screenTitles={
   s1:"Cadastros › Perfis",s2:"Cadastros › Usuários",s3:"Cadastros › Empresas",s4:"Cadastros › Equipes",
   s5:"Movimentações › Sobreaviso/Extra",s6:"Relatórios › Relatório de Horas",s7:"Movimentações › Extra Avulso",
   s8:"Cadastros › Tipo de Veículo",s9:"Cadastros › Valor do km",
-  s10:"Movimentações › Registro de Kilometragem",s11:"Relatórios › Controle de Kilometragem",
+  s10:"Movimentações › Registro de Km",s11:"Relatórios › Controle de Km",
   s12:"Cadastros › Fornecedores",s13:"Movimentações › Contratos",s14:"Relatórios › Relatório de Contratos",
 };
 
