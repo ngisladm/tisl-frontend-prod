@@ -1108,7 +1108,7 @@ function RegistroKmScreen({user}){
   const[vehicleTypes,setVehicleTypes]=useState([]);
   const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
-  const emptyForm={id:null,data:"",companyId:"",teamId:"",userId:"",vehicleTypeId:"",kmInicial:"",kmFinal:"",totalKm:0,valorKm:0,valorTotalKm:0,justificativa:""};
+  const emptyForm={id:null,data:"",companyId:"",teamId:"",userId:"",vehicleTypeId:"",totalKm:"",valorKm:0,valorTotalKm:0,justificativa:""};
   const[form,setForm]=useState(emptyForm);
   const p=user.permissions?.s10;
 
@@ -1124,37 +1124,32 @@ function RegistroKmScreen({user}){
     api.get(`/teams/${form.teamId}/users`).then(setTeamUsers).catch(()=>{});
   },[form.teamId]);
 
-  // Auto-fetch valor_km when vehicle type or date changes
   useEffect(()=>{
     if(!form.vehicleTypeId||!form.data)return;
     api.get(`/km-values/lookup?vehicleTypeId=${form.vehicleTypeId}&date=${encodeURIComponent(form.data)}`)
       .then(r=>{
         const vk=parseFloat(r.valorKm)||0;
-        const ki=parseFloat(form.kmInicial)||0;
-        const kf=parseFloat(form.kmFinal)||0;
-        const tk=ki+kf;
-        setForm(f=>({...f,valorKm:vk,totalKm:tk,valorTotalKm:parseFloat((tk*vk).toFixed(2))}));
+        const tk=parseFloat(form.totalKm)||0;
+        setForm(f=>({...f,valorKm:vk,valorTotalKm:parseFloat((tk*vk).toFixed(2))}));
       }).catch(()=>{});
   },[form.vehicleTypeId,form.data]);
 
-  const handleKmChange=(field,val)=>{
+  const handleTotalKmChange=val=>{
     setForm(f=>{
-      const ki=field==="kmInicial"?parseFloat(val)||0:parseFloat(f.kmInicial)||0;
-      const kf=field==="kmFinal"  ?parseFloat(val)||0:parseFloat(f.kmFinal)  ||0;
-      const tk=ki+kf;
+      const tk=parseFloat(val)||0;
       const vk=parseFloat(f.valorKm)||0;
-      return {...f,[field]:val,totalKm:tk,valorTotalKm:parseFloat((tk*vk).toFixed(2))};
+      return{...f,totalKm:val,valorTotalKm:parseFloat((tk*vk).toFixed(2))};
     });
   };
 
   const openAdd=()=>{
-    const u=user.isMaster?"":(user.id||"");
-    setForm({...emptyForm,userId:u,companyId:user.companyId||"",teamId:user.teamId||""});
+    const uid=user.isMaster?"":(user.id||"");
+    setForm({...emptyForm,userId:uid,companyId:user.companyId||"",teamId:user.teamId||""});
     setModal(true);
   };
-  const openEdit=it=>{setForm({...it,kmInicial:String(it.kmInicial),kmFinal:String(it.kmFinal)});setModal(true);};
+  const openEdit=it=>{setForm({...it,totalKm:String(it.totalKm)});setModal(true);};
   const save=async()=>{
-    if(!form.data||!form.companyId||!form.teamId||!form.userId||!form.vehicleTypeId||form.kmInicial===""||form.kmFinal==="")
+    if(!form.data||!form.companyId||!form.teamId||!form.userId||!form.vehicleTypeId||form.totalKm==="")
       return alert("Preencha todos os campos obrigatórios.");
     setSaving(true);
     try{
@@ -1175,7 +1170,7 @@ function RegistroKmScreen({user}){
       {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🛣️</span>Nenhum registro.</div>:(
         <div style={{overflowX:"auto"}}>
         <table style={S.table}><thead><tr>
-          {["Data","Usuário","Equipe","Tipo Veículo","Km Inicial","Km Final","Total km","Valor km","Valor Total","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          {["Data","Usuário","Equipe","Tipo Veículo","Total km","Valor km","Valor Total","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
         <tbody>{items.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
@@ -1183,8 +1178,6 @@ function RegistroKmScreen({user}){
             <td style={S.td}>{it.userName}</td>
             <td style={S.td}>{it.teamName}</td>
             <td style={S.td}>{it.vehicleTypeName}</td>
-            <td style={{...S.td,textAlign:"right"}}>{Number(it.kmInicial).toLocaleString("pt-BR")}</td>
-            <td style={{...S.td,textAlign:"right"}}>{Number(it.kmFinal).toLocaleString("pt-BR")}</td>
             <td style={{...S.td,textAlign:"right",fontWeight:700}}>{Number(it.totalKm).toLocaleString("pt-BR")}</td>
             <td style={{...S.td,textAlign:"right"}}>{fmtMoney(it.valorKm)}</td>
             <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.success}}>{fmtMoney(it.valorTotalKm)}</td>
@@ -1203,19 +1196,12 @@ function RegistroKmScreen({user}){
             <SelectField label="Empresa" value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))} required/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-            <SelectField label="Equipe" value={form.teamId} onChange={v=>setForm(f=>({...f,teamId:v,userId:""}))} options={teams.map(t=>({value:t.id,label:t.name}))} required/>
-            <SelectField label="Usuário" value={form.userId} onChange={v=>setForm(f=>({...f,userId:v}))} options={teamUsers.map(u=>({value:u.id,label:u.name}))} required/>
+            <SelectField label="Equipe"   value={form.teamId}  onChange={v=>setForm(f=>({...f,teamId:v,userId:""}))} options={teams.map(t=>({value:t.id,label:t.name}))} required/>
+            <SelectField label="Usuário"  value={form.userId}  onChange={v=>setForm(f=>({...f,userId:v}))}           options={teamUsers.map(u=>({value:u.id,label:u.name}))} required/>
           </div>
           <SelectField label="Tipo de Veículo" value={form.vehicleTypeId} onChange={v=>setForm(f=>({...f,vehicleTypeId:v}))} options={vehicleTypes.map(vt=>({value:vt.id,label:vt.name}))} required/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
-            <Input label="Km Inicial" type="number" value={String(form.kmInicial)} onChange={v=>handleKmChange("kmInicial",v)} required/>
-            <Input label="Km Final"   type="number" value={String(form.kmFinal)}   onChange={v=>handleKmChange("kmFinal",v)}   required/>
-            <div style={S.formRow}>
-              <label style={S.label}>Total km</label>
-              <input value={Number(form.totalKm).toLocaleString("pt-BR")} disabled style={{...S.input,background:"#f9f9f9",fontWeight:700}}/>
-            </div>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <Input label="Total km *" type="number" value={String(form.totalKm)} onChange={handleTotalKmChange} placeholder="0" required/>
             <div style={S.formRow}>
               <label style={S.label}>Valor km (automático)</label>
               <input value={Number(form.valorKm).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} disabled style={{...S.input,background:"#f9f9f9"}}/>
@@ -1304,14 +1290,12 @@ function RelatorioKmScreen({user}){
               </div>
               <div style={{overflowX:"auto"}}>
               <table style={S.table}><thead><tr>
-                {["Tipo Veículo","Km Inicial","Km Final","Total km","Valor km","Valor Total km","Justificativa"].map(h=><th key={h} style={S.th}>{h}</th>)}
+                {["Tipo Veículo","Total km","Valor km","Valor Total km","Justificativa"].map(h=><th key={h} style={S.th}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {g.rows.map((r,i)=>(
                   <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                     <td style={S.td}>{r.vehicleTypeName}</td>
-                    <td style={{...S.td,textAlign:"right"}}>{Number(r.kmInicial).toLocaleString("pt-BR")}</td>
-                    <td style={{...S.td,textAlign:"right"}}>{Number(r.kmFinal).toLocaleString("pt-BR")}</td>
                     <td style={{...S.td,textAlign:"right",fontWeight:700}}>{Number(r.totalKm).toLocaleString("pt-BR")}</td>
                     <td style={{...S.td,textAlign:"right"}}>{fmtMoney(r.valorKm)}</td>
                     <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.success}}>{fmtMoney(r.valorTotalKm)}</td>
@@ -1319,7 +1303,7 @@ function RelatorioKmScreen({user}){
                   </tr>
                 ))}
                 <tr style={{background:"#FFF8E1"}}>
-                  <td colSpan={5} style={{...S.td,fontWeight:700,color:C.accent}}>TOTAL {g.userName.toUpperCase()}</td>
+                  <td colSpan={3} style={{...S.td,fontWeight:700,color:C.accent}}>TOTAL {g.userName.toUpperCase()}</td>
                   <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.primary}}>{fmtMoney(g.totalValorTotal)}</td>
                   <td style={S.td}/>
                 </tr>
@@ -1411,7 +1395,14 @@ function ContratosScreen({user}){
   const[suppliers,setSuppliers]=useState([]);
   const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
-  const emptyForm={id:null,companyId:"",supplierId:"",contractNumber:"",dataInicio:"",dataFim:"",valor:"",valorAtual:"",observacao:"",attachments:[]};
+  const emptyForm={id:null,companyId:"",supplierId:"",contractNumber:"",dataInicio:"",dataFim:"",valor:"",valorAtual:"",observacao:"",attachments:[],frequencia:""};
+  const getStatus=dataFim=>{
+    if(!dataFim)return"Ativo";
+    const[d,m,y]=dataFim.split("/");
+    const fim=new Date(`${y}-${m}-${d}`);
+    const hoje=new Date();hoje.setHours(0,0,0,0);
+    return fim<=hoje?"Inativo":"Ativo";
+  };
   const[form,setForm]=useState(emptyForm);
   const p=user.permissions?.s13;
 
@@ -1423,7 +1414,7 @@ function ContratosScreen({user}){
   },[]);
 
   const openAdd=()=>{setForm(emptyForm);setModal(true);};
-  const openEdit=it=>{setForm({...it,valor:it.valor?String(it.valor):"",valorAtual:it.valorAtual?String(it.valorAtual):"",attachments:it.attachments||[]});setModal(true);};
+  const openEdit=it=>{setForm({...it,valor:it.valor?String(it.valor):"",valorAtual:it.valorAtual?String(it.valorAtual):"",attachments:it.attachments||[],frequencia:it.frequencia||""});setModal(true);};
 
   const handleFile=e=>{
     const files=Array.from(e.target.files);
@@ -1464,15 +1455,17 @@ function ContratosScreen({user}){
       {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📄</span>Nenhum contrato.</div>:(
         <div style={{overflowX:"auto"}}>
         <table style={S.table}><thead><tr>
-          {["Empresa","Fornecedor","Nº Contrato","Data Início","Data Término","Valor","Valor Atual","Anexos","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          {["Empresa","Fornecedor","Nº Contrato","Data Início","Data Término","Frequência","Status","Valor","Valor Atual","Anexos","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
-        <tbody>{items.map(it=>(
+        <tbody>{items.map(it=>{const st=getStatus(it.dataFim);return(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}>{it.companyName}</td>
             <td style={S.td}><strong>{it.supplierName}</strong></td>
             <td style={S.td}>{it.contractNumber||"—"}</td>
             <td style={S.td}>{it.dataInicio||"—"}</td>
             <td style={S.td}>{it.dataFim||"—"}</td>
+            <td style={S.td}>{it.frequencia||"—"}</td>
+            <td style={S.td}><span style={{...S.badge,...(st==="Ativo"?S.badgeActive:S.badgeInactive)}}>{st}</span></td>
             <td style={{...S.td,textAlign:"right"}}>{fmtMoney(it.valor)}</td>
             <td style={{...S.td,textAlign:"right"}}>{fmtMoney(it.valorAtual)}</td>
             <td style={S.td}>
@@ -1485,7 +1478,7 @@ function ContratosScreen({user}){
               {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
             </td>
           </tr>
-        ))}</tbody></table>
+        );}}</tbody></table>
         </div>
       )}
       {modal&&(
@@ -1496,13 +1489,23 @@ function ContratosScreen({user}){
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
             <Input label="Número do Contrato" value={form.contractNumber} onChange={v=>setForm(f=>({...f,contractNumber:v}))}/>
-            <Input label="Data Início (dd/mm/aaaa)"    value={form.dataInicio} onChange={v=>setForm(f=>({...f,dataInicio:v}))} placeholder="01/01/2025"/>
-            <Input label="Data Término (dd/mm/aaaa)"   value={form.dataFim}    onChange={v=>setForm(f=>({...f,dataFim:v}))}    placeholder="31/12/2025"/>
+            <Input label="Data Início (dd/mm/aaaa)"  value={form.dataInicio} onChange={v=>setForm(f=>({...f,dataInicio:v}))} placeholder="01/01/2025"/>
+            <Input label="Data Término (dd/mm/aaaa)" value={form.dataFim}    onChange={v=>setForm(f=>({...f,dataFim:v}))}    placeholder="31/12/2025"/>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-            <Input label="Valor (R$)"        type="number" value={form.valor}      onChange={v=>setForm(f=>({...f,valor:v}))}      placeholder="0.00"/>
-            <Input label="Valor Atual (R$)"  type="number" value={form.valorAtual} onChange={v=>setForm(f=>({...f,valorAtual:v}))} placeholder="0.00"/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
+            <Input label="Valor (R$)"       type="number" value={form.valor}      onChange={v=>setForm(f=>({...f,valor:v}))}      placeholder="0.00"/>
+            <Input label="Valor Atual (R$)" type="number" value={form.valorAtual} onChange={v=>setForm(f=>({...f,valorAtual:v}))} placeholder="0.00"/>
+            <SelectField label="Frequência" value={form.frequencia} onChange={v=>setForm(f=>({...f,frequencia:v}))}
+              options={["Mensal","Trimestral","Semestral","Anual"].map(o=>({value:o,label:o}))}/>
           </div>
+          {form.dataFim&&(
+            <div style={{...S.formRow,display:"flex",alignItems:"center",gap:10,background:getStatus(form.dataFim)==="Ativo"?"#D5F5E3":"#FDECEA",borderRadius:8,padding:"10px 14px"}}>
+              <span style={{fontWeight:700,fontSize:13,color:getStatus(form.dataFim)==="Ativo"?"#1E8449":C.danger}}>
+                Status: {getStatus(form.dataFim)}
+              </span>
+              <span style={{fontSize:12,color:C.textLight}}>(calculado automaticamente pela Data de Término)</span>
+            </div>
+          )}
           <div style={S.formRow}>
             <label style={S.label}>Observação</label>
             <textarea value={form.observacao||""} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))} rows={4}
@@ -1547,7 +1550,7 @@ function ContratosScreen({user}){
 function RelatorioContratosScreen({user}){
   const[rows,setRows]=useState([]);const[loading,setLoading]=useState(false);
   const[companies,setCompanies]=useState([]);const[suppliers,setSuppliers]=useState([]);
-  const[filters,setFilters]=useState({companyId:"",supplierId:"",contractNumber:"",dateFrom:"",dateTo:""});
+  const[filters,setFilters]=useState({companyId:"",supplierId:"",contractNumber:"",dateFrom:"",dateTo:"",status:"",frequencia:""});
   const p=user.permissions?.s14;
 
   useEffect(()=>{
@@ -1573,33 +1576,39 @@ function RelatorioContratosScreen({user}){
       <div style={{background:C.bg,borderRadius:8,padding:16,marginBottom:20,border:`1px solid ${C.border}`}}>
         <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,letterSpacing:.5}}>FILTROS</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12}}>
-          <SelectField label="Empresa"       value={filters.companyId}      onChange={v=>setFilters(f=>({...f,companyId:v}))}      options={companies.map(c=>({value:c.id,label:c.name}))}/>
-          <SelectField label="Fornecedor"    value={filters.supplierId}     onChange={v=>setFilters(f=>({...f,supplierId:v}))}     options={suppliers.map(s=>({value:s.id,label:s.name}))}/>
-          <Input label="Nº Contrato"         value={filters.contractNumber} onChange={v=>setFilters(f=>({...f,contractNumber:v}))} placeholder="Buscar..."/>
-          <Input label="Data Início De (dd/mm/aaaa)" value={filters.dateFrom} onChange={v=>setFilters(f=>({...f,dateFrom:v}))} placeholder="01/01/2025"/>
-          <Input label="Data Término Até (dd/mm/aaaa)" value={filters.dateTo} onChange={v=>setFilters(f=>({...f,dateTo:v}))}   placeholder="31/12/2025"/>
+          <SelectField label="Empresa"    value={filters.companyId}      onChange={v=>setFilters(f=>({...f,companyId:v}))}      options={companies.map(c=>({value:c.id,label:c.name}))}/>
+          <SelectField label="Fornecedor" value={filters.supplierId}     onChange={v=>setFilters(f=>({...f,supplierId:v}))}     options={suppliers.map(s=>({value:s.id,label:s.name}))}/>
+          <Input label="Nº Contrato"      value={filters.contractNumber} onChange={v=>setFilters(f=>({...f,contractNumber:v}))} placeholder="Buscar..."/>
+          <Input label="Data Início De (dd/mm/aaaa)"    value={filters.dateFrom}   onChange={v=>setFilters(f=>({...f,dateFrom:v}))}   placeholder="01/01/2025"/>
+          <Input label="Data Término Até (dd/mm/aaaa)"  value={filters.dateTo}     onChange={v=>setFilters(f=>({...f,dateTo:v}))}     placeholder="31/12/2025"/>
+          <SelectField label="Status"     value={filters.status}         onChange={v=>setFilters(f=>({...f,status:v}))}
+            options={["Ativo","Inativo"].map(o=>({value:o,label:o}))}/>
+          <SelectField label="Frequência" value={filters.frequencia}     onChange={v=>setFilters(f=>({...f,frequencia:v}))}
+            options={["Mensal","Trimestral","Semestral","Anual"].map(o=>({value:o,label:o}))}/>
         </div>
         <div style={{marginTop:12,display:"flex",gap:10}}>
           <button style={S.btnAdd} onClick={search}>🔍 Pesquisar</button>
-          <button style={S.btnCancel} onClick={()=>{setFilters({companyId:"",supplierId:"",contractNumber:"",dateFrom:"",dateTo:""});setRows([]);}}>Limpar</button>
+          <button style={S.btnCancel} onClick={()=>{setFilters({companyId:"",supplierId:"",contractNumber:"",dateFrom:"",dateTo:"",status:"",frequencia:""});setRows([]);}}>Limpar</button>
         </div>
       </div>
       {loading?<Spinner/>:rows.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📑</span>Nenhum resultado.</div>:(
         <div style={{overflowX:"auto"}}>
         <table style={S.table}><thead><tr>
-          {["Fornecedor","Nº Contrato","Data Início","Data Término","Valor","Valor Atual","Observação"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          {["Fornecedor","Nº Contrato","Data Início","Data Término","Frequência","Status","Valor","Valor Atual","Observação"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
-        <tbody>{rows.map(r=>(
+        <tbody>{rows.map(r=>{const st=r.status;return(
           <tr key={r.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}><strong>{r.supplierName}</strong></td>
             <td style={S.td}>{r.contractNumber||"—"}</td>
             <td style={S.td}>{r.dataInicio||"—"}</td>
             <td style={S.td}>{r.dataFim||"—"}</td>
+            <td style={S.td}>{r.frequencia||"—"}</td>
+            <td style={S.td}><span style={{...S.badge,...(st==="Ativo"?S.badgeActive:S.badgeInactive)}}>{st}</span></td>
             <td style={{...S.td,textAlign:"right"}}>{fmtMoney(r.valor)}</td>
             <td style={{...S.td,textAlign:"right"}}>{fmtMoney(r.valorAtual)}</td>
             <td style={S.td}><span style={{fontSize:12,color:C.textLight,whiteSpace:"pre-wrap"}}>{r.observacao||"—"}</span></td>
           </tr>
-        ))}</tbody></table>
+        );}}</tbody></table>
         </div>
       )}
     </div>
