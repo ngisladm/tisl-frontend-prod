@@ -456,6 +456,7 @@ function ControleHorasScreen({user}){
   const[loading,setLoading]=useState(true);const[modalEscala,setModalEscala]=useState(false);
   const[modalCal,setModalCal]=useState(null);const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
   const[form,setForm]=useState({id:null,companyId:"",teamId:"",dataInicio:"",dataFim:""});
+  const[filters,setFilters]=useState({companyId:"",teamId:"",dataFrom:"",dataTo:""});
   const isMob=useIsMobile();
   const p=user.permissions?.s5;
   useEffect(()=>{
@@ -477,14 +478,34 @@ function ControleHorasScreen({user}){
   const del=async()=>{try{await api.delete(`/escalas/${delId}`);setEscalas(es=>es.filter(e=>e.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
+  const toISO5=d=>{if(!d||d.length<10)return"";const[dd,mm,yy]=d.split("/");return`${yy}-${mm}-${dd}`;};
+  const filteredEscalas=escalas.filter(e=>{
+    if(filters.companyId&&e.companyId!==filters.companyId)return false;
+    if(filters.teamId&&e.teamId!==filters.teamId)return false;
+    if(filters.dataFrom&&toISO5(e.dataFim)<toISO5(filters.dataFrom))return false;
+    if(filters.dataTo&&toISO5(e.dataInicio)>toISO5(filters.dataTo))return false;
+    return true;
+  });
   return(
+    <div>
+      <div style={{...S.card,marginBottom:16}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12,marginBottom:12}}>
+          <SelectField label="Empresa" value={filters.companyId} onChange={v=>setFilters(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))}/>
+          <SelectField label="Equipe"  value={filters.teamId}    onChange={v=>setFilters(f=>({...f,teamId:v}))}    options={teams.map(t=>({value:t.id,label:t.name}))}/>
+          <MaskedInput label="Período De" mask={MASK_DATE} value={filters.dataFrom} onChange={v=>setFilters(f=>({...f,dataFrom:v}))} placeholder="01/01/2025"/>
+          <MaskedInput label="Período Até" mask={MASK_DATE} value={filters.dataTo}   onChange={v=>setFilters(f=>({...f,dataTo:v}))}   placeholder="31/01/2025"/>
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end"}}>
+          <button style={{...S.btnCancel,marginRight:8}} onClick={()=>setFilters({companyId:"",teamId:"",dataFrom:"",dataTo:""})}>Limpar Filtros</button>
+        </div>
+      </div>
     <div style={S.card}>
       <div style={S.cardHeader}><span style={S.cardTitle}>⏱️ Controle de Horas — Escalas de Sobreaviso</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Nova Escala</button>}</div>
-      {escalas.length===0
+      {filteredEscalas.length===0
         ? <div style={S.emptyState}><span style={S.emptyIcon}>📅</span>Nenhuma escala.</div>
         : isMob
           ? (
-            <MobileCardList items={escalas}
+            <MobileCardList items={filteredEscalas}
               columns={[
                 {key:"companyName",label:"Empresa", render:e=><strong>{e.companyName||"—"}</strong>},
                 {key:"teamName",   label:"Equipe",  render:e=>e.teamName||"—"},
@@ -502,7 +523,7 @@ function ControleHorasScreen({user}){
           : (
             <table style={S.table}><thead><tr>
               <th style={S.th}>Empresa</th><th style={S.th}>Equipe</th><th style={S.th}>Período</th><th style={S.th}>Ações</th>
-            </tr></thead><tbody>{escalas.map(e=>(
+            </tr></thead><tbody>{filteredEscalas.map(e=>(
               <tr key={e.id} onMouseOver={ev=>ev.currentTarget.style.background=C.bg} onMouseOut={ev=>ev.currentTarget.style.background=C.white}>
                 <td style={S.td}><strong>{e.companyName||"—"}</strong></td>
                 <td style={S.td}>{e.teamName||"—"}</td>
@@ -532,6 +553,7 @@ function ControleHorasScreen({user}){
       )}
       {modalCal&&<CalendarioModal escala={modalCal} user={user} onClose={()=>setModalCal(null)}/>}
       {delId&&<ConfirmModal msg="Excluir esta escala?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
     </div>
   );
 }
@@ -742,8 +764,8 @@ function TurnoDetalheModal({dateStr,turno,turnoData,teamUsers,loggedUser,onSave,
     }
   },[isFeriado]);
 
-  // Only the assigned user can edit extras
-  const isOwner=loggedUser.id===turnoData?.userId;
+  // Only the assigned user (or Master) can edit extras
+  const canEditExtra=loggedUser.id===turnoData?.userId||loggedUser.isMaster;
   const responsavel=teamUsers.find(u=>u.id===turnoData?.userId);
 
   // Calc extra duration
@@ -775,23 +797,23 @@ function TurnoDetalheModal({dateStr,turno,turnoData,teamUsers,loggedUser,onSave,
         <div style={{background:"#F8F9FA",borderRadius:8,padding:12,marginBottom:16}}>
           <div style={{fontSize:11,fontWeight:700,color:C.accent,marginBottom:10,letterSpacing:.5}}>HORÁRIO DO TURNO</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <Input label="Hora Início" type="time" value={horaInicio} onChange={setHoraInicio}/>
-            <Input label="Hora Fim"    type="time" value={horaFim}    onChange={setHoraFim}/>
+            <div style={S.formRow}><label style={S.label}>Hora Início</label><input value={horaInicio} readOnly style={{...S.input,background:"#f0f0f0",cursor:"default"}}/></div>
+            <div style={S.formRow}><label style={S.label}>Hora Fim</label><input value={horaFim} readOnly style={{...S.input,background:"#f0f0f0",cursor:"default"}}/></div>
           </div>
         </div>
         {/* Horas extras - só o responsável edita */}
-        <div style={{background:isOwner?"#FFFDE7":"#F5F5F5",borderRadius:8,padding:12,marginBottom:16,border:`1px solid ${isOwner?"#F9A825":C.border}`}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.accent,marginBottom:10,letterSpacing:.5}}>⚡ HORAS EXTRAS {!isOwner&&<span style={{color:C.textLight,fontWeight:400}}>(apenas o responsável pode editar)</span>}</div>
+        <div style={{background:canEditExtra?"#FFFDE7":"#F5F5F5",borderRadius:8,padding:12,marginBottom:16,border:`1px solid ${canEditExtra?"#F9A825":C.border}`}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.accent,marginBottom:10,letterSpacing:.5}}>⚡ HORAS EXTRAS {!canEditExtra&&<span style={{color:C.textLight,fontWeight:400}}>(apenas o responsável ou Master pode editar)</span>}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <Input label="Início Extra" type="time" value={extraInicio} onChange={setExtraInicio} disabled={!isOwner}/>
-            <Input label="Fim Extra"    type="time" value={extraFim}    onChange={setExtraFim}    disabled={!isOwner}/>
+            <Input label="Início Extra" type="time" value={extraInicio} onChange={setExtraInicio} disabled={!canEditExtra}/>
+            <Input label="Fim Extra"    type="time" value={extraFim}    onChange={setExtraFim}    disabled={!canEditExtra}/>
           </div>
           {extraMin>0&&<div style={{fontSize:12,color:C.success,fontWeight:700,marginTop:4}}>Total Extra: {minutesToHHMM(extraMin)}</div>}
           <div style={S.formRow}>
             <label style={S.label}>Observação / Motivo da Hora Extra</label>
-            <textarea value={observacao} onChange={e=>setObservacao(e.target.value)} disabled={!isOwner} rows={2}
-              style={{...S.input,resize:"vertical",background:!isOwner?"#f9f9f9":C.white}}
-              placeholder={isOwner?"Descreva o motivo das horas extras...":""}/>
+            <textarea value={observacao} onChange={e=>setObservacao(e.target.value)} disabled={!canEditExtra} rows={2}
+              style={{...S.input,resize:"vertical",background:!canEditExtra?"#f9f9f9":C.white}}
+              placeholder={canEditExtra?"Descreva o motivo das horas extras...":""}/>
           </div>
         </div>
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -808,16 +830,18 @@ function TurnoDetalheModal({dateStr,turno,turnoData,teamUsers,loggedUser,onSave,
 function ExtraAvulsoScreen({user}){
   const[items,setItems]=useState([]);const[companies,setCompanies]=useState([]);
   const[teams,setTeams]=useState([]);const[teamUsers,setTeamUsers]=useState([]);
+  const[allUsers,setAllUsers]=useState([]);
   const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
   const[form,setForm]=useState({id:null,companyId:"",teamId:"",userId:"",data:"",horaInicio:"",horaFim:"",observacao:""});
+  const[filters,setFilters]=useState({dataFrom:"",dataTo:"",userId:"",teamId:"",companyId:""});
   const isMob=useIsMobile();
   const p=user.permissions?.s7;
 
   useEffect(()=>{
     if(!p?.view)return;
-    Promise.all([api.get("/extra-avulso"),api.get("/companies"),api.get("/teams")])
-      .then(([it,c,t])=>{setItems(it);setCompanies(c);setTeams(t);})
+    Promise.all([api.get("/extra-avulso"),api.get("/companies"),api.get("/teams"),api.get("/users")])
+      .then(([it,c,t,u])=>{setItems(it);setCompanies(c);setTeams(t);setAllUsers(u);})
       .catch(e=>alert(e.message)).finally(()=>setLoading(false));
   },[]);
 
@@ -827,7 +851,11 @@ function ExtraAvulsoScreen({user}){
     api.get(`/teams/${form.teamId}/users`).then(setTeamUsers).catch(()=>{});
   },[form.teamId]);
 
-  const openAdd=()=>{setForm({id:null,companyId:"",teamId:"",userId:"",data:"",horaInicio:"",horaFim:"",observacao:""});setModal(true);};
+  const openAdd=()=>{
+    const uid=user.isMaster?"":(user.id||"");
+    setForm({id:null,companyId:"",teamId:"",userId:uid,data:"",horaInicio:"",horaFim:"",observacao:""});
+    setModal(true);
+  };
   const openEdit=it=>{setForm({...it});setModal(true);};
 
   const save=async()=>{
@@ -849,17 +877,40 @@ function ExtraAvulsoScreen({user}){
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
 
+  const toISO7=d=>{if(!d||d.length<10)return"";const[dd,mm,yy]=d.split("/");return`${yy}-${mm}-${dd}`;};
+  const filteredItems=items.filter(it=>{
+    if(filters.companyId&&it.companyId!==filters.companyId)return false;
+    if(filters.teamId&&it.teamId!==filters.teamId)return false;
+    if(filters.userId&&it.userId!==filters.userId)return false;
+    if(filters.dataFrom&&toISO7(it.data)<toISO7(filters.dataFrom))return false;
+    if(filters.dataTo&&toISO7(it.data)>toISO7(filters.dataTo))return false;
+    return true;
+  });
+
   return(
+    <div>
+      <div style={{...S.card,marginBottom:16}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:12,marginBottom:12}}>
+          <MaskedInput label="Data De" mask={MASK_DATE} value={filters.dataFrom} onChange={v=>setFilters(f=>({...f,dataFrom:v}))} placeholder="01/01/2025"/>
+          <MaskedInput label="Data Até" mask={MASK_DATE} value={filters.dataTo}   onChange={v=>setFilters(f=>({...f,dataTo:v}))}   placeholder="31/01/2025"/>
+          <SelectField label="Usuário"  value={filters.userId}    onChange={v=>setFilters(f=>({...f,userId:v}))}    options={allUsers.map(u=>({value:u.id,label:u.name}))}/>
+          <SelectField label="Equipe"   value={filters.teamId}    onChange={v=>setFilters(f=>({...f,teamId:v}))}    options={teams.map(t=>({value:t.id,label:t.name}))}/>
+          <SelectField label="Empresa"  value={filters.companyId} onChange={v=>setFilters(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end"}}>
+          <button style={{...S.btnCancel,marginRight:8}} onClick={()=>setFilters({dataFrom:"",dataTo:"",userId:"",teamId:"",companyId:""})}>Limpar Filtros</button>
+        </div>
+      </div>
     <div style={S.card}>
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>⚡ Extra Avulso</span>
         {p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Extra</button>}
       </div>
-      {items.length===0
+      {filteredItems.length===0
         ? <div style={S.emptyState}><span style={S.emptyIcon}>⚡</span>Nenhum extra avulso lançado.</div>
         : isMob
           ? (
-            <MobileCardList items={items}
+            <MobileCardList items={filteredItems}
               columns={[
                 {key:"data",      label:"Data",    render:it=><strong>{it.data}</strong>},
                 {key:"userName",  label:"Usuário", render:it=>it.userName},
@@ -881,7 +932,7 @@ function ExtraAvulsoScreen({user}){
               <thead><tr>
                 {["Data","Usuário","Equipe","Empresa","Início","Fim","Observação","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
               </tr></thead>
-              <tbody>{items.map(it=>(
+              <tbody>{filteredItems.map(it=>(
                 <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                   <td style={S.td}><strong>{it.data}</strong></td>
                   <td style={S.td}>{it.userName}</td>
@@ -902,8 +953,8 @@ function ExtraAvulsoScreen({user}){
       {modal&&(
         <Modal title={form.id?"Editar Extra Avulso":"Novo Extra Avulso"} onClose={()=>setModal(false)}>
           <SelectField label="Empresa" value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))} required/>
-          <SelectField label="Equipe"  value={form.teamId}    onChange={v=>setForm(f=>({...f,teamId:v,userId:""}))} options={teams.map(t=>({value:t.id,label:t.name}))} required/>
-          <SelectField label="Usuário" value={form.userId}    onChange={v=>setForm(f=>({...f,userId:v}))} options={teamUsers.map(u=>({value:u.id,label:u.name}))} required/>
+          <SelectField label="Equipe"  value={form.teamId}    onChange={v=>setForm(f=>({...f,teamId:v,userId:user.isMaster?"":f.userId}))} options={teams.map(t=>({value:t.id,label:t.name}))} required/>
+          <SelectField label="Usuário" value={form.userId}    onChange={v=>setForm(f=>({...f,userId:v}))} options={teamUsers.map(u=>({value:u.id,label:u.name}))} required disabled={!user.isMaster}/>
           <MaskedInput label="Data" mask={MASK_DATE} value={form.data} onChange={v=>setForm(f=>({...f,data:v}))} placeholder="01/01/2025" required/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
             <Input label="Hora Início" type="time" value={form.horaInicio} onChange={v=>setForm(f=>({...f,horaInicio:v}))} required/>
@@ -921,6 +972,7 @@ function ExtraAvulsoScreen({user}){
         </Modal>
       )}
       {delId&&<ConfirmModal msg="Deseja excluir este extra avulso?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
     </div>
   );
 }
@@ -1194,17 +1246,19 @@ function ValorKmScreen({user}){
 function RegistroKmScreen({user}){
   const[items,setItems]=useState([]);const[companies,setCompanies]=useState([]);
   const[teams,setTeams]=useState([]);const[teamUsers,setTeamUsers]=useState([]);
+  const[allUsers,setAllUsers]=useState([]);
   const[vehicleTypes,setVehicleTypes]=useState([]);
   const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
+  const[filters,setFilters]=useState({dataFrom:"",dataTo:"",userId:"",teamId:""});
   const emptyForm={id:null,data:"",companyId:"",teamId:"",userId:"",vehicleTypeId:"",totalKm:"",valorKm:0,valorTotalKm:0,justificativa:""};
   const[form,setForm]=useState(emptyForm);
   const p=user.permissions?.s10;
 
   useEffect(()=>{
     if(!p?.view)return;
-    Promise.all([api.get("/km-records"),api.get("/companies"),api.get("/teams"),api.get("/vehicle-types")])
-      .then(([it,c,t,vt])=>{setItems(it);setCompanies(c);setTeams(t);setVehicleTypes(vt);})
+    Promise.all([api.get("/km-records"),api.get("/companies"),api.get("/teams"),api.get("/vehicle-types"),api.get("/users")])
+      .then(([it,c,t,vt,u])=>{setItems(it);setCompanies(c);setTeams(t);setVehicleTypes(vt);setAllUsers(u);})
       .catch(e=>alert(e.message)).finally(()=>setLoading(false));
   },[]);
 
@@ -1253,15 +1307,35 @@ function RegistroKmScreen({user}){
 
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
+  const toISO10=d=>{if(!d||d.length<10)return"";const[dd,mm,yy]=d.split("/");return`${yy}-${mm}-${dd}`;};
+  const filteredKm=items.filter(it=>{
+    if(filters.teamId&&it.teamId!==filters.teamId)return false;
+    if(filters.userId&&it.userId!==filters.userId)return false;
+    if(filters.dataFrom&&toISO10(it.data)<toISO10(filters.dataFrom))return false;
+    if(filters.dataTo&&toISO10(it.data)>toISO10(filters.dataTo))return false;
+    return true;
+  });
   return(
+    <div>
+      <div style={{...S.card,marginBottom:16}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12,marginBottom:12}}>
+          <MaskedInput label="Data De" mask={MASK_DATE} value={filters.dataFrom} onChange={v=>setFilters(f=>({...f,dataFrom:v}))} placeholder="01/01/2025"/>
+          <MaskedInput label="Data Até" mask={MASK_DATE} value={filters.dataTo}   onChange={v=>setFilters(f=>({...f,dataTo:v}))}   placeholder="31/01/2025"/>
+          <SelectField label="Usuário"  value={filters.userId}  onChange={v=>setFilters(f=>({...f,userId:v}))}  options={allUsers.map(u=>({value:u.id,label:u.name}))}/>
+          <SelectField label="Equipe"   value={filters.teamId}  onChange={v=>setFilters(f=>({...f,teamId:v}))}  options={teams.map(t=>({value:t.id,label:t.name}))}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end"}}>
+          <button style={{...S.btnCancel,marginRight:8}} onClick={()=>setFilters({dataFrom:"",dataTo:"",userId:"",teamId:""})}>Limpar Filtros</button>
+        </div>
+      </div>
     <div style={S.card}>
       <div style={S.cardHeader}><span style={S.cardTitle}>🛣️ Registro de Kilometragem</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Registro</button>}</div>
-      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🛣️</span>Nenhum registro.</div>:(
+      {filteredKm.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🛣️</span>Nenhum registro.</div>:(
         <div style={{overflowX:"auto"}}>
         <table style={S.table}><thead><tr>
           {["Data","Usuário","Equipe","Tipo Veículo","Total km","Valor km","Valor Total","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
-        <tbody>{items.map(it=>(
+        <tbody>{filteredKm.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}><strong>{it.data}</strong></td>
             <td style={S.td}>{it.userName}</td>
@@ -1285,8 +1359,8 @@ function RegistroKmScreen({user}){
             <SelectField label="Empresa" value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))} required/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-            <SelectField label="Equipe"   value={form.teamId}  onChange={v=>setForm(f=>({...f,teamId:v,userId:""}))} options={teams.map(t=>({value:t.id,label:t.name}))} required/>
-            <SelectField label="Usuário"  value={form.userId}  onChange={v=>setForm(f=>({...f,userId:v}))}           options={teamUsers.map(u=>({value:u.id,label:u.name}))} required/>
+            <SelectField label="Equipe"   value={form.teamId}  onChange={v=>setForm(f=>({...f,teamId:v,userId:user.isMaster?"":f.userId}))} options={teams.map(t=>({value:t.id,label:t.name}))} required/>
+            <SelectField label="Usuário"  value={form.userId}  onChange={v=>setForm(f=>({...f,userId:v}))}           options={teamUsers.map(u=>({value:u.id,label:u.name}))} required disabled={!user.isMaster}/>
           </div>
           <SelectField label="Tipo de Veículo" value={form.vehicleTypeId} onChange={v=>setForm(f=>({...f,vehicleTypeId:v}))} options={vehicleTypes.map(vt=>({value:vt.id,label:vt.name}))} required/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
@@ -1312,6 +1386,7 @@ function RegistroKmScreen({user}){
         </Modal>
       )}
       {delId&&<ConfirmModal msg="Deseja excluir este registro de km?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
     </div>
   );
 }
