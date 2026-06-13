@@ -148,6 +148,30 @@ function SelectField({label,value,onChange,options,required}){
     </div>
   );
 }
+// mask: '9' = dígito, qualquer outro char = literal
+function applyMask(raw,mask){
+  const digits=(raw||"").replace(/\D/g,"");
+  let out="",di=0;
+  for(let i=0;i<mask.length&&di<digits.length;i++){
+    out+=mask[i]==="9"?digits[di++]:mask[i];
+  }
+  return out;
+}
+const MASK_DATE  ="99/99/9999";
+const MASK_CNPJ  ="99.999.999/9999-99";
+const MASK_PHONE ="(99) 99999-9999";
+function MaskedInput({label,value,onChange,mask,placeholder,required,disabled}){
+  const handle=e=>onChange(applyMask(e.target.value,mask));
+  return(
+    <div style={S.formRow}>
+      <label style={S.label}>{label}{required&&" *"}</label>
+      <input value={value||""} onChange={handle} placeholder={placeholder} disabled={disabled}
+        style={{...S.input,background:disabled?"#f9f9f9":C.white}}
+        onFocus={e=>e.target.style.borderColor=C.primary}
+        onBlur={e=>e.target.style.borderColor=C.border}/>
+    </div>
+  );
+}
 function Modal({title,onClose,children,wide,extraWide}){
   return(
     <div style={S.modal} onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -494,8 +518,8 @@ function ControleHorasScreen({user}){
           <SelectField label="Empresa" value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))} required/>
           <SelectField label="Equipe"  value={form.teamId}    onChange={v=>setForm(f=>({...f,teamId:v}))}    options={teams.map(t=>({value:t.id,label:t.name}))} required/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-            <Input label="Período Inicial (dd/mm/aaaa)" value={form.dataInicio} onChange={v=>setForm(f=>({...f,dataInicio:v}))} placeholder="01/01/2025" required/>
-            <Input label="Período Final (dd/mm/aaaa)"   value={form.dataFim}    onChange={v=>setForm(f=>({...f,dataFim:v}))}    placeholder="31/01/2025" required/>
+            <MaskedInput label="Período Inicial" mask={MASK_DATE} value={form.dataInicio} onChange={v=>setForm(f=>({...f,dataInicio:v}))} placeholder="01/01/2025" required/>
+            <MaskedInput label="Período Final"   mask={MASK_DATE} value={form.dataFim}    onChange={v=>setForm(f=>({...f,dataFim:v}))}    placeholder="31/01/2025" required/>
           </div>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
             <button style={S.btnCancel} onClick={()=>setModalEscala(false)}>Cancelar</button>
@@ -877,7 +901,7 @@ function ExtraAvulsoScreen({user}){
           <SelectField label="Empresa" value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))} required/>
           <SelectField label="Equipe"  value={form.teamId}    onChange={v=>setForm(f=>({...f,teamId:v,userId:""}))} options={teams.map(t=>({value:t.id,label:t.name}))} required/>
           <SelectField label="Usuário" value={form.userId}    onChange={v=>setForm(f=>({...f,userId:v}))} options={teamUsers.map(u=>({value:u.id,label:u.name}))} required/>
-          <Input label="Data (dd/mm/aaaa)" value={form.data} onChange={v=>setForm(f=>({...f,data:v}))} placeholder="01/01/2025" required/>
+          <MaskedInput label="Data" mask={MASK_DATE} value={form.data} onChange={v=>setForm(f=>({...f,data:v}))} placeholder="01/01/2025" required/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
             <Input label="Hora Início" type="time" value={form.horaInicio} onChange={v=>setForm(f=>({...f,horaInicio:v}))} required/>
             <Input label="Hora Fim"    type="time" value={form.horaFim}    onChange={v=>setForm(f=>({...f,horaFim:v}))}    required/>
@@ -928,8 +952,8 @@ function RelatorioHorasScreen({user}){
       <div style={{...S.card,marginBottom:20}}>
         <div style={{...S.cardHeader,marginBottom:16}}><span style={S.cardTitle}>📊 Relatório de Horas de Sobreaviso</span></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:16,marginBottom:16}}>
-          <Input label="Período Inicial (dd/mm/aaaa)" value={filters.dataInicio} onChange={v=>setFilters(f=>({...f,dataInicio:v}))} placeholder="01/01/2025" required/>
-          <Input label="Período Final (dd/mm/aaaa)"   value={filters.dataFim}    onChange={v=>setFilters(f=>({...f,dataFim:v}))}    placeholder="31/01/2025" required/>
+          <MaskedInput label="Período Inicial" mask={MASK_DATE} value={filters.dataInicio} onChange={v=>setFilters(f=>({...f,dataInicio:v}))} placeholder="01/01/2025" required/>
+          <MaskedInput label="Período Final"   mask={MASK_DATE} value={filters.dataFim}    onChange={v=>setFilters(f=>({...f,dataFim:v}))}    placeholder="31/01/2025" required/>
           <SelectField label="Empresa" value={filters.companyId} onChange={v=>setFilters(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))}/>
           <SelectField label="Equipe"  value={filters.teamId}    onChange={v=>setFilters(f=>({...f,teamId:v}))}    options={teams.map(t=>({value:t.id,label:t.name}))}/>
           <SelectField label="Usuário" value={filters.userId}    onChange={v=>setFilters(f=>({...f,userId:v}))}    options={users.map(u=>({value:u.id,label:u.name}))}/>
@@ -1086,8 +1110,8 @@ function ValorKmScreen({user}){
           <SelectField label="Tipo de Veículo" value={form.vehicleTypeId} onChange={v=>setForm(f=>({...f,vehicleTypeId:v}))}
             options={vehicleTypes.map(vt=>({value:vt.id,label:vt.name}))} required/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-            <Input label="Data Inicial (dd/mm/aaaa)" value={form.dataInicio} onChange={v=>setForm(f=>({...f,dataInicio:v}))} placeholder="01/01/2025" required/>
-            <Input label="Data Final (dd/mm/aaaa)"   value={form.dataFim}   onChange={v=>setForm(f=>({...f,dataFim:v}))}   placeholder="31/12/2025" required/>
+            <MaskedInput label="Data Inicial" mask={MASK_DATE} value={form.dataInicio} onChange={v=>setForm(f=>({...f,dataInicio:v}))} placeholder="01/01/2025" required/>
+            <MaskedInput label="Data Final"   mask={MASK_DATE} value={form.dataFim}   onChange={v=>setForm(f=>({...f,dataFim:v}))}   placeholder="31/12/2025" required/>
           </div>
           <Input label="Valor km (R$)" type="number" value={form.valorKm} onChange={v=>setForm(f=>({...f,valorKm:v}))} placeholder="0.00" required/>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -1192,7 +1216,7 @@ function RegistroKmScreen({user}){
       {modal&&(
         <Modal title={form.id?"Editar Registro de km":"Novo Registro de km"} onClose={()=>setModal(false)} wide>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-            <Input label="Data (dd/mm/aaaa)" value={form.data} onChange={v=>setForm(f=>({...f,data:v}))} placeholder="01/01/2025" required/>
+            <MaskedInput label="Data" mask={MASK_DATE} value={form.data} onChange={v=>setForm(f=>({...f,data:v}))} placeholder="01/01/2025" required/>
             <SelectField label="Empresa" value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))} required/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
@@ -1269,8 +1293,8 @@ function RelatorioKmScreen({user}){
       <div style={{background:C.bg,borderRadius:8,padding:16,marginBottom:20,border:`1px solid ${C.border}`}}>
         <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,letterSpacing:.5}}>FILTROS</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12}}>
-          <Input label="Data De (dd/mm/aaaa)"  value={filters.dateFrom}      onChange={v=>setFilters(f=>({...f,dateFrom:v}))}      placeholder="01/01/2025"/>
-          <Input label="Data Até (dd/mm/aaaa)" value={filters.dateTo}        onChange={v=>setFilters(f=>({...f,dateTo:v}))}        placeholder="31/12/2025"/>
+          <MaskedInput label="Data De"  mask={MASK_DATE} value={filters.dateFrom} onChange={v=>setFilters(f=>({...f,dateFrom:v}))} placeholder="01/01/2025"/>
+          <MaskedInput label="Data Até" mask={MASK_DATE} value={filters.dateTo}   onChange={v=>setFilters(f=>({...f,dateTo:v}))}   placeholder="31/12/2025"/>
           <SelectField label="Empresa"     value={filters.companyId}     onChange={v=>setFilters(f=>({...f,companyId:v}))}     options={companies.map(c=>({value:c.id,label:c.name}))}/>
           <SelectField label="Equipe"      value={filters.teamId}        onChange={v=>setFilters(f=>({...f,teamId:v}))}        options={teams.map(t=>({value:t.id,label:t.name}))}/>
           <SelectField label="Usuário"     value={filters.userId}        onChange={v=>setFilters(f=>({...f,userId:v}))}        options={allUsers.map(u=>({value:u.id,label:u.name}))}/>
@@ -1289,22 +1313,26 @@ function RelatorioKmScreen({user}){
                 👤 {g.userName}
               </div>
               <div style={{overflowX:"auto"}}>
-              <table style={S.table}><thead><tr>
-                {["Tipo Veículo","Total km","Valor km","Valor Total km","Justificativa"].map(h=><th key={h} style={S.th}>{h}</th>)}
+              <table style={{...S.table,tableLayout:"fixed",width:"100%"}}><thead><tr>
+                <th style={{...S.th,width:"130px"}}>Tipo Veículo</th>
+                <th style={{...S.th,width:"90px",textAlign:"right"}}>Total km</th>
+                <th style={{...S.th,width:"100px",textAlign:"right"}}>Valor km</th>
+                <th style={{...S.th,width:"120px",textAlign:"right"}}>Valor Total km</th>
+                <th style={S.th}>Justificativa</th>
               </tr></thead>
               <tbody>
                 {g.rows.map((r,i)=>(
                   <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
-                    <td style={S.td}>{r.vehicleTypeName}</td>
-                    <td style={{...S.td,textAlign:"right",fontWeight:700}}>{Number(r.totalKm).toLocaleString("pt-BR")}</td>
-                    <td style={{...S.td,textAlign:"right"}}>{fmtMoney(r.valorKm)}</td>
-                    <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.success}}>{fmtMoney(r.valorTotalKm)}</td>
-                    <td style={S.td}><span style={{fontSize:12,color:C.textLight}}>{r.justificativa||"—"}</span></td>
+                    <td style={{...S.td,fontSize:12}}>{r.vehicleTypeName}</td>
+                    <td style={{...S.td,textAlign:"right",fontWeight:700,fontSize:12}}>{Number(r.totalKm).toLocaleString("pt-BR")}</td>
+                    <td style={{...S.td,textAlign:"right",fontSize:12}}>{fmtMoney(r.valorKm)}</td>
+                    <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.success,fontSize:12}}>{fmtMoney(r.valorTotalKm)}</td>
+                    <td style={{...S.td,fontSize:12,whiteSpace:"pre-wrap",wordBreak:"break-word",color:C.textLight}}>{r.justificativa||"—"}</td>
                   </tr>
                 ))}
                 <tr style={{background:"#FFF8E1"}}>
-                  <td colSpan={3} style={{...S.td,fontWeight:700,color:C.accent}}>TOTAL {g.userName.toUpperCase()}</td>
-                  <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.primary}}>{fmtMoney(g.totalValorTotal)}</td>
+                  <td colSpan={3} style={{...S.td,fontWeight:700,color:C.accent,fontSize:12}}>TOTAL {g.userName.toUpperCase()}</td>
+                  <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.primary,fontSize:12}}>{fmtMoney(g.totalValorTotal)}</td>
                   <td style={S.td}/>
                 </tr>
               </tbody></table>
@@ -1369,9 +1397,9 @@ function FornecedoresScreen({user}){
       {modal&&(
         <Modal title={form.id?"Editar Fornecedor":"Novo Fornecedor"} onClose={()=>setModal(false)}>
           <Input label="Fornecedor" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
-          <Input label="CNPJ" value={form.cnpj} onChange={v=>setForm(f=>({...f,cnpj:v}))} placeholder="00.000.000/0000-00"/>
+          <MaskedInput label="CNPJ" mask={MASK_CNPJ} value={form.cnpj} onChange={v=>setForm(f=>({...f,cnpj:v}))} placeholder="00.000.000/0000-00"/>
           <Input label="Nome do Contato" value={form.contactName} onChange={v=>setForm(f=>({...f,contactName:v}))}/>
-          <Input label="Fone do Contato" value={form.contactPhone} onChange={v=>setForm(f=>({...f,contactPhone:v}))} placeholder="(11) 99999-9999"/>
+          <MaskedInput label="Fone do Contato" mask={MASK_PHONE} value={form.contactPhone} onChange={v=>setForm(f=>({...f,contactPhone:v}))} placeholder="(11) 99999-9999"/>
           <Input label="E-mail do Contato" type="email" value={form.contactEmail} onChange={v=>setForm(f=>({...f,contactEmail:v}))}/>
           <div style={S.formRow}>
             <label style={S.label}>Observação</label>
@@ -1489,8 +1517,8 @@ function ContratosScreen({user}){
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
             <Input label="Número do Contrato" value={form.contractNumber} onChange={v=>setForm(f=>({...f,contractNumber:v}))}/>
-            <Input label="Data Início (dd/mm/aaaa)"  value={form.dataInicio} onChange={v=>setForm(f=>({...f,dataInicio:v}))} placeholder="01/01/2025"/>
-            <Input label="Data Término (dd/mm/aaaa)" value={form.dataFim}    onChange={v=>setForm(f=>({...f,dataFim:v}))}    placeholder="31/12/2025"/>
+            <MaskedInput label="Data Início"  mask={MASK_DATE} value={form.dataInicio} onChange={v=>setForm(f=>({...f,dataInicio:v}))} placeholder="01/01/2025"/>
+            <MaskedInput label="Data Término" mask={MASK_DATE} value={form.dataFim}    onChange={v=>setForm(f=>({...f,dataFim:v}))}    placeholder="31/12/2025"/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
             <Input label="Valor (R$)"       type="number" value={form.valor}      onChange={v=>setForm(f=>({...f,valor:v}))}      placeholder="0.00"/>
@@ -1579,8 +1607,8 @@ function RelatorioContratosScreen({user}){
           <SelectField label="Empresa"    value={filters.companyId}      onChange={v=>setFilters(f=>({...f,companyId:v}))}      options={companies.map(c=>({value:c.id,label:c.name}))}/>
           <SelectField label="Fornecedor" value={filters.supplierId}     onChange={v=>setFilters(f=>({...f,supplierId:v}))}     options={suppliers.map(s=>({value:s.id,label:s.name}))}/>
           <Input label="Nº Contrato"      value={filters.contractNumber} onChange={v=>setFilters(f=>({...f,contractNumber:v}))} placeholder="Buscar..."/>
-          <Input label="Data Início De (dd/mm/aaaa)"    value={filters.dateFrom}   onChange={v=>setFilters(f=>({...f,dateFrom:v}))}   placeholder="01/01/2025"/>
-          <Input label="Data Término Até (dd/mm/aaaa)"  value={filters.dateTo}     onChange={v=>setFilters(f=>({...f,dateTo:v}))}     placeholder="31/12/2025"/>
+          <MaskedInput label="Data Início De"   mask={MASK_DATE} value={filters.dateFrom} onChange={v=>setFilters(f=>({...f,dateFrom:v}))} placeholder="01/01/2025"/>
+          <MaskedInput label="Data Término Até" mask={MASK_DATE} value={filters.dateTo}   onChange={v=>setFilters(f=>({...f,dateTo:v}))}   placeholder="31/12/2025"/>
           <SelectField label="Status"     value={filters.status}         onChange={v=>setFilters(f=>({...f,status:v}))}
             options={["Ativo","Inativo"].map(o=>({value:o,label:o}))}/>
           <SelectField label="Frequência" value={filters.frequencia}     onChange={v=>setFilters(f=>({...f,frequencia:v}))}
