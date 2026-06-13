@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const API_URL = "https://sl-ti-api.onrender.com";
+const API_URL = process.env.REACT_APP_API_URL || "https://sl-ti-api.onrender.com";
 
 // ── Responsive hook ──────────────────────────────────────────
 function useIsMobile(){ 
@@ -985,6 +985,627 @@ function RelatorioHorasScreen({user}){
   );
 }
 
+// ── TIPO DE VEÍCULO (s8) ──────────────────────────────────────
+function TipoVeiculoScreen({user}){
+  const[items,setItems]=useState([]);const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(false);const[delId,setDelId]=useState(null);
+  const[saving,setSaving]=useState(false);const[form,setForm]=useState({id:null,name:""});
+  const p=user.permissions?.s8;
+  useEffect(()=>{if(!p?.view)return;api.get("/vehicle-types").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));},[]);
+  const openAdd=()=>{setForm({id:null,name:""});setModal(true);};
+  const openEdit=i=>{setForm({id:i.id,name:i.name});setModal(true);};
+  const save=async()=>{
+    if(!form.name.trim())return alert("Nome é obrigatório.");setSaving(true);
+    try{
+      if(form.id){const u=await api.put(`/vehicle-types/${form.id}`,{name:form.name});setItems(is=>is.map(i=>i.id===u.id?u:i));}
+      else{const c=await api.post("/vehicle-types",{name:form.name});setItems(is=>[...is,c]);}
+      setModal(false);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{try{await api.delete(`/vehicle-types/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>🚗 Tipo de Veículo</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Tipo</button>}</div>
+      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🚗</span>Nenhum tipo cadastrado.</div>:(
+        <table style={S.table}><thead><tr><th style={S.th}>Tipo de Veículo</th><th style={S.th}>Ações</th></tr></thead>
+        <tbody>{items.map(it=>(
+          <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={S.td}><strong>{it.name}</strong></td>
+            <td style={S.td}>
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+            </td>
+          </tr>
+        ))}</tbody></table>
+      )}
+      {modal&&(
+        <Modal title={form.id?"Editar Tipo de Veículo":"Novo Tipo de Veículo"} onClose={()=>setModal(false)}>
+          <Input label="Tipo de Veículo" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Deseja excluir este tipo de veículo?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── VALOR DO KM (s9) ──────────────────────────────────────────
+function ValorKmScreen({user}){
+  const[items,setItems]=useState([]);const[vehicleTypes,setVehicleTypes]=useState([]);
+  const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
+  const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
+  const[form,setForm]=useState({id:null,vehicleTypeId:"",dataInicio:"",dataFim:"",valorKm:""});
+  const p=user.permissions?.s9;
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/km-values"),api.get("/vehicle-types")])
+      .then(([kv,vt])=>{setItems(kv);setVehicleTypes(vt);}).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[]);
+  const openAdd=()=>{setForm({id:null,vehicleTypeId:"",dataInicio:"",dataFim:"",valorKm:""});setModal(true);};
+  const openEdit=i=>{setForm({id:i.id,vehicleTypeId:i.vehicleTypeId,dataInicio:i.dataInicio,dataFim:i.dataFim,valorKm:String(i.valorKm)});setModal(true);};
+  const save=async()=>{
+    if(!form.vehicleTypeId||!form.dataInicio||!form.dataFim||!form.valorKm)return alert("Todos os campos são obrigatórios.");
+    setSaving(true);
+    try{
+      if(form.id){const u=await api.put(`/km-values/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
+      else{const c=await api.post("/km-values",form);setItems(is=>[...is,c]);}
+      setModal(false);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{try{await api.delete(`/km-values/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+  const fmtVal=v=>v?Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}):"—";
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>💰 Valor do km</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Valor</button>}</div>
+      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>💰</span>Nenhum valor cadastrado.</div>:(
+        <table style={S.table}><thead><tr>
+          {["Tipo de Veículo","Data Inicial","Data Final","Valor km","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+        </tr></thead>
+        <tbody>{items.map(it=>(
+          <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={S.td}><strong>{it.vehicleTypeName}</strong></td>
+            <td style={S.td}>{it.dataInicio}</td>
+            <td style={S.td}>{it.dataFim}</td>
+            <td style={S.td}>{fmtVal(it.valorKm)}</td>
+            <td style={S.td}>
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+            </td>
+          </tr>
+        ))}</tbody></table>
+      )}
+      {modal&&(
+        <Modal title={form.id?"Editar Valor do km":"Novo Valor do km"} onClose={()=>setModal(false)}>
+          <SelectField label="Tipo de Veículo" value={form.vehicleTypeId} onChange={v=>setForm(f=>({...f,vehicleTypeId:v}))}
+            options={vehicleTypes.map(vt=>({value:vt.id,label:vt.name}))} required/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <Input label="Data Inicial (dd/mm/aaaa)" value={form.dataInicio} onChange={v=>setForm(f=>({...f,dataInicio:v}))} placeholder="01/01/2025" required/>
+            <Input label="Data Final (dd/mm/aaaa)"   value={form.dataFim}   onChange={v=>setForm(f=>({...f,dataFim:v}))}   placeholder="31/12/2025" required/>
+          </div>
+          <Input label="Valor km (R$)" type="number" value={form.valorKm} onChange={v=>setForm(f=>({...f,valorKm:v}))} placeholder="0.00" required/>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Deseja excluir este valor de km?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── REGISTRO DE KILOMETRAGEM (s10) ────────────────────────────
+function RegistroKmScreen({user}){
+  const[items,setItems]=useState([]);const[companies,setCompanies]=useState([]);
+  const[teams,setTeams]=useState([]);const[teamUsers,setTeamUsers]=useState([]);
+  const[vehicleTypes,setVehicleTypes]=useState([]);
+  const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
+  const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
+  const emptyForm={id:null,data:"",companyId:"",teamId:"",userId:"",vehicleTypeId:"",kmInicial:"",kmFinal:"",totalKm:0,valorKm:0,valorTotalKm:0,justificativa:""};
+  const[form,setForm]=useState(emptyForm);
+  const p=user.permissions?.s10;
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/km-records"),api.get("/companies"),api.get("/teams"),api.get("/vehicle-types")])
+      .then(([it,c,t,vt])=>{setItems(it);setCompanies(c);setTeams(t);setVehicleTypes(vt);})
+      .catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[]);
+
+  useEffect(()=>{
+    if(!form.teamId){setTeamUsers([]);return;}
+    api.get(`/teams/${form.teamId}/users`).then(setTeamUsers).catch(()=>{});
+  },[form.teamId]);
+
+  // Auto-fetch valor_km when vehicle type or date changes
+  useEffect(()=>{
+    if(!form.vehicleTypeId||!form.data)return;
+    api.get(`/km-values/lookup?vehicleTypeId=${form.vehicleTypeId}&date=${encodeURIComponent(form.data)}`)
+      .then(r=>{
+        const vk=parseFloat(r.valorKm)||0;
+        const ki=parseFloat(form.kmInicial)||0;
+        const kf=parseFloat(form.kmFinal)||0;
+        const tk=ki+kf;
+        setForm(f=>({...f,valorKm:vk,totalKm:tk,valorTotalKm:parseFloat((tk*vk).toFixed(2))}));
+      }).catch(()=>{});
+  },[form.vehicleTypeId,form.data]);
+
+  const handleKmChange=(field,val)=>{
+    setForm(f=>{
+      const ki=field==="kmInicial"?parseFloat(val)||0:parseFloat(f.kmInicial)||0;
+      const kf=field==="kmFinal"  ?parseFloat(val)||0:parseFloat(f.kmFinal)  ||0;
+      const tk=ki+kf;
+      const vk=parseFloat(f.valorKm)||0;
+      return {...f,[field]:val,totalKm:tk,valorTotalKm:parseFloat((tk*vk).toFixed(2))};
+    });
+  };
+
+  const openAdd=()=>{
+    const u=user.isMaster?"":(user.id||"");
+    setForm({...emptyForm,userId:u,companyId:user.companyId||"",teamId:user.teamId||""});
+    setModal(true);
+  };
+  const openEdit=it=>{setForm({...it,kmInicial:String(it.kmInicial),kmFinal:String(it.kmFinal)});setModal(true);};
+  const save=async()=>{
+    if(!form.data||!form.companyId||!form.teamId||!form.userId||!form.vehicleTypeId||form.kmInicial===""||form.kmFinal==="")
+      return alert("Preencha todos os campos obrigatórios.");
+    setSaving(true);
+    try{
+      if(form.id){const u=await api.put(`/km-records/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
+      else{const c=await api.post("/km-records",form);setItems(is=>[c,...is]);}
+      setModal(false);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{try{await api.delete(`/km-records/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+  const fmtMoney=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+  const canEdit=it=>user.isMaster||it.userId===user.id;
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>🛣️ Registro de Kilometragem</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Registro</button>}</div>
+      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🛣️</span>Nenhum registro.</div>:(
+        <div style={{overflowX:"auto"}}>
+        <table style={S.table}><thead><tr>
+          {["Data","Usuário","Equipe","Tipo Veículo","Km Inicial","Km Final","Total km","Valor km","Valor Total","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+        </tr></thead>
+        <tbody>{items.map(it=>(
+          <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={S.td}><strong>{it.data}</strong></td>
+            <td style={S.td}>{it.userName}</td>
+            <td style={S.td}>{it.teamName}</td>
+            <td style={S.td}>{it.vehicleTypeName}</td>
+            <td style={{...S.td,textAlign:"right"}}>{Number(it.kmInicial).toLocaleString("pt-BR")}</td>
+            <td style={{...S.td,textAlign:"right"}}>{Number(it.kmFinal).toLocaleString("pt-BR")}</td>
+            <td style={{...S.td,textAlign:"right",fontWeight:700}}>{Number(it.totalKm).toLocaleString("pt-BR")}</td>
+            <td style={{...S.td,textAlign:"right"}}>{fmtMoney(it.valorKm)}</td>
+            <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.success}}>{fmtMoney(it.valorTotalKm)}</td>
+            <td style={S.td}>
+              {canEdit(it)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️</button>}
+              {canEdit(it)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>}
+            </td>
+          </tr>
+        ))}</tbody></table>
+        </div>
+      )}
+      {modal&&(
+        <Modal title={form.id?"Editar Registro de km":"Novo Registro de km"} onClose={()=>setModal(false)} wide>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <Input label="Data (dd/mm/aaaa)" value={form.data} onChange={v=>setForm(f=>({...f,data:v}))} placeholder="01/01/2025" required/>
+            <SelectField label="Empresa" value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))} required/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <SelectField label="Equipe" value={form.teamId} onChange={v=>setForm(f=>({...f,teamId:v,userId:""}))} options={teams.map(t=>({value:t.id,label:t.name}))} required/>
+            <SelectField label="Usuário" value={form.userId} onChange={v=>setForm(f=>({...f,userId:v}))} options={teamUsers.map(u=>({value:u.id,label:u.name}))} required/>
+          </div>
+          <SelectField label="Tipo de Veículo" value={form.vehicleTypeId} onChange={v=>setForm(f=>({...f,vehicleTypeId:v}))} options={vehicleTypes.map(vt=>({value:vt.id,label:vt.name}))} required/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
+            <Input label="Km Inicial" type="number" value={String(form.kmInicial)} onChange={v=>handleKmChange("kmInicial",v)} required/>
+            <Input label="Km Final"   type="number" value={String(form.kmFinal)}   onChange={v=>handleKmChange("kmFinal",v)}   required/>
+            <div style={S.formRow}>
+              <label style={S.label}>Total km</label>
+              <input value={Number(form.totalKm).toLocaleString("pt-BR")} disabled style={{...S.input,background:"#f9f9f9",fontWeight:700}}/>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div style={S.formRow}>
+              <label style={S.label}>Valor km (automático)</label>
+              <input value={Number(form.valorKm).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} disabled style={{...S.input,background:"#f9f9f9"}}/>
+            </div>
+            <div style={S.formRow}>
+              <label style={S.label}>Valor Total km</label>
+              <input value={Number(form.valorTotalKm).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} disabled style={{...S.input,background:"#f9f9f9",fontWeight:700,color:C.success}}/>
+            </div>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Justificativa</label>
+            <textarea value={form.justificativa||""} onChange={e=>setForm(f=>({...f,justificativa:e.target.value}))} rows={3}
+              style={{...S.input,resize:"vertical"}} placeholder="Descreva o motivo/destino..."/>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Deseja excluir este registro de km?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── RELATÓRIO CONTROLE DE KILOMETRAGEM (s11) ─────────────────
+function RelatorioKmScreen({user}){
+  const[rows,setRows]=useState([]);const[loading,setLoading]=useState(false);
+  const[companies,setCompanies]=useState([]);const[teams,setTeams]=useState([]);
+  const[allUsers,setAllUsers]=useState([]);const[vehicleTypes,setVehicleTypes]=useState([]);
+  const[filters,setFilters]=useState({dateFrom:"",dateTo:"",companyId:"",teamId:"",userId:"",vehicleTypeId:""});
+  const p=user.permissions?.s11;
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/companies"),api.get("/teams"),api.get("/users"),api.get("/vehicle-types")])
+      .then(([c,t,u,vt])=>{setCompanies(c);setTeams(t);setAllUsers(u);setVehicleTypes(vt);})
+      .catch(e=>alert(e.message));
+  },[]);
+
+  const search=async()=>{
+    setLoading(true);
+    const q=new URLSearchParams();
+    Object.entries(filters).forEach(([k,v])=>{if(v)q.set(k,v);});
+    try{const r=await api.get(`/km-records/report?${q}`);setRows(r);}
+    catch(e){alert(e.message);}finally{setLoading(false);}
+  };
+
+  const fmtMoney=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+
+  // Group by user
+  const groups=rows.reduce((acc,r)=>{
+    if(!acc[r.userId]){acc[r.userId]={userName:r.userName,rows:[],totalValorTotal:0};}
+    acc[r.userId].rows.push(r);
+    acc[r.userId].totalValorTotal+=parseFloat(r.valorTotalKm||0);
+    return acc;
+  },{});
+  const grandTotal=rows.reduce((s,r)=>s+parseFloat(r.valorTotalKm||0),0);
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📊 Controle de Kilometragem</span></div>
+      {/* Filtros */}
+      <div style={{background:C.bg,borderRadius:8,padding:16,marginBottom:20,border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,letterSpacing:.5}}>FILTROS</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12}}>
+          <Input label="Data De (dd/mm/aaaa)"  value={filters.dateFrom}      onChange={v=>setFilters(f=>({...f,dateFrom:v}))}      placeholder="01/01/2025"/>
+          <Input label="Data Até (dd/mm/aaaa)" value={filters.dateTo}        onChange={v=>setFilters(f=>({...f,dateTo:v}))}        placeholder="31/12/2025"/>
+          <SelectField label="Empresa"     value={filters.companyId}     onChange={v=>setFilters(f=>({...f,companyId:v}))}     options={companies.map(c=>({value:c.id,label:c.name}))}/>
+          <SelectField label="Equipe"      value={filters.teamId}        onChange={v=>setFilters(f=>({...f,teamId:v}))}        options={teams.map(t=>({value:t.id,label:t.name}))}/>
+          <SelectField label="Usuário"     value={filters.userId}        onChange={v=>setFilters(f=>({...f,userId:v}))}        options={allUsers.map(u=>({value:u.id,label:u.name}))}/>
+          <SelectField label="Tipo Veículo" value={filters.vehicleTypeId} onChange={v=>setFilters(f=>({...f,vehicleTypeId:v}))} options={vehicleTypes.map(vt=>({value:vt.id,label:vt.name}))}/>
+        </div>
+        <div style={{marginTop:12,display:"flex",gap:10}}>
+          <button style={S.btnAdd} onClick={search}>🔍 Pesquisar</button>
+          <button style={S.btnCancel} onClick={()=>{setFilters({dateFrom:"",dateTo:"",companyId:"",teamId:"",userId:"",vehicleTypeId:""});setRows([]);}}>Limpar</button>
+        </div>
+      </div>
+      {loading?<Spinner/>:rows.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📊</span>Nenhum resultado.</div>:(
+        <div>
+          {Object.values(groups).map(g=>(
+            <div key={g.userName} style={{marginBottom:24}}>
+              <div style={{background:C.primary,color:C.white,padding:"8px 14px",borderRadius:"6px 6px 0 0",fontWeight:700,fontSize:13}}>
+                👤 {g.userName}
+              </div>
+              <div style={{overflowX:"auto"}}>
+              <table style={S.table}><thead><tr>
+                {["Tipo Veículo","Km Inicial","Km Final","Total km","Valor km","Valor Total km","Justificativa"].map(h=><th key={h} style={S.th}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {g.rows.map((r,i)=>(
+                  <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                    <td style={S.td}>{r.vehicleTypeName}</td>
+                    <td style={{...S.td,textAlign:"right"}}>{Number(r.kmInicial).toLocaleString("pt-BR")}</td>
+                    <td style={{...S.td,textAlign:"right"}}>{Number(r.kmFinal).toLocaleString("pt-BR")}</td>
+                    <td style={{...S.td,textAlign:"right",fontWeight:700}}>{Number(r.totalKm).toLocaleString("pt-BR")}</td>
+                    <td style={{...S.td,textAlign:"right"}}>{fmtMoney(r.valorKm)}</td>
+                    <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.success}}>{fmtMoney(r.valorTotalKm)}</td>
+                    <td style={S.td}><span style={{fontSize:12,color:C.textLight}}>{r.justificativa||"—"}</span></td>
+                  </tr>
+                ))}
+                <tr style={{background:"#FFF8E1"}}>
+                  <td colSpan={5} style={{...S.td,fontWeight:700,color:C.accent}}>TOTAL {g.userName.toUpperCase()}</td>
+                  <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.primary}}>{fmtMoney(g.totalValorTotal)}</td>
+                  <td style={S.td}/>
+                </tr>
+              </tbody></table>
+              </div>
+            </div>
+          ))}
+          <div style={{background:C.dark,color:C.white,padding:"12px 16px",borderRadius:6,display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:14,fontWeight:700}}>
+            <span>TOTAL GERAL</span>
+            <span style={{color:C.primary,fontSize:16}}>{fmtMoney(grandTotal)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── FORNECEDORES (s12) ────────────────────────────────────────
+function FornecedoresScreen({user}){
+  const[items,setItems]=useState([]);const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(false);const[delId,setDelId]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const emptyForm={id:null,name:"",cnpj:"",contactName:"",contactPhone:"",contactEmail:"",observacao:""};
+  const[form,setForm]=useState(emptyForm);
+  const p=user.permissions?.s12;
+  useEffect(()=>{if(!p?.view)return;api.get("/suppliers").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));},[]);
+  const openAdd=()=>{setForm(emptyForm);setModal(true);};
+  const openEdit=i=>{setForm({...i});setModal(true);};
+  const save=async()=>{
+    if(!form.name.trim())return alert("Nome do fornecedor é obrigatório.");setSaving(true);
+    try{
+      if(form.id){const u=await api.put(`/suppliers/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
+      else{const c=await api.post("/suppliers",form);setItems(is=>[...is,c]);}
+      setModal(false);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{try{await api.delete(`/suppliers/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>🏭 Fornecedores</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Fornecedor</button>}</div>
+      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏭</span>Nenhum fornecedor.</div>:(
+        <div style={{overflowX:"auto"}}>
+        <table style={S.table}><thead><tr>
+          {["Fornecedor","CNPJ","Contato","Fone","E-mail","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+        </tr></thead>
+        <tbody>{items.map(it=>(
+          <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={S.td}><strong>{it.name}</strong></td>
+            <td style={S.td}>{it.cnpj||"—"}</td>
+            <td style={S.td}>{it.contactName||"—"}</td>
+            <td style={S.td}>{it.contactPhone||"—"}</td>
+            <td style={S.td}>{it.contactEmail||"—"}</td>
+            <td style={S.td}>
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+            </td>
+          </tr>
+        ))}</tbody></table>
+        </div>
+      )}
+      {modal&&(
+        <Modal title={form.id?"Editar Fornecedor":"Novo Fornecedor"} onClose={()=>setModal(false)}>
+          <Input label="Fornecedor" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
+          <Input label="CNPJ" value={form.cnpj} onChange={v=>setForm(f=>({...f,cnpj:v}))} placeholder="00.000.000/0000-00"/>
+          <Input label="Nome do Contato" value={form.contactName} onChange={v=>setForm(f=>({...f,contactName:v}))}/>
+          <Input label="Fone do Contato" value={form.contactPhone} onChange={v=>setForm(f=>({...f,contactPhone:v}))} placeholder="(11) 99999-9999"/>
+          <Input label="E-mail do Contato" type="email" value={form.contactEmail} onChange={v=>setForm(f=>({...f,contactEmail:v}))}/>
+          <div style={S.formRow}>
+            <label style={S.label}>Observação</label>
+            <textarea value={form.observacao||""} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))} rows={3}
+              style={{...S.input,resize:"vertical"}} placeholder="Observações..."/>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Deseja excluir este fornecedor?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── CONTRATOS (s13) ───────────────────────────────────────────
+function ContratosScreen({user}){
+  const[items,setItems]=useState([]);const[companies,setCompanies]=useState([]);
+  const[suppliers,setSuppliers]=useState([]);
+  const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
+  const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
+  const emptyForm={id:null,companyId:"",supplierId:"",contractNumber:"",dataInicio:"",dataFim:"",valor:"",valorAtual:"",observacao:"",attachments:[]};
+  const[form,setForm]=useState(emptyForm);
+  const p=user.permissions?.s13;
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/contracts"),api.get("/companies"),api.get("/suppliers")])
+      .then(([it,c,s])=>{setItems(it);setCompanies(c);setSuppliers(s);})
+      .catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[]);
+
+  const openAdd=()=>{setForm(emptyForm);setModal(true);};
+  const openEdit=it=>{setForm({...it,valor:it.valor?String(it.valor):"",valorAtual:it.valorAtual?String(it.valorAtual):"",attachments:it.attachments||[]});setModal(true);};
+
+  const handleFile=e=>{
+    const files=Array.from(e.target.files);
+    files.forEach(file=>{
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        setForm(f=>({...f,attachments:[...f.attachments,{name:file.name,type:file.type,size:file.size,data:ev.target.result}]}));
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value="";
+  };
+
+  const removeAttachment=idx=>{setForm(f=>({...f,attachments:f.attachments.filter((_,i)=>i!==idx)}));};
+
+  const downloadFile=(att)=>{
+    const a=document.createElement("a");a.href=att.data;a.download=att.name;a.click();
+  };
+
+  const save=async()=>{
+    if(!form.companyId||!form.supplierId)return alert("Empresa e Fornecedor são obrigatórios.");
+    setSaving(true);
+    try{
+      if(form.id){const u=await api.put(`/contracts/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
+      else{const c=await api.post("/contracts",form);setItems(is=>[...is,c]);}
+      setModal(false);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{try{await api.delete(`/contracts/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+  const fmtMoney=v=>v?Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}):"—";
+  const fmtSize=b=>{if(b<1024)return`${b}B`;if(b<1048576)return`${(b/1024).toFixed(1)}KB`;return`${(b/1048576).toFixed(1)}MB`;};
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📄 Contratos</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Contrato</button>}</div>
+      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📄</span>Nenhum contrato.</div>:(
+        <div style={{overflowX:"auto"}}>
+        <table style={S.table}><thead><tr>
+          {["Empresa","Fornecedor","Nº Contrato","Data Início","Data Término","Valor","Valor Atual","Anexos","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+        </tr></thead>
+        <tbody>{items.map(it=>(
+          <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={S.td}>{it.companyName}</td>
+            <td style={S.td}><strong>{it.supplierName}</strong></td>
+            <td style={S.td}>{it.contractNumber||"—"}</td>
+            <td style={S.td}>{it.dataInicio||"—"}</td>
+            <td style={S.td}>{it.dataFim||"—"}</td>
+            <td style={{...S.td,textAlign:"right"}}>{fmtMoney(it.valor)}</td>
+            <td style={{...S.td,textAlign:"right"}}>{fmtMoney(it.valorAtual)}</td>
+            <td style={S.td}>
+              {(it.attachments||[]).length>0&&(
+                <span style={{...S.badge,...S.badgeActive}}>{(it.attachments||[]).length} arquivo(s)</span>
+              )}
+            </td>
+            <td style={S.td}>
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+            </td>
+          </tr>
+        ))}</tbody></table>
+        </div>
+      )}
+      {modal&&(
+        <Modal title={form.id?"Editar Contrato":"Novo Contrato"} onClose={()=>setModal(false)} wide>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <SelectField label="Empresa"    value={form.companyId}  onChange={v=>setForm(f=>({...f,companyId:v}))}  options={companies.map(c=>({value:c.id,label:c.name}))}  required/>
+            <SelectField label="Fornecedor" value={form.supplierId} onChange={v=>setForm(f=>({...f,supplierId:v}))} options={suppliers.map(s=>({value:s.id,label:s.name}))} required/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
+            <Input label="Número do Contrato" value={form.contractNumber} onChange={v=>setForm(f=>({...f,contractNumber:v}))}/>
+            <Input label="Data Início (dd/mm/aaaa)"    value={form.dataInicio} onChange={v=>setForm(f=>({...f,dataInicio:v}))} placeholder="01/01/2025"/>
+            <Input label="Data Término (dd/mm/aaaa)"   value={form.dataFim}    onChange={v=>setForm(f=>({...f,dataFim:v}))}    placeholder="31/12/2025"/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <Input label="Valor (R$)"        type="number" value={form.valor}      onChange={v=>setForm(f=>({...f,valor:v}))}      placeholder="0.00"/>
+            <Input label="Valor Atual (R$)"  type="number" value={form.valorAtual} onChange={v=>setForm(f=>({...f,valorAtual:v}))} placeholder="0.00"/>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Observação</label>
+            <textarea value={form.observacao||""} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))} rows={4}
+              style={{...S.input,resize:"vertical"}} placeholder="Observações do contrato..."/>
+          </div>
+          {/* Anexos */}
+          <div style={S.formRow}>
+            <label style={S.label}>Anexos</label>
+            <input type="file" multiple onChange={handleFile} style={{marginBottom:8}}/>
+            {form.attachments&&form.attachments.length>0&&(
+              <div style={{border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden"}}>
+                {form.attachments.map((att,idx)=>(
+                  <div key={idx} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span>📎</span>
+                      <div>
+                        <div style={{fontWeight:600}}>{att.name}</div>
+                        <div style={{fontSize:11,color:C.textLight}}>{fmtSize(att.size||0)}</div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:6}}>
+                      {att.data&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>downloadFile(att)}>⬇️ Baixar</button>}
+                      <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>removeAttachment(idx)}>🗑️</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Deseja excluir este contrato?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── RELATÓRIO CONTRATOS (s14) ─────────────────────────────────
+function RelatorioContratosScreen({user}){
+  const[rows,setRows]=useState([]);const[loading,setLoading]=useState(false);
+  const[companies,setCompanies]=useState([]);const[suppliers,setSuppliers]=useState([]);
+  const[filters,setFilters]=useState({companyId:"",supplierId:"",contractNumber:"",dateFrom:"",dateTo:""});
+  const p=user.permissions?.s14;
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/companies"),api.get("/suppliers")])
+      .then(([c,s])=>{setCompanies(c);setSuppliers(s);}).catch(e=>alert(e.message));
+  },[]);
+
+  const search=async()=>{
+    setLoading(true);
+    const q=new URLSearchParams();
+    Object.entries(filters).forEach(([k,v])=>{if(v)q.set(k,v);});
+    try{const r=await api.get(`/contracts/report?${q}`);setRows(r);}
+    catch(e){alert(e.message);}finally{setLoading(false);}
+  };
+
+  const fmtMoney=v=>v?Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}):"—";
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📑 Relatório de Contratos</span></div>
+      <div style={{background:C.bg,borderRadius:8,padding:16,marginBottom:20,border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,letterSpacing:.5}}>FILTROS</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12}}>
+          <SelectField label="Empresa"       value={filters.companyId}      onChange={v=>setFilters(f=>({...f,companyId:v}))}      options={companies.map(c=>({value:c.id,label:c.name}))}/>
+          <SelectField label="Fornecedor"    value={filters.supplierId}     onChange={v=>setFilters(f=>({...f,supplierId:v}))}     options={suppliers.map(s=>({value:s.id,label:s.name}))}/>
+          <Input label="Nº Contrato"         value={filters.contractNumber} onChange={v=>setFilters(f=>({...f,contractNumber:v}))} placeholder="Buscar..."/>
+          <Input label="Data Início De (dd/mm/aaaa)" value={filters.dateFrom} onChange={v=>setFilters(f=>({...f,dateFrom:v}))} placeholder="01/01/2025"/>
+          <Input label="Data Término Até (dd/mm/aaaa)" value={filters.dateTo} onChange={v=>setFilters(f=>({...f,dateTo:v}))}   placeholder="31/12/2025"/>
+        </div>
+        <div style={{marginTop:12,display:"flex",gap:10}}>
+          <button style={S.btnAdd} onClick={search}>🔍 Pesquisar</button>
+          <button style={S.btnCancel} onClick={()=>{setFilters({companyId:"",supplierId:"",contractNumber:"",dateFrom:"",dateTo:""});setRows([]);}}>Limpar</button>
+        </div>
+      </div>
+      {loading?<Spinner/>:rows.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📑</span>Nenhum resultado.</div>:(
+        <div style={{overflowX:"auto"}}>
+        <table style={S.table}><thead><tr>
+          {["Fornecedor","Nº Contrato","Data Início","Data Término","Valor","Valor Atual","Observação"].map(h=><th key={h} style={S.th}>{h}</th>)}
+        </tr></thead>
+        <tbody>{rows.map(r=>(
+          <tr key={r.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={S.td}><strong>{r.supplierName}</strong></td>
+            <td style={S.td}>{r.contractNumber||"—"}</td>
+            <td style={S.td}>{r.dataInicio||"—"}</td>
+            <td style={S.td}>{r.dataFim||"—"}</td>
+            <td style={{...S.td,textAlign:"right"}}>{fmtMoney(r.valor)}</td>
+            <td style={{...S.td,textAlign:"right"}}>{fmtMoney(r.valorAtual)}</td>
+            <td style={S.td}><span style={{fontSize:12,color:C.textLight,whiteSpace:"pre-wrap"}}>{r.observacao||"—"}</span></td>
+          </tr>
+        ))}</tbody></table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── HOME ──────────────────────────────────────────────────────
 function HomeScreen({user,navigate}){
   const[stats,setStats]=useState({usuarios:0,empresas:0,perfis:0,equipes:0,escalas:0});
@@ -1039,15 +1660,24 @@ function HomeScreen({user,navigate}){
 // ── SIDEBAR ───────────────────────────────────────────────────
 const navConfig=[
   {id:"cadastros",label:"Cadastros",icon:"📁",children:[
-    {id:"s1",label:"Perfis",  icon:"👤"},{id:"s2",label:"Usuários",icon:"👥"},
-    {id:"s3",label:"Empresas",icon:"🏢"},{id:"s4",label:"Equipes",  icon:"👷"},
+    {id:"s1",label:"Perfis",          icon:"👤"},
+    {id:"s2",label:"Usuários",        icon:"👥"},
+    {id:"s3",label:"Empresas",        icon:"🏢"},
+    {id:"s4",label:"Equipes",         icon:"👷"},
+    {id:"s8",label:"Tipo de Veículo", icon:"🚗"},
+    {id:"s9",label:"Valor do km",     icon:"💰"},
+    {id:"s12",label:"Fornecedores",   icon:"🏭"},
   ]},
   {id:"movimentacoes",label:"Movimentações",icon:"🔄",children:[
-    {id:"s5",label:"Sobreaviso/Extra",icon:"⏱️"},
-    {id:"s7",label:"Extra",            icon:"⚡"},
+    {id:"s5", label:"Sobreaviso/Extra",         icon:"⏱️"},
+    {id:"s7", label:"Extra Avulso",             icon:"⚡"},
+    {id:"s10",label:"Registro de Kilometragem", icon:"🛣️"},
+    {id:"s13",label:"Contratos",                icon:"📄"},
   ]},
   {id:"relatorios",label:"Relatórios",icon:"📊",children:[
-    {id:"s6",label:"Relatório de Horas",icon:"📋"},
+    {id:"s6", label:"Relatório de Horas",        icon:"📋"},
+    {id:"s11",label:"Controle de Kilometragem",  icon:"📊"},
+    {id:"s14",label:"Relatório de Contratos",    icon:"📑"},
   ]},
 ];
 function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
@@ -1103,7 +1733,14 @@ function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
   );
 }
 
-const screenTitles={home:"Início",s1:"Cadastros › Perfis",s2:"Cadastros › Usuários",s3:"Cadastros › Empresas",s4:"Cadastros › Equipes",s5:"Movimentações › Sobreaviso/Extra",s6:"Relatórios › Relatório de Horas",s7:"Movimentações › Extra"};
+const screenTitles={
+  home:"Início",
+  s1:"Cadastros › Perfis",s2:"Cadastros › Usuários",s3:"Cadastros › Empresas",s4:"Cadastros › Equipes",
+  s5:"Movimentações › Sobreaviso/Extra",s6:"Relatórios › Relatório de Horas",s7:"Movimentações › Extra Avulso",
+  s8:"Cadastros › Tipo de Veículo",s9:"Cadastros › Valor do km",
+  s10:"Movimentações › Registro de Kilometragem",s11:"Relatórios › Controle de Kilometragem",
+  s12:"Cadastros › Fornecedores",s13:"Movimentações › Contratos",s14:"Relatórios › Relatório de Contratos",
+};
 
 export default function App(){
   const[user,setUser]=useState(null);
@@ -1124,6 +1761,9 @@ export default function App(){
     s3:<SimpleListScreen user={user} screenId="s3" title="Empresas" icon="🏢" apiPath="/companies"/>,
     s4:<SimpleListScreen user={user} screenId="s4" title="Equipes"  icon="👷" apiPath="/teams"/>,
     s5:<ControleHorasScreen user={user}/>,s6:<RelatorioHorasScreen user={user}/>,s7:<ExtraAvulsoScreen user={user}/>,
+    s8:<TipoVeiculoScreen user={user}/>,s9:<ValorKmScreen user={user}/>,
+    s10:<RegistroKmScreen user={user}/>,s11:<RelatorioKmScreen user={user}/>,
+    s12:<FornecedoresScreen user={user}/>,s13:<ContratosScreen user={user}/>,s14:<RelatorioContratosScreen user={user}/>,
   };
 
   return(
