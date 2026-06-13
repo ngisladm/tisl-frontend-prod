@@ -1009,6 +1009,68 @@ function RelatorioHorasScreen({user}){
   );
 }
 
+// ── EMPRESAS (s3) ─────────────────────────────────────────────
+function EmpresasScreen({user}){
+  const[items,setItems]=useState([]);const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(false);const[delId,setDelId]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const[form,setForm]=useState({id:null,name:"",cnpj:"",active:true});
+  const p=user.permissions?.s3;
+  useEffect(()=>{if(!p?.view)return;api.get("/companies").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));},[]);
+  const openAdd=()=>{setForm({id:null,name:"",cnpj:"",active:true});setModal(true);};
+  const openEdit=i=>{setForm({id:i.id,name:i.name,cnpj:i.cnpj||"",active:i.active});setModal(true);};
+  const save=async()=>{
+    if(!form.name.trim())return alert("Nome é obrigatório.");setSaving(true);
+    try{
+      if(form.id){const u=await api.put(`/companies/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
+      else{const c=await api.post("/companies",form);setItems(is=>[...is,c]);}
+      setModal(false);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{try{await api.delete(`/companies/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>🏢 Empresas</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Nova Empresa</button>}</div>
+      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏢</span>Nenhuma empresa.</div>:(
+        <table style={S.table}><thead><tr>
+          {["Nome","CNPJ","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+        </tr></thead>
+        <tbody>{items.map(it=>(
+          <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={S.td}><strong>{it.name}</strong></td>
+            <td style={S.td}>{it.cnpj||"—"}</td>
+            <td style={S.td}><span style={{...S.badge,...(it.active?S.badgeActive:S.badgeInactive)}}>{it.active?"Ativo":"Inativo"}</span></td>
+            <td style={S.td}>
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+            </td>
+          </tr>
+        ))}</tbody></table>
+      )}
+      {modal&&(
+        <Modal title={form.id?"Editar Empresa":"Nova Empresa"} onClose={()=>setModal(false)}>
+          <Input label="Nome" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
+          <MaskedInput label="CNPJ" mask={MASK_CNPJ} value={form.cnpj} onChange={v=>setForm(f=>({...f,cnpj:v}))} placeholder="00.000.000/0000-00"/>
+          <div style={S.formRow}><label style={S.label}>STATUS</label>
+            <div style={{display:"flex",gap:16}}>{[{v:true,l:"Ativo"},{v:false,l:"Inativo"}].map(o=>(
+              <label key={String(o.v)} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
+                <input type="radio" checked={form.active===o.v} onChange={()=>setForm(f=>({...f,active:o.v}))} style={{accentColor:C.primary}}/>{o.l}
+              </label>
+            ))}</div>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Deseja excluir esta empresa?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
 // ── TIPO DE VEÍCULO (s8) ──────────────────────────────────────
 function TipoVeiculoScreen({user}){
   const[items,setItems]=useState([]);const[loading,setLoading]=useState(true);
@@ -1795,7 +1857,7 @@ export default function App(){
   const screenMap={
     home:<HomeScreen user={user} navigate={setScreen}/>,
     s1:<ProfilesScreen user={user}/>,s2:<UsersScreen user={user}/>,
-    s3:<SimpleListScreen user={user} screenId="s3" title="Empresas" icon="🏢" apiPath="/companies"/>,
+    s3:<EmpresasScreen user={user}/>,
     s4:<SimpleListScreen user={user} screenId="s4" title="Equipes"  icon="👷" apiPath="/teams"/>,
     s5:<ControleHorasScreen user={user}/>,s6:<RelatorioHorasScreen user={user}/>,s7:<ExtraAvulsoScreen user={user}/>,
     s8:<TipoVeiculoScreen user={user}/>,s9:<ValorKmScreen user={user}/>,
