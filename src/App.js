@@ -1478,7 +1478,7 @@ function ContratosScreen({user}){
               {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
             </td>
           </tr>
-        );}}</tbody></table>
+        );})}</tbody></table>
         </div>
       )}
       {modal&&(
@@ -1608,7 +1608,7 @@ function RelatorioContratosScreen({user}){
             <td style={{...S.td,textAlign:"right"}}>{fmtMoney(r.valorAtual)}</td>
             <td style={S.td}><span style={{fontSize:12,color:C.textLight,whiteSpace:"pre-wrap"}}>{r.observacao||"—"}</span></td>
           </tr>
-        );}}</tbody></table>
+        );})}</tbody></table>
         </div>
       )}
     </div>
