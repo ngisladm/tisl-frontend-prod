@@ -1006,7 +1006,7 @@ function RelatorioHorasScreen({user}){
       {/* Filtros */}
       <div style={{...S.card,marginBottom:20}}>
         <div style={{...S.cardHeader,marginBottom:16}}><span style={S.cardTitle}>📊 Relatório de Horas de Sobreaviso</span></div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:16,marginBottom:16}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12,marginBottom:16}}>
           <MaskedInput label="Período Inicial" mask={MASK_DATE} value={filters.dataInicio} onChange={v=>setFilters(f=>({...f,dataInicio:v}))} placeholder="01/01/2025" required/>
           <MaskedInput label="Período Final"   mask={MASK_DATE} value={filters.dataFim}    onChange={v=>setFilters(f=>({...f,dataFim:v}))}    placeholder="31/01/2025" required/>
           <SelectField label="Empresa" value={filters.companyId} onChange={v=>setFilters(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))}/>
@@ -1494,7 +1494,7 @@ function RelatorioKmScreen({user}){
                     <td style={{...S.td,textAlign:"right",fontWeight:700,fontSize:12}}>{Number(r.totalKm).toLocaleString("pt-BR")}</td>
                     <td style={{...S.td,textAlign:"right",fontSize:12}}>{fmtMoney(r.valorKm)}</td>
                     <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.success,fontSize:12}}>{fmtMoney(r.valorTotalKm)}</td>
-                    <td style={{...S.td,fontSize:12,whiteSpace:"pre-wrap",wordBreak:"break-word",color:C.textLight}}>{r.justificativa||"—"}</td>
+                    <td style={{...S.td,fontSize:12,whiteSpace:"pre-wrap",wordBreak:"break-word",color:C.textLight,minWidth:160}}>{r.justificativa||"—"}</td>
                   </tr>
                 ))}
                 <tr style={{background:"#FFF8E1"}}>
@@ -1594,6 +1594,7 @@ function ContratosScreen({user}){
   const[suppliers,setSuppliers]=useState([]);
   const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
+  const[filters,setFilters]=useState({companyId:"",supplierId:"",contractNumber:"",dataFrom:"",dataTo:"",frequencia:"",status:""});
   const emptyForm={id:null,companyId:"",supplierId:"",contractNumber:"",dataInicio:"",dataFim:"",valor:"",valorAtual:"",observacao:"",attachments:[],frequencia:""};
   const getStatus=dataFim=>{
     if(!dataFim)return"Ativo";
@@ -1648,15 +1649,42 @@ function ContratosScreen({user}){
 
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
+  const toISO13=d=>{if(!d||d.length<10)return"";const[dd,mm,yy]=d.split("/");return`${yy}-${mm}-${dd}`;};
+  const filteredContratos=items.filter(it=>{
+    if(filters.companyId&&it.companyId!==filters.companyId)return false;
+    if(filters.supplierId&&it.supplierId!==filters.supplierId)return false;
+    if(filters.contractNumber&&!((it.contractNumber||"").toLowerCase().includes(filters.contractNumber.toLowerCase())))return false;
+    if(filters.dataFrom&&toISO13(it.dataInicio)<toISO13(filters.dataFrom))return false;
+    if(filters.dataTo&&toISO13(it.dataFim)>toISO13(filters.dataTo))return false;
+    if(filters.frequencia&&it.frequencia!==filters.frequencia)return false;
+    if(filters.status&&getStatus(it.dataFim)!==filters.status)return false;
+    return true;
+  });
   return(
+    <div>
+      <div style={{background:C.bg,borderRadius:8,padding:16,marginBottom:16,border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,letterSpacing:.5}}>FILTROS</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12}}>
+          <SelectField label="Empresa"    value={filters.companyId}      onChange={v=>setFilters(f=>({...f,companyId:v}))}      options={companies.map(c=>({value:c.id,label:c.name}))}/>
+          <SelectField label="Fornecedor" value={filters.supplierId}     onChange={v=>setFilters(f=>({...f,supplierId:v}))}     options={suppliers.map(s=>({value:s.id,label:s.name}))}/>
+          <Input label="Nº Contrato"      value={filters.contractNumber} onChange={v=>setFilters(f=>({...f,contractNumber:v}))} placeholder="Buscar..."/>
+          <MaskedInput label="Data Início De"   mask={MASK_DATE} value={filters.dataFrom} onChange={v=>setFilters(f=>({...f,dataFrom:v}))} placeholder="01/01/2025"/>
+          <MaskedInput label="Data Término Até" mask={MASK_DATE} value={filters.dataTo}   onChange={v=>setFilters(f=>({...f,dataTo:v}))}   placeholder="31/12/2025"/>
+          <SelectField label="Frequência" value={filters.frequencia} onChange={v=>setFilters(f=>({...f,frequencia:v}))} options={["Mensal","Trimestral","Semestral","Anual"].map(o=>({value:o,label:o}))}/>
+          <SelectField label="Status"     value={filters.status}     onChange={v=>setFilters(f=>({...f,status:v}))}     options={["Ativo","Inativo"].map(o=>({value:o,label:o}))}/>
+        </div>
+        <div style={{marginTop:12,display:"flex",gap:10}}>
+          <button style={S.btnCancel} onClick={()=>setFilters({companyId:"",supplierId:"",contractNumber:"",dataFrom:"",dataTo:"",frequencia:"",status:""})}>Limpar Filtros</button>
+        </div>
+      </div>
     <div style={S.card}>
       <div style={S.cardHeader}><span style={S.cardTitle}>📄 Contratos</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Contrato</button>}</div>
-      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📄</span>Nenhum contrato.</div>:(
+      {filteredContratos.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📄</span>Nenhum contrato.</div>:(
         <div style={{overflowX:"auto"}}>
         <table style={S.table}><thead><tr>
           {["Empresa","Fornecedor","Nº Contrato","Data Início","Data Término","Frequência","Status","Valor","Valor Atual","Anexos","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
-        <tbody>{items.map(it=>{const st=getStatus(it.dataFim);return(
+        <tbody>{filteredContratos.map(it=>{const st=getStatus(it.dataFim);return(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}>{it.companyName}</td>
             <td style={S.td}><strong>{it.supplierName}</strong></td>
@@ -1742,6 +1770,7 @@ function ContratosScreen({user}){
       )}
       {delId&&<ConfirmModal msg="Deseja excluir este contrato?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
     </div>
+    </div>
   );
 }
 
@@ -1826,7 +1855,7 @@ function RelatorioContratosScreen({user}){
             <td style={S.td}><span style={{...S.badge,...(st==="Ativo"?S.badgeActive:S.badgeInactive)}}>{st}</span></td>
             <td style={{...S.td,textAlign:"right"}}>{fmtMoney(r.valor)}</td>
             <td style={{...S.td,textAlign:"right"}}>{fmtMoney(r.valorAtual)}</td>
-            <td style={S.td}><span style={{fontSize:12,color:C.textLight,whiteSpace:"pre-wrap"}}>{r.observacao||"—"}</span></td>
+            <td style={{...S.td,minWidth:180}}><span style={{fontSize:12,color:C.textLight,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{r.observacao||"—"}</span></td>
           </tr>
         );})}</tbody></table>
         </div>
