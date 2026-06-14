@@ -590,7 +590,9 @@ function CalendarioModal({escala,user,onClose}){
     Promise.all([api.get(`/escalas/${escala.id}/turnos`),api.get(`/teams/${escala.teamId}/users`)])
       .then(([t,u])=>{
         const map={};t.forEach(r=>{map[`${r.turnoDate}_${r.turno}`]=r;});
-        setTurnos(map);setTeamUsers(u);
+        setTurnos(map);
+        // Filtrar por empresa da escala (endpoint agora retorna companyId)
+        setTeamUsers(u.filter(usr=>!escala.companyId||usr.companyId===escala.companyId));
       }).catch(e=>alert(e.message)).finally(()=>setLoading(false));
   },[]);
 
@@ -829,7 +831,7 @@ function TurnoDetalheModal({dateStr,turno,turnoData,teamUsers,loggedUser,onSave,
 // ── EXTRA AVULSO ──────────────────────────────────────────────
 function ExtraAvulsoScreen({user}){
   const[items,setItems]=useState([]);const[companies,setCompanies]=useState([]);
-  const[teams,setTeams]=useState([]);const[teamUsers,setTeamUsers]=useState([]);
+  const[teams,setTeams]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
@@ -845,11 +847,12 @@ function ExtraAvulsoScreen({user}){
       .catch(e=>alert(e.message)).finally(()=>setLoading(false));
   },[]);
 
-  // Load users when team changes
-  useEffect(()=>{
-    if(!form.teamId){setTeamUsers([]);return;}
-    api.get(`/teams/${form.teamId}/users`).then(setTeamUsers).catch(()=>{});
-  },[form.teamId]);
+  // Derivar usuários disponíveis filtrando por empresa E equipe do formulário
+  const teamUsers=allUsers.filter(u=>
+    (!form.companyId||u.companyId===form.companyId)&&
+    (!form.teamId||u.teamId===form.teamId)&&
+    u.active!==false
+  );
 
   const openAdd=()=>{
     const uid=user.isMaster?"":(user.id||"");
@@ -952,7 +955,7 @@ function ExtraAvulsoScreen({user}){
       }
       {modal&&(
         <Modal title={form.id?"Editar Extra Avulso":"Novo Extra Avulso"} onClose={()=>setModal(false)}>
-          <SelectField label="Empresa" value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))} required/>
+          <SelectField label="Empresa" value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v,userId:user.isMaster?"":f.userId}))} options={companies.map(c=>({value:c.id,label:c.name}))} required/>
           <SelectField label="Equipe"  value={form.teamId}    onChange={v=>setForm(f=>({...f,teamId:v,userId:user.isMaster?"":f.userId}))} options={teams.map(t=>({value:t.id,label:t.name}))} required/>
           <SelectField label="Usuário" value={form.userId}    onChange={v=>setForm(f=>({...f,userId:v}))} options={teamUsers.map(u=>({value:u.id,label:u.name}))} required disabled={!user.isMaster}/>
           <MaskedInput label="Data" mask={MASK_DATE} value={form.data} onChange={v=>setForm(f=>({...f,data:v}))} placeholder="01/01/2025" required/>
@@ -1245,7 +1248,7 @@ function ValorKmScreen({user}){
 // ── REGISTRO DE KILOMETRAGEM (s10) ────────────────────────────
 function RegistroKmScreen({user}){
   const[items,setItems]=useState([]);const[companies,setCompanies]=useState([]);
-  const[teams,setTeams]=useState([]);const[teamUsers,setTeamUsers]=useState([]);
+  const[teams,setTeams]=useState([]);
   const[allUsers,setAllUsers]=useState([]);
   const[vehicleTypes,setVehicleTypes]=useState([]);
   const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
@@ -1262,10 +1265,12 @@ function RegistroKmScreen({user}){
       .catch(e=>alert(e.message)).finally(()=>setLoading(false));
   },[]);
 
-  useEffect(()=>{
-    if(!form.teamId){setTeamUsers([]);return;}
-    api.get(`/teams/${form.teamId}/users`).then(setTeamUsers).catch(()=>{});
-  },[form.teamId]);
+  // Derivar usuários disponíveis filtrando por empresa E equipe do formulário
+  const teamUsers=allUsers.filter(u=>
+    (!form.companyId||u.companyId===form.companyId)&&
+    (!form.teamId||u.teamId===form.teamId)&&
+    u.active!==false
+  );
 
   useEffect(()=>{
     if(!form.vehicleTypeId||!form.data)return;
@@ -1356,7 +1361,7 @@ function RegistroKmScreen({user}){
         <Modal title={form.id?"Editar Registro de km":"Novo Registro de km"} onClose={()=>setModal(false)} wide>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
             <MaskedInput label="Data" mask={MASK_DATE} value={form.data} onChange={v=>setForm(f=>({...f,data:v}))} placeholder="01/01/2025" required/>
-            <SelectField label="Empresa" value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))} required/>
+            <SelectField label="Empresa" value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v,userId:user.isMaster?"":f.userId}))} options={companies.map(c=>({value:c.id,label:c.name}))} required/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
             <SelectField label="Equipe"   value={form.teamId}  onChange={v=>setForm(f=>({...f,teamId:v,userId:user.isMaster?"":f.userId}))} options={teams.map(t=>({value:t.id,label:t.name}))} required/>
