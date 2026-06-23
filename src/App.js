@@ -1875,6 +1875,295 @@ function RelatorioContratosScreen({user}){
   );
 }
 
+// ── USER PROFILE MODAL ────────────────────────────────────────
+function UserProfileModal({user,onClose,onUserUpdated}){
+  const[tab,setTab]=useState("dados");
+  const[name,setName]=useState(user.name||"");
+  const[avatar,setAvatar]=useState(user.avatar||null);
+  const[avatarPreview,setAvatarPreview]=useState(user.avatar||null);
+  const[curPwd,setCurPwd]=useState("");
+  const[newPwd,setNewPwd]=useState("");
+  const[confPwd,setConfPwd]=useState("");
+  const[saving,setSaving]=useState(false);
+  const[err,setErr]=useState("");
+  const[ok,setOk]=useState("");
+
+  const handleFileChange=e=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const b64=ev.target.result;
+      setAvatar(b64);
+      setAvatarPreview(b64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveDados=async()=>{
+    if(!name.trim()){setErr("Nome é obrigatório.");return;}
+    setSaving(true);setErr("");setOk("");
+    try{
+      const updated=await api.put("/users/me",{name:name.trim(),avatar});
+      onUserUpdated({...user,...updated});
+      setOk("Perfil atualizado com sucesso!");
+    }catch(e){setErr(e.message);}
+    setSaving(false);
+  };
+
+  const saveSenha=async()=>{
+    if(!curPwd||!newPwd||!confPwd){setErr("Preencha todos os campos.");return;}
+    if(newPwd!==confPwd){setErr("As senhas não coincidem.");return;}
+    if(newPwd.length<6){setErr("A nova senha deve ter no mínimo 6 caracteres.");return;}
+    setSaving(true);setErr("");setOk("");
+    try{
+      await api.put("/users/me/password",{currentPassword:curPwd,newPassword:newPwd});
+      setOk("Senha alterada com sucesso!");
+      setCurPwd("");setNewPwd("");setConfPwd("");
+    }catch(e){setErr(e.message);}
+    setSaving(false);
+  };
+
+  const tabStyle=active=>({
+    padding:"8px 18px",border:"none",cursor:"pointer",fontSize:13,fontWeight:600,
+    background:active?C.primary:"none",color:active?C.white:C.textLight,
+    borderRadius:"6px 6px 0 0",borderBottom:active?`2px solid ${C.primary}`:"2px solid transparent"
+  });
+
+  return(
+    <Modal title="Meu Perfil" onClose={onClose}>
+      <div style={{display:"flex",gap:0,marginBottom:16,borderBottom:`1px solid ${C.border}`}}>
+        <button style={tabStyle(tab==="dados")} onClick={()=>{setErr("");setOk("");setTab("dados");}}>👤 Dados</button>
+        <button style={tabStyle(tab==="senha")} onClick={()=>{setErr("");setOk("");setTab("senha");}}>🔑 Senha</button>
+      </div>
+
+      {tab==="dados"&&(
+        <div>
+          {/* Avatar */}
+          <div style={{display:"flex",alignItems:"center",gap:20,marginBottom:24}}>
+            <div style={{width:80,height:80,borderRadius:"50%",overflow:"hidden",border:`3px solid ${C.primary}`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:C.primary}}>
+              {avatarPreview
+                ?<img src={avatarPreview} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                :<span style={{fontSize:28,fontWeight:700,color:C.white}}>{getInit(name)}</span>}
+            </div>
+            <div>
+              <label style={{...S.btnAdd,display:"inline-block",cursor:"pointer",fontSize:12,padding:"7px 14px"}}>
+                📷 Alterar foto
+                <input type="file" accept="image/*" onChange={handleFileChange} style={{display:"none"}}/>
+              </label>
+              {avatarPreview&&<button style={{...S.btnCancel,marginLeft:8,fontSize:12,padding:"7px 14px"}} onClick={()=>{setAvatar(null);setAvatarPreview(null);}}>Remover</button>}
+              <div style={{fontSize:11,color:C.textLight,marginTop:6}}>JPG, PNG ou GIF. Recomendado: 200×200px</div>
+            </div>
+          </div>
+          <Input label="Nome" value={name} onChange={setName} required/>
+          <Input label="E-mail" value={user.email} onChange={()=>{}} disabled/>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          {ok&&<div style={{color:C.success,fontSize:12,marginBottom:8}}>{ok}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={onClose}>Fechar</button>
+            <button style={S.btnSave} onClick={saveDados} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </div>
+      )}
+
+      {tab==="senha"&&(
+        <div>
+          <Input label="Senha atual" value={curPwd} onChange={setCurPwd} type="password" required/>
+          <Input label="Nova senha" value={newPwd} onChange={setNewPwd} type="password" required/>
+          <Input label="Confirmar nova senha" value={confPwd} onChange={setConfPwd} type="password" required/>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          {ok&&<div style={{color:C.success,fontSize:12,marginBottom:8}}>{ok}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={onClose}>Fechar</button>
+            <button style={S.btnSave} onClick={saveSenha} disabled={saving}>{saving?"Salvando...":"Alterar Senha"}</button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ── RELATÓRIO DE ESCALA DE SOBREAVISO ─────────────────────────
+function RelatorioEscalaScreen({user}){
+  const[escalas,setEscalas]=useState([]);
+  const[escalaSel,setEscalaSel]=useState("");
+  const[relatorio,setRelatorio]=useState(null);
+  const[loading,setLoading]=useState(false);
+  const[err,setErr]=useState("");
+  const isMobile=useIsMobile();
+
+  useEffect(()=>{api.get("/escalas").then(setEscalas).catch(()=>{});},[]);
+
+  const buscar=async()=>{
+    if(!escalaSel){setErr("Selecione uma escala.");return;}
+    setLoading(true);setErr("");setRelatorio(null);
+    try{
+      const data=await api.get(`/escalas/${escalaSel}/relatorio-calendario`);
+      setRelatorio(data);
+    }catch(e){setErr(e.message);}
+    setLoading(false);
+  };
+
+  // Gera todos os dias do período da escala
+  const buildCalendar=(escala,turnos)=>{
+    const [d1,m1,y1]=escala.dataInicio.split("/"); const di=new Date(`${y1}-${m1}-${d1}T12:00:00Z`);
+    const [d2,m2,y2]=escala.dataFim.split("/");   const df=new Date(`${y2}-${m2}-${d2}T12:00:00Z`);
+    const turnoMap={};
+    turnos.forEach(t=>{
+      if(!turnoMap[t.turnoDate])turnoMap[t.turnoDate]={};
+      turnoMap[t.turnoDate][t.turno]=t;
+    });
+    const days=[];
+    const cur=new Date(di);
+    while(cur<=df){
+      const iso=cur.toISOString().slice(0,10);
+      days.push({iso,date:new Date(cur),t1:turnoMap[iso]?.turno1||null,t2:turnoMap[iso]?.turno2||null});
+      cur.setUTCDate(cur.getUTCDate()+1);
+    }
+    return days;
+  };
+
+  const exportPDF=()=>{
+    if(!relatorio)return;
+    const{escala,turnos}=relatorio;
+    const days=buildCalendar(escala,turnos);
+    const doc=new jsPDF({orientation:"landscape"});
+    doc.setFontSize(14);
+    doc.text(`Escala de Sobreaviso — ${escala.companyName} / ${escala.teamName}`,14,16);
+    doc.setFontSize(10);
+    doc.text(`Período: ${escala.dataInicio} a ${escala.dataFim}`,14,23);
+    const rows=days.map(d=>{
+      const wd=DAYS_PT[d.date.getUTCDay()];
+      const [,dm,dd]=d.iso.split("-");
+      const feriado=(d.t1?.isFeriado||d.t2?.isFeriado)?"🎉":"";
+      return[`${dd}/${dm} (${wd})${feriado}`,d.t1?.userName||"—",d.t2?.userName||"—"];
+    });
+    autoTable(doc,{
+      head:[["Data","Turno 1 (00:00–07:30 / 00:00–12:00)","Turno 2 (17:30–00:00 / 12:00–00:00)"]],
+      body:rows,startY:30,styles:{fontSize:9},
+      headStyles:{fillColor:[240,165,0],textColor:255,fontStyle:"bold"},
+    });
+    doc.save(`Relatorio_Escala_${escala.companyName}_${escala.teamName}.pdf`);
+  };
+
+  const turnoLabel=(t,turnoKey)=>{
+    if(!t)return<span style={{color:C.textLight,fontSize:11}}>—</span>;
+    const bg=turnoKey==="turno1"?C.t1bg:C.t2bg;
+    const border=turnoKey==="turno1"?C.t1border:C.t2border;
+    return(
+      <div style={{background:bg,border:`1px solid ${border}`,borderRadius:4,padding:"3px 7px",fontSize:11,fontWeight:600,color:C.accent,display:"inline-block",maxWidth:"100%",wordBreak:"break-word"}}>
+        {t.userName||"?"}
+        {t.isFeriado&&<span style={{marginLeft:4,fontSize:10}}>🎉</span>}
+      </div>
+    );
+  };
+
+  return(
+    <div>
+      <div style={S.card}>
+        <div style={S.cardHeader}><span style={S.cardTitle}>📅 Relatório de Escala de Sobreaviso</span></div>
+        <div style={{display:"flex",gap:12,alignItems:"flex-end",flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:220}}>
+            <label style={S.label}>Escala de Sobreaviso *</label>
+            <select value={escalaSel} onChange={e=>setEscalaSel(e.target.value)} style={S.select}>
+              <option value="">Selecione uma escala...</option>
+              {escalas.map(e=><option key={e.id} value={e.id}>{e.companyName} / {e.teamName} ({e.dataInicio} – {e.dataFim})</option>)}
+            </select>
+          </div>
+          <button style={S.btnAdd} onClick={buscar} disabled={loading}>{loading?"Carregando...":"🔍 Gerar"}</button>
+        </div>
+        {err&&<div style={{...S.errorMsg,textAlign:"left",marginTop:10}}>{err}</div>}
+      </div>
+
+      {relatorio&&(()=>{
+        const{escala,turnos}=relatorio;
+        const days=buildCalendar(escala,turnos);
+        const preenchidos=turnos.filter(t=>t.userId).length;
+        const total=days.length*2;
+        return(
+          <div style={{...S.card,marginTop:16}}>
+            {/* Cabeçalho */}
+            <div style={{...S.cardHeader,flexWrap:"wrap",gap:8}}>
+              <div>
+                <div style={S.cardTitle}>📋 {escala.companyName} — {escala.teamName}</div>
+                <div style={{fontSize:12,color:C.textLight,marginTop:4}}>{escala.dataInicio} a {escala.dataFim} · {days.length} dias · {preenchidos}/{total} turnos preenchidos</div>
+              </div>
+              <button style={{...S.btnCancel,display:"flex",alignItems:"center",gap:6}} onClick={exportPDF}>📄 Exportar PDF</button>
+            </div>
+
+            {/* Legenda */}
+            <div style={{display:"flex",gap:12,marginBottom:12,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11}}>
+                <div style={{width:14,height:14,background:C.t1bg,border:`1px solid ${C.t1border}`,borderRadius:3}}/>
+                <span>Turno 1 (sem/feriado: 00:00–07:30 / 00:00–12:00)</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11}}>
+                <div style={{width:14,height:14,background:C.t2bg,border:`1px solid ${C.t2border}`,borderRadius:3}}/>
+                <span>Turno 2 (sem/feriado: 17:30–00:00 / 12:00–00:00)</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11}}><span>🎉</span><span>Feriado</span></div>
+            </div>
+
+            {/* Calendário */}
+            {isMobile?(
+              <div>
+                {days.map(d=>{
+                  const wd=DAYS_PT[d.date.getUTCDay()];
+                  const [,dm,dd]=d.iso.split("-");
+                  const isWE=d.date.getUTCDay()===0||d.date.getUTCDay()===6;
+                  const feriado=d.t1?.isFeriado||d.t2?.isFeriado;
+                  return(
+                    <div key={d.iso} style={{...S.mobileCard,borderLeft:`3px solid ${feriado?"#E67E22":isWE?"#8E44AD":C.border}`}}>
+                      <div style={{fontWeight:700,color:C.accent,marginBottom:8,fontSize:13}}>
+                        {dd}/{dm} ({wd}){isWE&&<span style={{color:"#8E44AD",marginLeft:6,fontSize:11}}>Fim de semana</span>}{feriado&&<span style={{marginLeft:6}}>🎉</span>}
+                      </div>
+                      <div style={{display:"flex",gap:4,marginBottom:4}}><span style={{fontSize:11,color:C.textLight,minWidth:54}}>Turno 1:</span>{turnoLabel(d.t1,"turno1")}</div>
+                      <div style={{display:"flex",gap:4}}><span style={{fontSize:11,color:C.textLight,minWidth:54}}>Turno 2:</span>{turnoLabel(d.t2,"turno2")}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            ):(
+              <div style={{overflowX:"auto"}}>
+                <table style={{...S.table,tableLayout:"fixed"}}>
+                  <colgroup><col style={{width:140}}/><col/><col/></colgroup>
+                  <thead><tr>
+                    <th style={S.th}>Data</th>
+                    <th style={{...S.th,color:C.t1border}}>Turno 1</th>
+                    <th style={{...S.th,color:C.t2border}}>Turno 2</th>
+                  </tr></thead>
+                  <tbody>
+                    {days.map(d=>{
+                      const wd=DAYS_PT[d.date.getUTCDay()];
+                      const [,dm,dd]=d.iso.split("-");
+                      const isWE=d.date.getUTCDay()===0||d.date.getUTCDay()===6;
+                      const feriado=d.t1?.isFeriado||d.t2?.isFeriado;
+                      const rowBg=feriado?"#FFF3E0":isWE?"#F3E5F5":C.white;
+                      return(
+                        <tr key={d.iso} style={{background:rowBg}}
+                          onMouseOver={e=>e.currentTarget.style.filter="brightness(0.97)"}
+                          onMouseOut={e=>e.currentTarget.style.filter="none"}>
+                          <td style={{...S.td,fontWeight:600}}>
+                            {dd}/{dm} <span style={{color:C.textLight,fontWeight:400,fontSize:11}}>({wd})</span>
+                            {isWE&&<span style={{color:"#8E44AD",marginLeft:6,fontSize:10,fontWeight:700}}>FDS</span>}
+                            {feriado&&<span style={{marginLeft:4}}>🎉</span>}
+                          </td>
+                          <td style={S.td}>{turnoLabel(d.t1,"turno1")}</td>
+                          <td style={S.td}>{turnoLabel(d.t2,"turno2")}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
 // ── HOME ──────────────────────────────────────────────────────
 function HomeScreen({user,navigate}){
   const[stats,setStats]=useState({usuarios:0,empresas:0,perfis:0,equipes:0,escalas:0});
@@ -1947,6 +2236,7 @@ const navConfig=[
     {id:"s6", label:"Relatório de Horas",        icon:"📋"},
     {id:"s11",label:"Controle de Km", icon:"📊"},
     {id:"s14",label:"Relatório de Contratos",    icon:"📑"},
+    {id:"s15",label:"Relatório de Escala",       icon:"📅"},
   ]},
 ];
 function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
@@ -1956,10 +2246,17 @@ function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
   return(
     <div style={{...S.sidebar,...(isMobile?{position:"fixed",top:0,left:0,height:"100vh",zIndex:300,overflowY:"auto"}:{})}}>
       <div style={{padding:"20px 16px",borderBottom:"1px solid #444",display:"flex",alignItems:"center"}}><Logo size={28}/></div>
-      <div style={{padding:"12px 16px 8px",borderBottom:"1px solid #444"}}>
-        <div style={{fontSize:12,color:"#aaa"}}>Usuário logado</div>
-        <div style={{fontSize:13,fontWeight:700,color:"#eee",marginTop:2}}>{user.name}</div>
-        <div style={{fontSize:11,color:"#888"}}>{user.email}</div>
+      <div style={{padding:"12px 16px 8px",borderBottom:"1px solid #444",display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:38,height:38,borderRadius:"50%",overflow:"hidden",border:`2px solid ${C.primary}`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:C.primary}}>
+          {user.avatar
+            ?<img src={user.avatar} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+            :<span style={{fontSize:14,fontWeight:700,color:"#fff"}}>{getInit(user.name)}</span>}
+        </div>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:12,color:"#aaa",marginBottom:1}}>Usuário logado</div>
+          <div style={{fontSize:13,fontWeight:700,color:"#eee",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{user.name}</div>
+          <div style={{fontSize:10,color:"#888",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{user.email}</div>
+        </div>
       </div>
       <nav style={S.navSection}>
         <div style={{padding:"8px 16px 4px",fontSize:10,color:"#777",fontWeight:700,letterSpacing:1}}>NAVEGAÇÃO</div>
@@ -2009,6 +2306,8 @@ const screenTitles={
   s8:"Cadastros › Tipo de Veículo",s9:"Cadastros › Valor do km",
   s10:"Movimentações › Registro de Km",s11:"Relatórios › Controle de Km",
   s12:"Cadastros › Fornecedores",s13:"Movimentações › Contratos",s14:"Relatórios › Relatório de Contratos",
+  s15:"Relatórios › Relatório de Escala",
+  profile:"Meu Perfil",
 };
 
 export default function App(){
@@ -2016,11 +2315,24 @@ export default function App(){
   const[screen,setScreen]=useState("home");
   const isMobile=useIsMobile();
   const[sidebarOpen,setSidebarOpen]=useState(false);
+  const[profileOpen,setProfileOpen]=useState(false);
 
   useEffect(()=>{const saved=localStorage.getItem("sl_session");if(saved){try{const{user,token}=JSON.parse(saved);api.setToken(token);setUser(user);}catch{localStorage.removeItem("sl_session");}}},[]);
 
-  const handleLogin=(user,token)=>{localStorage.setItem("sl_session",JSON.stringify({user,token}));setUser(user);setScreen("home");};
+  const handleLogin=(u,token)=>{localStorage.setItem("sl_session",JSON.stringify({user:u,token}));setUser(u);setScreen("home");};
   const handleLogout=()=>{localStorage.removeItem("sl_session");api.setToken(null);setUser(null);};
+
+  const handleUserUpdated=(updated)=>{
+    const saved=localStorage.getItem("sl_session");
+    if(saved){
+      try{
+        const sess=JSON.parse(saved);
+        sess.user={...sess.user,...updated};
+        localStorage.setItem("sl_session",JSON.stringify(sess));
+      }catch{}
+    }
+    setUser(u=>({...u,...updated}));
+  };
 
   if(!user)return<Login onLogin={handleLogin}/>;
 
@@ -2033,7 +2345,14 @@ export default function App(){
     s8:<TipoVeiculoScreen user={user}/>,s9:<ValorKmScreen user={user}/>,
     s10:<RegistroKmScreen user={user}/>,s11:<RelatorioKmScreen user={user}/>,
     s12:<FornecedoresScreen user={user}/>,s13:<ContratosScreen user={user}/>,s14:<RelatorioContratosScreen user={user}/>,
+    s15:<RelatorioEscalaScreen user={user}/>,
   };
+
+  const UserAvatar=({size=32,style:st={}})=>(
+    user.avatar
+      ?<img src={user.avatar} alt="avatar" style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",border:`2px solid ${C.primary}`,cursor:"pointer",...st}}/>
+      :<div style={{...S.userBadge,width:size,height:size,fontSize:size*0.4,cursor:"pointer",...st}}>{getInit(user.name)}</div>
+  );
 
   return(
     <div style={S.layout}>
@@ -2066,11 +2385,13 @@ export default function App(){
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             {screen!=="home"&&<button style={{...S.btnClose,...(isMobile?{padding:"6px 10px",fontSize:12}:{})}} onClick={()=>setScreen("home")}>✕ {!isMobile&&"Fechar"}</button>}
-            <div style={S.userBadge}>{getInit(user.name)}</div>
+            <div title="Meu perfil" onClick={()=>setProfileOpen(true)}><UserAvatar/></div>
           </div>
         </div>
         <div style={{...S.content,...(isMobile?{padding:12}:{})}}>{screenMap[screen]||<div style={S.emptyState}><span style={S.emptyIcon}>🚧</span>Em desenvolvimento</div>}</div>
       </div>
+
+      {profileOpen&&<UserProfileModal user={user} onClose={()=>setProfileOpen(false)} onUserUpdated={handleUserUpdated}/>}
     </div>
   );
 }
