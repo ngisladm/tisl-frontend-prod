@@ -1875,6 +1875,321 @@ function RelatorioContratosScreen({user}){
   );
 }
 
+// ── OPERADORAS (s16) ─────────────────────────────────────────
+function OperadorasScreen({user}){
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null); // null | {id?,name}
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const isMobile=useIsMobile();
+
+  const load=()=>api.get("/operadoras").then(setItems).catch(()=>{}).finally(()=>setLoading(false));
+  useEffect(()=>{load();},[]);
+
+  const save=async()=>{
+    if(!modal.name?.trim()){setErr("Nome é obrigatório.");return;}
+    try{
+      if(modal.id) await api.put(`/operadoras/${modal.id}`,{name:modal.name});
+      else         await api.post("/operadoras",{name:modal.name});
+      setModal(null);load();
+    }catch(e){setErr(e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/operadoras/${delId}`);setDelId(null);load();}
+    catch(e){alert(e.message);}
+  };
+
+  const canI=act=>user.permissions?.s16?.[act];
+  const cols=[{key:"name",label:"Operadora"}];
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>📡 Operadoras</span>
+        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({name:""});}}>+ Nova Operadora</button>}
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📡</span>Nenhuma operadora cadastrada</div>:(
+        isMobile
+          ?<MobileCardList items={items} columns={cols} actions={item=>(
+            <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,name:item.name});}}>Editar</button>}
+              {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}</>
+          )}/>
+          :<table style={S.table}><thead><tr><th style={S.th}>Operadora</th><th style={{...S.th,width:140}}>Ações</th></tr></thead>
+            <tbody>{items.map(item=>(
+              <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={S.td}>{item.name}</td>
+                <td style={S.td}>
+                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,name:item.name});}}>Editar</button>}
+                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+                </td>
+              </tr>
+            ))}</tbody>
+          </table>
+      )}
+      {modal&&(
+        <Modal title={modal.id?"Editar Operadora":"Nova Operadora"} onClose={()=>setModal(null)}>
+          <Input label="Operadora" value={modal.name} onChange={v=>setModal(m=>({...m,name:v}))} required/>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Excluir esta operadora?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── LINHAS FATURADAS (s17) ────────────────────────────────────
+function parseCSV(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length===0)return[];
+  // auto-detect separator
+  const sep=(lines[0].split(";").length>=lines[0].split(",").length)?";":","
+  return lines.map(l=>{
+    const cols=l.split(sep).map(c=>c.trim().replace(/^"|"$/g,""));
+    return{numeroLinha:cols[0]||"",plano:cols[1]||"",consumoLinha:cols[2]||"",valorLinha:cols[3]||""};
+  }).filter(r=>r.numeroLinha);
+}
+
+function LinhasFaturadasScreen({user}){
+  const[items,setItems]=useState([]);
+  const[operadoras,setOperadoras]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);      // form modal
+  const[importModal,setImportModal]=useState(null); // {linha} import modal
+  const[itensModal,setItensModal]=useState(null);   // {linha, itens[]}
+  const[csvPreview,setCsvPreview]=useState(null);   // parsed rows before processing
+  const[csvFile,setCsvFile]=useState(null);
+  const[importing,setImporting]=useState(false);
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const isMobile=useIsMobile();
+
+  const load=()=>{
+    setLoading(true);
+    Promise.all([api.get("/linhas-faturadas"),api.get("/operadoras")])
+      .then(([lf,op])=>{setItems(lf);setOperadoras(op);})
+      .catch(()=>{})
+      .finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+
+  const save=async()=>{
+    if(!modal.operadoraId||!modal.mesAno?.trim()){setErr("Operadora e Mês/Ano são obrigatórios.");return;}
+    try{
+      if(modal.id) await api.put(`/linhas-faturadas/${modal.id}`,{operadoraId:modal.operadoraId,mesAno:modal.mesAno});
+      else         await api.post("/linhas-faturadas",{operadoraId:modal.operadoraId,mesAno:modal.mesAno});
+      setModal(null);load();
+    }catch(e){setErr(e.message);}
+  };
+
+  const del=async()=>{
+    try{await api.delete(`/linhas-faturadas/${delId}`);setDelId(null);load();}
+    catch(e){alert(e.message);}
+  };
+
+  const handleFileChange=e=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    setCsvFile(file);
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const rows=parseCSV(ev.target.result);
+      setCsvPreview(rows);
+    };
+    reader.readAsText(file,"UTF-8");
+  };
+
+  const processar=async()=>{
+    if(!csvPreview||csvPreview.length===0){alert("Nenhum dado válido no arquivo.");return;}
+    setImporting(true);
+    try{
+      await api.post(`/linhas-faturadas/${importModal.id}/itens/importar`,{itens:csvPreview});
+      setImportModal(null);setCsvPreview(null);setCsvFile(null);load();
+    }catch(e){alert(e.message);}
+    setImporting(false);
+  };
+
+  const verItens=async(linha)=>{
+    try{
+      const itens=await api.get(`/linhas-faturadas/${linha.id}/itens`);
+      setItensModal({linha,itens});
+    }catch(e){alert(e.message);}
+  };
+
+  const exportItensPDF=()=>{
+    if(!itensModal)return;
+    const{linha,itens}=itensModal;
+    const doc=new jsPDF({orientation:"landscape"});
+    doc.setFontSize(13);
+    doc.text(`Itens de Linhas Faturadas — ${linha.operadoraName} ${linha.mesAno}`,14,16);
+    autoTable(doc,{
+      head:[["Operadora","Mês/Ano","Número Linha","Plano","Consumo Linha","Valor Linha"]],
+      body:itens.map(i=>[i.operadoraName,i.mesAno,i.numeroLinha||"—",i.plano||"—",i.consumoLinha||"—",i.valorLinha||"—"]),
+      startY:24,styles:{fontSize:9},
+      headStyles:{fillColor:[240,165,0],textColor:255,fontStyle:"bold"},
+    });
+    doc.save(`Itens_${linha.operadoraName}_${linha.mesAno}.pdf`);
+  };
+
+  const exportItensExcel=()=>{
+    if(!itensModal)return;
+    const{linha,itens}=itensModal;
+    const ws=XLSX.utils.json_to_sheet(itens.map(i=>({
+      "Operadora":i.operadoraName,"Mês/Ano":i.mesAno,
+      "Número Linha":i.numeroLinha,"Plano":i.plano,
+      "Consumo Linha":i.consumoLinha,"Valor Linha":i.valorLinha,
+    })));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Itens");
+    XLSX.writeFile(wb,`Itens_${linha.operadoraName}_${linha.mesAno}.xlsx`);
+  };
+
+  const canI=act=>user.permissions?.s17?.[act];
+  const MASK_MESANO="99/9999";
+
+  return(
+    <div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>
+          <span style={S.cardTitle}>📱 Linhas Faturadas</span>
+          {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({operadoraId:"",mesAno:""});}}>+ Nova Linha</button>}
+        </div>
+        {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📱</span>Nenhuma linha faturada cadastrada</div>:(
+          isMobile?(
+            <div>{items.map(item=>(
+              <div key={item.id} style={S.mobileCard}>
+                <div style={{fontWeight:700,fontSize:13,marginBottom:6}}>{item.operadoraName}</div>
+                <div style={{fontSize:12,color:C.textLight,marginBottom:4}}>Mês/Ano: {item.mesAno}</div>
+                <div style={{fontSize:12,color:C.textLight,marginBottom:8}}>Itens importados: <strong>{item.totalItens}</strong></div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",paddingTop:8,borderTop:`1px solid ${C.border}`}}>
+                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,operadoraId:item.operadoraId,mesAno:item.mesAno});}}>Editar</button>}
+                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+                  {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F8F5",color:"#1E8449"}} onClick={()=>{setCsvPreview(null);setCsvFile(null);setImportModal(item);}}>📥 Importar</button>}
+                  <button style={{...S.actionBtn,background:"#EBF5FB",color:"#2980B9"}} onClick={()=>verItens(item)}>📋 Itens ({item.totalItens})</button>
+                </div>
+              </div>
+            ))}</div>
+          ):(
+            <div style={{overflowX:"auto"}}>
+              <table style={S.table}><thead><tr>
+                {["Operadora","Mês/Ano","Itens Importados","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+              </tr></thead>
+              <tbody>{items.map(item=>(
+                <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                  <td style={{...S.td,fontWeight:600}}>{item.operadoraName}</td>
+                  <td style={S.td}>{item.mesAno}</td>
+                  <td style={S.td}><span style={{...S.badge,background:"#EBF5FB",color:"#2980B9"}}>{item.totalItens} {item.totalItens===1?"item":"itens"}</span></td>
+                  <td style={S.td}>
+                    {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,operadoraId:item.operadoraId,mesAno:item.mesAno});}}>Editar</button>}
+                    {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+                    {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F8F5",color:"#1E8449"}} onClick={()=>{setCsvPreview(null);setCsvFile(null);setImportModal(item);}}>📥 Importar CSV</button>}
+                    <button style={{...S.actionBtn,background:"#EBF5FB",color:"#2980B9"}} onClick={()=>verItens(item)}>📋 Ver Itens ({item.totalItens})</button>
+                  </td>
+                </tr>
+              ))}</tbody></table>
+            </div>
+          )
+        )}
+      </div>
+
+      {/* Form modal */}
+      {modal&&(
+        <Modal title={modal.id?"Editar Linha Faturada":"Nova Linha Faturada"} onClose={()=>setModal(null)}>
+          <SelectField label="Operadora" value={modal.operadoraId} onChange={v=>setModal(m=>({...m,operadoraId:v}))} required
+            options={operadoras.map(o=>({value:o.id,label:o.name}))}/>
+          <MaskedInput label="Mês/Ano" value={modal.mesAno} onChange={v=>setModal(m=>({...m,mesAno:v}))} mask={MASK_MESANO} placeholder="MM/AAAA" required/>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Import CSV modal */}
+      {importModal&&(
+        <Modal title={`Importar CSV — ${importModal.operadoraName} ${importModal.mesAno}`} onClose={()=>{setImportModal(null);setCsvPreview(null);setCsvFile(null);}}>
+          {importModal.totalItens>0&&(
+            <div style={{background:"#FFF3CD",border:"1px solid #F0A500",borderRadius:6,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#7D5A00"}}>
+              ⚠️ Esta linha já possui <strong>{importModal.totalItens} itens</strong> importados. Ao processar, eles serão <strong>substituídos</strong> pelos dados do novo arquivo.
+            </div>
+          )}
+          <div style={S.formRow}>
+            <label style={S.label}>Arquivo CSV *</label>
+            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+              <label style={{...S.btnAdd,display:"inline-block",cursor:"pointer",fontSize:12,padding:"8px 16px"}}>
+                📂 Selecionar arquivo
+                <input type="file" accept=".csv,text/csv" onChange={handleFileChange} style={{display:"none"}}/>
+              </label>
+              {csvFile&&<span style={{fontSize:12,color:C.textLight}}>{csvFile.name}</span>}
+            </div>
+          </div>
+          {csvPreview&&(
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:12,color:C.success,fontWeight:600,marginBottom:8}}>✅ {csvPreview.length} linha(s) encontrada(s) no arquivo</div>
+              <div style={{maxHeight:200,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:6}}>
+                <table style={{...S.table,fontSize:11}}><thead><tr>
+                  {["Número Linha","Plano","Consumo Linha","Valor Linha"].map(h=><th key={h} style={{...S.th,fontSize:10,padding:"6px 8px"}}>{h}</th>)}
+                </tr></thead>
+                <tbody>{csvPreview.slice(0,10).map((r,i)=>(
+                  <tr key={i}><td style={{...S.td,padding:"5px 8px"}}>{r.numeroLinha}</td><td style={{...S.td,padding:"5px 8px"}}>{r.plano}</td><td style={{...S.td,padding:"5px 8px"}}>{r.consumoLinha}</td><td style={{...S.td,padding:"5px 8px"}}>{r.valorLinha}</td></tr>
+                ))}</tbody></table>
+                {csvPreview.length>10&&<div style={{padding:"6px 10px",fontSize:11,color:C.textLight}}>...e mais {csvPreview.length-10} linha(s)</div>}
+              </div>
+            </div>
+          )}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>{setImportModal(null);setCsvPreview(null);setCsvFile(null);}}>Cancelar</button>
+            <button style={{...S.btnSave,background:C.success}} onClick={processar} disabled={!csvPreview||importing}>
+              {importing?"Processando...":"⚙️ Processar"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Itens modal */}
+      {itensModal&&(
+        <Modal title={`Itens — ${itensModal.linha.operadoraName} ${itensModal.linha.mesAno}`} onClose={()=>setItensModal(null)} extraWide>
+          <div style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+            <span style={{fontSize:12,color:C.textLight}}>{itensModal.itens.length} item(ns) importado(s)</span>
+            {itensModal.itens.length>0&&(
+              <div style={{display:"flex",gap:8}}>
+                <button style={{...S.btnCancel,fontSize:12,padding:"6px 12px"}} onClick={exportItensPDF}>📄 PDF</button>
+                <button style={{...S.btnAdd,background:"#1D6F42",fontSize:12,padding:"6px 12px"}} onClick={exportItensExcel}>📊 Excel</button>
+              </div>
+            )}
+          </div>
+          {itensModal.itens.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum item importado ainda</div>:(
+            <div style={{overflowX:"auto",maxHeight:"60vh",overflowY:"auto"}}>
+              <table style={S.table}><thead><tr>
+                {["Operadora","Mês/Ano","Número Linha","Plano","Consumo Linha","Valor Linha"].map(h=><th key={h} style={S.th}>{h}</th>)}
+              </tr></thead>
+              <tbody>{itensModal.itens.map(i=>(
+                <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                  <td style={S.td}>{i.operadoraName}</td><td style={S.td}>{i.mesAno}</td>
+                  <td style={S.td}><strong>{i.numeroLinha||"—"}</strong></td>
+                  <td style={S.td}>{i.plano||"—"}</td>
+                  <td style={S.td}>{i.consumoLinha||"—"}</td>
+                  <td style={S.td}>{i.valorLinha||"—"}</td>
+                </tr>
+              ))}</tbody></table>
+            </div>
+          )}
+          <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+            <button style={S.btnClose} onClick={()=>setItensModal(null)}>Fechar</button>
+          </div>
+        </Modal>
+      )}
+
+      {delId&&<ConfirmModal msg="Excluir esta linha e todos os seus itens importados?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
 // ── USER PROFILE MODAL ────────────────────────────────────────
 function UserProfileModal({user,onClose,onUserUpdated}){
   const[tab,setTab]=useState("dados");
@@ -2225,6 +2540,8 @@ const navConfig=[
     {id:"s8",label:"Tipo de Veículo", icon:"🚗"},
     {id:"s9",label:"Valor do km",     icon:"💰"},
     {id:"s12",label:"Fornecedores",   icon:"🏭"},
+    {id:"s16",label:"Operadoras",     icon:"📡"},
+    {id:"s17",label:"Linhas Faturadas",icon:"📱"},
   ]},
   {id:"movimentacoes",label:"Movimentações",icon:"🔄",children:[
     {id:"s5", label:"Sobreaviso/Extra",         icon:"⏱️"},
@@ -2307,6 +2624,8 @@ const screenTitles={
   s10:"Movimentações › Registro de Km",s11:"Relatórios › Controle de Km",
   s12:"Cadastros › Fornecedores",s13:"Movimentações › Contratos",s14:"Relatórios › Relatório de Contratos",
   s15:"Relatórios › Relatório de Escala",
+  s16:"Cadastros › Telefonia › Operadoras",
+  s17:"Cadastros › Telefonia › Linhas Faturadas",
   profile:"Meu Perfil",
 };
 
@@ -2346,6 +2665,8 @@ export default function App(){
     s10:<RegistroKmScreen user={user}/>,s11:<RelatorioKmScreen user={user}/>,
     s12:<FornecedoresScreen user={user}/>,s13:<ContratosScreen user={user}/>,s14:<RelatorioContratosScreen user={user}/>,
     s15:<RelatorioEscalaScreen user={user}/>,
+    s16:<OperadorasScreen user={user}/>,
+    s17:<LinhasFaturadasScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
