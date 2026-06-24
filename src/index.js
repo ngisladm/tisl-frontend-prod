@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { register } from './serviceWorkerRegistration';
+import { unregister } from './serviceWorkerRegistration';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -10,5 +10,4 @@ root.render(
   </React.StrictMode>
 );
 
-// Ativa o PWA — permite instalar no celular e funcionar offline
-register();
+unregister();
