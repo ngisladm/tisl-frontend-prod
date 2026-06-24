@@ -1948,7 +1948,7 @@ function parseCSV(text){
   if(lines.length===0)return[];
   // auto-detect separator
   const sep=(lines[0].split(";").length>=lines[0].split(",").length)?";":","
-  return lines.map(l=>{
+  return lines.slice(1).map(l=>{
     const cols=l.split(sep).map(c=>c.trim().replace(/^"|"$/g,""));
     return{numeroLinha:cols[0]||"",plano:cols[1]||"",consumoLinha:cols[2]||"",valorLinha:cols[3]||""};
   }).filter(r=>r.numeroLinha);
