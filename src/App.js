@@ -2554,7 +2554,7 @@ function FuncionariosScreen({user}){
   const[modal,setModal]=useState(null);
   const[delId,setDelId]=useState(null);
   const[err,setErr]=useState("");
-  const[filter,setFilter]=useState({nome:"",situacao:""});
+  const[filter,setFilter]=useState({nome:"",cpf:"",situacao:""});
   const isMobile=useIsMobile();
 
   const blankFunc=()=>({
@@ -2589,6 +2589,7 @@ function FuncionariosScreen({user}){
 
   const filtered=items.filter(i=>{
     if(filter.nome&&!i.nome.toLowerCase().includes(filter.nome.toLowerCase()))return false;
+    if(filter.cpf&&!(i.cpf||"").includes(filter.cpf))return false;
     if(filter.situacao&&i.situacao!==filter.situacao)return false;
     return true;
   });
@@ -2617,17 +2618,19 @@ function FuncionariosScreen({user}){
         {/* Filtros */}
         <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
           <input placeholder="Buscar por nome..." value={filter.nome} onChange={e=>setFilter(f=>({...f,nome:e.target.value}))}
-            style={{...S.input,flex:"1 1 200px",minWidth:160,padding:"6px 10px",fontSize:13}}/>
+            style={{...S.input,flex:"1 1 180px",minWidth:150,padding:"6px 10px",fontSize:13}}/>
+          <input placeholder="CPF..." value={filter.cpf} onChange={e=>setFilter(f=>({...f,cpf:e.target.value}))}
+            style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
           <select value={filter.situacao} onChange={e=>setFilter(f=>({...f,situacao:e.target.value}))}
             style={{...S.select,width:"auto",minWidth:130}}>
             <option value="">Todas as situações</option>
             {SITUACAO_OPTS.map(s=><option key={s} value={s}>{s}</option>)}
           </select>
-          {(filter.nome||filter.situacao)&&<button style={S.btnCancel} onClick={()=>setFilter({nome:"",situacao:""})}>Limpar</button>}
+          {(filter.nome||filter.cpf||filter.situacao)&&<button style={S.btnCancel} onClick={()=>setFilter({nome:"",cpf:"",situacao:""})}>Limpar</button>}
         </div>
 
         {loading?<Spinner/>:filtered.length===0
-          ?<div style={S.emptyState}><span style={S.emptyIcon}>👤</span>{(filter.nome||filter.situacao)?"Nenhum resultado para o filtro":"Nenhum funcionário cadastrado"}</div>
+          ?<div style={S.emptyState}><span style={S.emptyIcon}>👤</span>{(filter.nome||filter.cpf||filter.situacao)?"Nenhum resultado para o filtro":"Nenhum funcionário cadastrado"}</div>
           :(
           isMobile?(
             <div>{filtered.map(item=>(
