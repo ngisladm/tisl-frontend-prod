@@ -2490,6 +2490,10 @@ function AtivosScreen({user}){
 }
 
 // ── CONTROLE DE ATIVOS (s21) ──────────────────────────────────
+const TIPO_PACOTE_OPTS=["Voz","Dados","Voz e Dados"];
+const CONDICAO_OPTS=["Novo","Usado"];
+const STATUS_ATIVO_OPTS=["Em uso","Devolvido","Baixado"];
+
 function ControleAtivosScreen({user}){
   const[items,setItems]=useState([]);
   const[companies,setCompanies]=useState([]);
@@ -2498,10 +2502,10 @@ function ControleAtivosScreen({user}){
   const[linhasEstoque,setLinhasEstoque]=useState([]);
   const[ativos,setAtivos]=useState([]);
   const[loading,setLoading]=useState(true);
-  const[modal,setModal]=useState(null);         // form principal
-  const[itensModal,setItensModal]=useState(null); // {controle, itens[]}
-  const[itemForm,setItemForm]=useState(null);   // form de item
-  const[anexosModal,setAnexosModal]=useState(null); // {controleId, itemId, attachments[]}
+  const[modal,setModal]=useState(null);
+  const[itensModal,setItensModal]=useState(null);
+  const[itemForm,setItemForm]=useState(null);
+  const[anexosModal,setAnexosModal]=useState(null);
   const[delId,setDelId]=useState(null);
   const[delItemId,setDelItemId]=useState(null);
   const[err,setErr]=useState("");
@@ -2583,8 +2587,21 @@ function ControleAtivosScreen({user}){
 
   const canI=act=>user.permissions?.s21?.[act];
   const MASK_CPF="999.999.999-99";
+  const MASK_DATA="99/99/9999";
 
-  const blankItem=()=>({companyId:"",tipoAtivoId:"",operadoraId:"",linhaId:"",imei:"",ativoId:"",numeroSerie:"",numeroDocumento:""});
+  const isTelefonia=tipoAtivoId=>{
+    const ta=tipoAtivos.find(t=>t.id===tipoAtivoId);
+    return ta&&ta.name.toLowerCase()==="telefonia";
+  };
+
+  const blankItem=()=>({
+    companyId:"",tipoAtivoId:"",operadoraId:"",linhaId:"",ativoId:"",
+    acesso:"",estrutura:"",iccid:"",tipoPacote:"",
+    marca:"",modelo:"",imeiSlot1:"",imeiSlot2:"",numeroSerie:"",
+    sistemaOperacional:"",versao:"",processador:"",memoria:"",hd:"",
+    patrimonio:"",numeroDocumento:"",valor:"",dataAquisicao:"",
+    condicao:"",acessorios:"",statusAtivo:"",
+  });
 
   return(
     <div>
@@ -2650,27 +2667,36 @@ function ControleAtivosScreen({user}){
           {itensModal.itens.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum item cadastrado</div>:(
             <div style={{overflowX:"auto",maxHeight:"55vh",overflowY:"auto"}}>
               <table style={S.table}><thead><tr>
-                {["Empresa","Tipo","Operadora","Nº Linha","IMEI","Ativo","Nº Série","Nº Doc","Ações"].map(h=><th key={h} style={{...S.th,fontSize:11}}>{h}</th>)}
+                {["Tipo de Ativo","Empresa","Operadora / Ativo","Nº Linha / Modelo","Status","Ações"].map(h=><th key={h} style={{...S.th,fontSize:11}}>{h}</th>)}
               </tr></thead>
-              <tbody>{itensModal.itens.map(item=>(
-                <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
-                  <td style={{...S.td,fontSize:12}}>{item.companyName||"—"}</td>
-                  <td style={{...S.td,fontSize:12}}>{item.tipoAtivoName||"—"}</td>
-                  <td style={{...S.td,fontSize:12}}>{item.operadoraName||"—"}</td>
-                  <td style={{...S.td,fontSize:12}}>{item.numeroLinha||"—"}</td>
-                  <td style={{...S.td,fontSize:12}}>{item.imei||"—"}</td>
-                  <td style={{...S.td,fontSize:12}}>{item.ativoNome||"—"}</td>
-                  <td style={{...S.td,fontSize:12}}>{item.numeroSerie||"—"}</td>
-                  <td style={{...S.td,fontSize:12}}>{item.numeroDocumento||"—"}</td>
-                  <td style={S.td}>
-                    {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErrItem("");setItemForm({id:item.id,companyId:item.companyId||"",tipoAtivoId:item.tipoAtivoId||"",operadoraId:item.operadoraId||"",linhaId:item.linhaId||"",imei:item.imei||"",ativoId:item.ativoId||"",numeroSerie:item.numeroSerie||"",numeroDocumento:item.numeroDocumento||""});}}>✏️</button>}
-                    {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelItemId(item.id)}>🗑️</button>}
-                    <button style={{...S.actionBtn,background:"#F0E6FF",color:"#6C3483"}} onClick={()=>openAnexos(itensModal.controle.id,item)}>
-                      📎 Anexos{item.attachments?.length?` (${item.attachments.length})`:""}
-                    </button>
-                  </td>
-                </tr>
-              ))}</tbody></table>
+              <tbody>{itensModal.itens.map(item=>{
+                const tel=item.tipoAtivoName?.toLowerCase()==="telefonia";
+                return(
+                  <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                    <td style={{...S.td,fontSize:12}}>{item.tipoAtivoName||"—"}</td>
+                    <td style={{...S.td,fontSize:12}}>{item.companyName||"—"}</td>
+                    <td style={{...S.td,fontSize:12}}>{tel?(item.operadoraName||"—"):(item.ativoNome||"—")}</td>
+                    <td style={{...S.td,fontSize:12}}>{tel?(item.numeroLinha||"—"):(item.modelo||"—")}</td>
+                    <td style={{...S.td,fontSize:12}}>{item.statusAtivo?<span style={{...S.badge,background:"#EBF5FB",color:"#2980B9"}}>{item.statusAtivo}</span>:"—"}</td>
+                    <td style={S.td}>
+                      {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErrItem("");setItemForm({
+                        id:item.id,companyId:item.companyId||"",tipoAtivoId:item.tipoAtivoId||"",
+                        operadoraId:item.operadoraId||"",linhaId:item.linhaId||"",ativoId:item.ativoId||"",
+                        acesso:item.acesso||"",estrutura:item.estrutura||"",iccid:item.iccid||"",tipoPacote:item.tipoPacote||"",
+                        marca:item.marca||"",modelo:item.modelo||"",imeiSlot1:item.imeiSlot1||"",imeiSlot2:item.imeiSlot2||"",
+                        numeroSerie:item.numeroSerie||"",sistemaOperacional:item.sistemaOperacional||"",versao:item.versao||"",
+                        processador:item.processador||"",memoria:item.memoria||"",hd:item.hd||"",patrimonio:item.patrimonio||"",
+                        numeroDocumento:item.numeroDocumento||"",valor:item.valor||"",dataAquisicao:item.dataAquisicao||"",
+                        condicao:item.condicao||"",acessorios:item.acessorios||"",statusAtivo:item.statusAtivo||"",
+                      });}}>✏️</button>}
+                      {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelItemId(item.id)}>🗑️</button>}
+                      <button style={{...S.actionBtn,background:"#F0E6FF",color:"#6C3483"}} onClick={()=>openAnexos(itensModal.controle.id,item)}>
+                        📎{item.attachments?.length?` (${item.attachments.length})`:""}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}</tbody></table>
             </div>
           )}
           <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
@@ -2680,28 +2706,106 @@ function ControleAtivosScreen({user}){
       )}
 
       {/* Form de item */}
-      {itemForm&&(
-        <Modal title={itemForm.id?"Editar Item":"Novo Item"} onClose={()=>setItemForm(null)} wide>
-          <SelectField label="Empresa" value={itemForm.companyId} onChange={v=>setItemForm(m=>({...m,companyId:v}))}
-            options={companies.filter(c=>c.active).map(c=>({value:c.id,label:c.name}))}/>
-          <SelectField label="Tipo de Ativo" value={itemForm.tipoAtivoId} onChange={v=>setItemForm(m=>({...m,tipoAtivoId:v}))}
-            options={tipoAtivos.map(t=>({value:t.id,label:t.name}))}/>
-          <SelectField label="Operadora" value={itemForm.operadoraId} onChange={v=>setItemForm(m=>({...m,operadoraId:v}))}
-            options={operadoras.map(o=>({value:o.id,label:o.name}))}/>
-          <SelectField label="Número Linha (Em estoque)" value={itemForm.linhaId} onChange={v=>setItemForm(m=>({...m,linhaId:v}))}
-            options={linhasEstoque.map(l=>({value:l.id,label:`${l.numeroLinha}${l.operadoraName?" — "+l.operadoraName:""}`}))}/>
-          <Input label="IMEI" value={itemForm.imei} onChange={v=>setItemForm(m=>({...m,imei:v}))}/>
-          <SelectField label="Nome do Ativo" value={itemForm.ativoId} onChange={v=>setItemForm(m=>({...m,ativoId:v}))}
-            options={ativos.map(a=>({value:a.id,label:a.nome}))}/>
-          <Input label="Número de Série" value={itemForm.numeroSerie} onChange={v=>setItemForm(m=>({...m,numeroSerie:v}))}/>
-          <Input label="Número do Documento" value={itemForm.numeroDocumento} onChange={v=>setItemForm(m=>({...m,numeroDocumento:v}))}/>
-          {errItem&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{errItem}</div>}
-          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-            <button style={S.btnCancel} onClick={()=>setItemForm(null)}>Cancelar</button>
-            <button style={S.btnSave} onClick={saveItem}>Salvar</button>
+      {itemForm&&(()=>{
+        const tel=isTelefonia(itemForm.tipoAtivoId);
+        const F=(label,key,type="text")=>(
+          <div style={S.formRow}>
+            <label style={S.label}>{label}</label>
+            <input type={type} value={itemForm[key]||""} onChange={e=>setItemForm(m=>({...m,[key]:e.target.value}))}
+              style={S.input}
+              onFocus={e=>e.target.style.borderColor=C.primary}
+              onBlur={e=>e.target.style.borderColor=C.border}/>
           </div>
-        </Modal>
-      )}
+        );
+        const gridStyle={display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"};
+        return(
+          <Modal title={itemForm.id?"Editar Item":"Novo Item"} onClose={()=>setItemForm(null)} extraWide>
+            <div style={gridStyle}>
+              <SelectField label="Tipo de Ativo" value={itemForm.tipoAtivoId} onChange={v=>setItemForm(m=>({...m,tipoAtivoId:v,operadoraId:"",linhaId:"",ativoId:""}))}
+                options={tipoAtivos.map(t=>({value:t.id,label:t.name}))}/>
+              <SelectField label="Empresa" value={itemForm.companyId} onChange={v=>setItemForm(m=>({...m,companyId:v}))}
+                options={companies.filter(c=>c.active).map(c=>({value:c.id,label:c.name}))}/>
+            </div>
+
+            {/* Campos Telefonia */}
+            {tel&&(<>
+              <div style={gridStyle}>
+                <SelectField label="Operadora" value={itemForm.operadoraId} onChange={v=>setItemForm(m=>({...m,operadoraId:v}))}
+                  options={operadoras.map(o=>({value:o.id,label:o.name}))}/>
+                <SelectField label="Número Linha (Em estoque)" value={itemForm.linhaId} onChange={v=>setItemForm(m=>({...m,linhaId:v}))}
+                  options={linhasEstoque.map(l=>({value:l.id,label:`${l.numeroLinha}${l.operadoraName?" — "+l.operadoraName:""}`}))}/>
+              </div>
+              <div style={gridStyle}>
+                {F("Acesso","acesso")}
+                {F("Estrutura","estrutura")}
+              </div>
+              <div style={gridStyle}>
+                {F("ICCID","iccid")}
+                <SelectField label="Tipo Pacote" value={itemForm.tipoPacote} onChange={v=>setItemForm(m=>({...m,tipoPacote:v}))}
+                  options={TIPO_PACOTE_OPTS.map(s=>({value:s,label:s}))}/>
+              </div>
+              <div style={gridStyle}>
+                <MaskedInput label="Data Aquisição" value={itemForm.dataAquisicao} onChange={v=>setItemForm(m=>({...m,dataAquisicao:v}))} mask={MASK_DATA} placeholder="DD/MM/AAAA"/>
+                <SelectField label="Status" value={itemForm.statusAtivo} onChange={v=>setItemForm(m=>({...m,statusAtivo:v}))}
+                  options={STATUS_ATIVO_OPTS.map(s=>({value:s,label:s}))}/>
+              </div>
+            </>)}
+
+            {/* Campos não-Telefonia */}
+            {itemForm.tipoAtivoId&&!tel&&(<>
+              <div style={gridStyle}>
+                <SelectField label="Nome do Ativo" value={itemForm.ativoId} onChange={v=>setItemForm(m=>({...m,ativoId:v}))}
+                  options={ativos.map(a=>({value:a.id,label:a.nome}))}/>
+                {F("Marca","marca")}
+              </div>
+              <div style={gridStyle}>
+                {F("Modelo","modelo")}
+                {F("IMEI Slot 1","imeiSlot1")}
+              </div>
+              <div style={gridStyle}>
+                {F("IMEI Slot 2","imeiSlot2")}
+                {F("Número de Série","numeroSerie")}
+              </div>
+              <div style={gridStyle}>
+                {F("Sistema Operacional","sistemaOperacional")}
+                {F("Versão","versao")}
+              </div>
+              <div style={gridStyle}>
+                {F("Processador","processador")}
+                {F("Memória","memoria")}
+              </div>
+              <div style={gridStyle}>
+                {F("HD","hd")}
+                {F("Patrimônio","patrimonio")}
+              </div>
+              <div style={gridStyle}>
+                {F("Número do Documento","numeroDocumento")}
+                {F("Valor","valor","number")}
+              </div>
+              <div style={gridStyle}>
+                <MaskedInput label="Data Aquisição" value={itemForm.dataAquisicao} onChange={v=>setItemForm(m=>({...m,dataAquisicao:v}))} mask={MASK_DATA} placeholder="DD/MM/AAAA"/>
+                <SelectField label="Condição" value={itemForm.condicao} onChange={v=>setItemForm(m=>({...m,condicao:v}))}
+                  options={CONDICAO_OPTS.map(s=>({value:s,label:s}))}/>
+              </div>
+              <div style={S.formRow}>
+                <label style={S.label}>Acessórios</label>
+                <textarea value={itemForm.acessorios||""} onChange={e=>setItemForm(m=>({...m,acessorios:e.target.value}))}
+                  style={{...S.input,height:64,resize:"vertical"}}/>
+              </div>
+              <SelectField label="Status" value={itemForm.statusAtivo} onChange={v=>setItemForm(m=>({...m,statusAtivo:v}))}
+                options={STATUS_ATIVO_OPTS.map(s=>({value:s,label:s}))}/>
+            </>)}
+
+            {!itemForm.tipoAtivoId&&<div style={{color:C.textLight,fontSize:12,marginBottom:12}}>Selecione o Tipo de Ativo para ver os campos correspondentes.</div>}
+
+            {errItem&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{errItem}</div>}
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button style={S.btnCancel} onClick={()=>setItemForm(null)}>Cancelar</button>
+              <button style={S.btnSave} onClick={saveItem}>Salvar</button>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* Anexos modal */}
       {anexosModal&&(
