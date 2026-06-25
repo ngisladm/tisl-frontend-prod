@@ -1967,6 +1967,7 @@ function LinhasFaturadasScreen({user}){
   const[importing,setImporting]=useState(false);
   const[delId,setDelId]=useState(null);
   const[err,setErr]=useState("");
+  const[filterItensLinha,setFilterItensLinha]=useState("");
   const isMobile=useIsMobile();
 
   const load=()=>{
@@ -2167,38 +2168,50 @@ function LinhasFaturadasScreen({user}){
       )}
 
       {/* Itens modal */}
-      {itensModal&&(
-        <Modal title={`Itens — ${itensModal.linha.operadoraName} ${itensModal.linha.mesAno}`} onClose={()=>setItensModal(null)} extraWide>
-          <div style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-            <span style={{fontSize:12,color:C.textLight}}>{itensModal.itens.length} item(ns) importado(s)</span>
-            {itensModal.itens.length>0&&(
-              <div style={{display:"flex",gap:8}}>
-                <button style={{...S.btnCancel,fontSize:12,padding:"6px 12px"}} onClick={exportItensPDF}>📄 PDF</button>
-                <button style={{...S.btnAdd,background:"#1D6F42",fontSize:12,padding:"6px 12px"}} onClick={exportItensExcel}>📊 Excel</button>
+      {itensModal&&(()=>{
+        const itensFilt=filterItensLinha
+          ?itensModal.itens.filter(i=>(i.numeroLinha||"").toLowerCase().includes(filterItensLinha.toLowerCase()))
+          :itensModal.itens;
+        return(
+          <Modal title={`Itens — ${itensModal.linha.operadoraName} ${itensModal.linha.mesAno}`} onClose={()=>{setItensModal(null);setFilterItensLinha("");}} extraWide>
+            <div style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+              <span style={{fontSize:12,color:C.textLight}}>{itensFilt.length}/{itensModal.itens.length} item(ns)</span>
+              {itensModal.itens.length>0&&(
+                <div style={{display:"flex",gap:8}}>
+                  <button style={{...S.btnCancel,fontSize:12,padding:"6px 12px"}} onClick={exportItensPDF}>📄 PDF</button>
+                  <button style={{...S.btnAdd,background:"#1D6F42",fontSize:12,padding:"6px 12px"}} onClick={exportItensExcel}>📊 Excel</button>
+                </div>
+              )}
+            </div>
+            {/* Filtro por Número Linha */}
+            <div style={{marginBottom:12,display:"flex",gap:8,alignItems:"center"}}>
+              <input placeholder="Filtrar por Número Linha..." value={filterItensLinha}
+                onChange={e=>setFilterItensLinha(e.target.value)}
+                style={{...S.input,flex:1,padding:"6px 10px",fontSize:13}}/>
+              {filterItensLinha&&<button style={S.btnCancel} onClick={()=>setFilterItensLinha("")}>Limpar</button>}
+            </div>
+            {itensFilt.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>{filterItensLinha?"Nenhum resultado para o filtro":"Nenhum item importado ainda"}</div>:(
+              <div style={{overflowX:"auto",maxHeight:"55vh",overflowY:"auto"}}>
+                <table style={S.table}><thead><tr>
+                  {["Empresa","Operadora","Mês/Ano","Número Linha","Plano","Consumo Linha","Valor Linha"].map(h=><th key={h} style={S.th}>{h}</th>)}
+                </tr></thead>
+                <tbody>{itensFilt.map(i=>(
+                  <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                    <td style={S.td}>{i.companyName||"—"}</td><td style={S.td}>{i.operadoraName}</td><td style={S.td}>{i.mesAno}</td>
+                    <td style={S.td}><strong>{i.numeroLinha||"—"}</strong></td>
+                    <td style={S.td}>{i.plano||"—"}</td>
+                    <td style={S.td}>{i.consumoLinha||"—"}</td>
+                    <td style={S.td}>{i.valorLinha||"—"}</td>
+                  </tr>
+                ))}</tbody></table>
               </div>
             )}
-          </div>
-          {itensModal.itens.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum item importado ainda</div>:(
-            <div style={{overflowX:"auto",maxHeight:"60vh",overflowY:"auto"}}>
-              <table style={S.table}><thead><tr>
-                {["Empresa","Operadora","Mês/Ano","Número Linha","Plano","Consumo Linha","Valor Linha"].map(h=><th key={h} style={S.th}>{h}</th>)}
-              </tr></thead>
-              <tbody>{itensModal.itens.map(i=>(
-                <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
-                  <td style={S.td}>{i.companyName||"—"}</td><td style={S.td}>{i.operadoraName}</td><td style={S.td}>{i.mesAno}</td>
-                  <td style={S.td}><strong>{i.numeroLinha||"—"}</strong></td>
-                  <td style={S.td}>{i.plano||"—"}</td>
-                  <td style={S.td}>{i.consumoLinha||"—"}</td>
-                  <td style={S.td}>{i.valorLinha||"—"}</td>
-                </tr>
-              ))}</tbody></table>
+            <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+              <button style={S.btnClose} onClick={()=>{setItensModal(null);setFilterItensLinha("");}}>Fechar</button>
             </div>
-          )}
-          <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
-            <button style={S.btnClose} onClick={()=>setItensModal(null)}>Fechar</button>
-          </div>
-        </Modal>
-      )}
+          </Modal>
+        );
+      })()}
 
       {delId&&<ConfirmModal msg="Excluir esta linha e todos os seus itens importados?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
     </div>
@@ -2281,7 +2294,7 @@ function LinhasDisponiveisScreen({user}){
   const[modal,setModal]=useState(null);
   const[delId,setDelId]=useState(null);
   const[err,setErr]=useState("");
-  const[filter,setFilter]=useState({status:"",operadora:""});
+  const[filter,setFilter]=useState({status:"",operadora:"",empresa:"",numeroLinha:""});
   const isMobile=useIsMobile();
 
   const load=()=>{
@@ -2325,6 +2338,8 @@ function LinhasDisponiveisScreen({user}){
   const filtered=items.filter(i=>{
     if(filter.status&&i.status!==filter.status)return false;
     if(filter.operadora&&i.operadoraId!==filter.operadora)return false;
+    if(filter.empresa&&i.companyId!==filter.empresa)return false;
+    if(filter.numeroLinha&&!(i.numeroLinha||"").toLowerCase().includes(filter.numeroLinha.toLowerCase()))return false;
     return true;
   });
 
@@ -2340,18 +2355,26 @@ function LinhasDisponiveisScreen({user}){
           {canI("insert")&&<button style={S.btnAdd} onClick={openNew}>+ Nova Linha</button>}
         </div>
         {/* Filtros */}
-        <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+          <select value={filter.empresa} onChange={e=>setFilter(f=>({...f,empresa:e.target.value}))}
+            style={{...S.select,width:"auto",minWidth:150}}>
+            <option value="">Todas as empresas</option>
+            {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select value={filter.operadora} onChange={e=>setFilter(f=>({...f,operadora:e.target.value}))}
+            style={{...S.select,width:"auto",minWidth:150}}>
+            <option value="">Todas as operadoras</option>
+            {operadoras.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          <input placeholder="Número Linha..." value={filter.numeroLinha} onChange={e=>setFilter(f=>({...f,numeroLinha:e.target.value}))}
+            style={{...S.input,width:"auto",minWidth:140,padding:"6px 10px",fontSize:13}}/>
           <select value={filter.status} onChange={e=>setFilter(f=>({...f,status:e.target.value}))}
             style={{...S.select,width:"auto",minWidth:140}}>
             <option value="">Todos os status</option>
             {STATUS_LD.map(s=><option key={s} value={s}>{s}</option>)}
           </select>
-          <select value={filter.operadora} onChange={e=>setFilter(f=>({...f,operadora:e.target.value}))}
-            style={{...S.select,width:"auto",minWidth:160}}>
-            <option value="">Todas as operadoras</option>
-            {operadoras.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
-          {(filter.status||filter.operadora)&&<button style={S.btnCancel} onClick={()=>setFilter({status:"",operadora:""})}>Limpar</button>}
+          {(filter.status||filter.operadora||filter.empresa||filter.numeroLinha)&&
+            <button style={S.btnCancel} onClick={()=>setFilter({status:"",operadora:"",empresa:"",numeroLinha:""})}>Limpar</button>}
         </div>
 
         {loading?<Spinner/>:filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📶</span>Nenhuma linha disponível cadastrada</div>:(
@@ -2496,6 +2519,7 @@ const STATUS_ATIVO_OPTS=["Em uso","Devolvido","Baixado"];
 
 function ControleAtivosScreen({user}){
   const[items,setItems]=useState([]);
+  const[allItens,setAllItens]=useState([]);
   const[companies,setCompanies]=useState([]);
   const[tipoAtivos,setTipoAtivos]=useState([]);
   const[operadoras,setOperadoras]=useState([]);
@@ -2510,6 +2534,7 @@ function ControleAtivosScreen({user}){
   const[delItemId,setDelItemId]=useState(null);
   const[err,setErr]=useState("");
   const[errItem,setErrItem]=useState("");
+  const[filterCA,setFilterCA]=useState({empresa:"",funcionario:"",cpf:"",operadora:"",numeroLinha:"",dataAquisicao:"",numeroSerie:"",numeroDocumento:""});
   const isMobile=useIsMobile();
 
   const load=()=>{
@@ -2518,11 +2543,12 @@ function ControleAtivosScreen({user}){
       api.get("/controle-ativos"),api.get("/companies"),
       api.get("/tipo-ativos"),api.get("/operadoras"),
       api.get("/linhas-disponiveis"),api.get("/ativos"),
-    ]).then(([ca,co,ta,op,ld,av])=>{
+      api.get("/controle-ativos/itens/all"),
+    ]).then(([ca,co,ta,op,ld,av,ai])=>{
       setItems(ca);setCompanies(co);setTipoAtivos(ta);
       setOperadoras(op);
       setLinhasEstoque(ld.filter(l=>l.status==="Em estoque"));
-      setAtivos(av);
+      setAtivos(av);setAllItens(ai);
     }).catch(()=>{}).finally(()=>setLoading(false));
   };
   useEffect(()=>{load();},[]);
@@ -2603,6 +2629,31 @@ function ControleAtivosScreen({user}){
     condicao:"",acessorios:"",statusAtivo:"",
   });
 
+  // Filtro: campos de item criam um Set de controleAtivoIds compatíveis
+  const hasItemFilter=filterCA.empresa||filterCA.operadora||filterCA.numeroLinha||filterCA.dataAquisicao||filterCA.numeroSerie||filterCA.numeroDocumento;
+  const matchingIds=hasItemFilter?new Set(
+    allItens.filter(i=>{
+      if(filterCA.empresa&&i.companyId!==filterCA.empresa)return false;
+      if(filterCA.operadora&&i.operadoraId!==filterCA.operadora)return false;
+      if(filterCA.numeroLinha&&!(i.numeroLinha||"").toLowerCase().includes(filterCA.numeroLinha.toLowerCase()))return false;
+      if(filterCA.dataAquisicao&&!(i.dataAquisicao||"").includes(filterCA.dataAquisicao))return false;
+      if(filterCA.numeroSerie&&!(i.numeroSerie||"").toLowerCase().includes(filterCA.numeroSerie.toLowerCase()))return false;
+      if(filterCA.numeroDocumento&&!(i.numeroDocumento||"").toLowerCase().includes(filterCA.numeroDocumento.toLowerCase()))return false;
+      return true;
+    }).map(i=>i.controleAtivoId)
+  ):null;
+  const filteredCA=items.filter(item=>{
+    if(filterCA.funcionario&&!item.nomeFuncionario.toLowerCase().includes(filterCA.funcionario.toLowerCase()))return false;
+    if(filterCA.cpf&&!(item.cpf||"").includes(filterCA.cpf))return false;
+    if(matchingIds&&!matchingIds.has(item.id))return false;
+    return true;
+  });
+  const hasAnyFilter=Object.values(filterCA).some(v=>v);
+  const TxtFilter=({label,fkey})=>(
+    <input placeholder={label} value={filterCA[fkey]} onChange={e=>setFilterCA(f=>({...f,[fkey]:e.target.value}))}
+      style={{...S.input,width:"auto",flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+  );
+
   return(
     <div>
       {/* Lista principal */}
@@ -2611,9 +2662,31 @@ function ControleAtivosScreen({user}){
           <span style={S.cardTitle}>🖥️ Controle de Ativos</span>
           {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({nomeFuncionario:"",cpf:""});}}>+ Novo Registro</button>}
         </div>
-        {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🖥️</span>Nenhum registro cadastrado</div>:(
+
+        {/* Filtros */}
+        <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+          <TxtFilter label="Nome do Funcionário" fkey="funcionario"/>
+          <TxtFilter label="CPF" fkey="cpf"/>
+          <select value={filterCA.empresa} onChange={e=>setFilterCA(f=>({...f,empresa:e.target.value}))}
+            style={{...S.select,width:"auto",flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13}}>
+            <option value="">Todas as empresas</option>
+            {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select value={filterCA.operadora} onChange={e=>setFilterCA(f=>({...f,operadora:e.target.value}))}
+            style={{...S.select,width:"auto",flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13}}>
+            <option value="">Todas as operadoras</option>
+            {operadoras.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          <TxtFilter label="Número Linha" fkey="numeroLinha"/>
+          <TxtFilter label="Data Aquisição (DD/MM/AAAA)" fkey="dataAquisicao"/>
+          <TxtFilter label="Número de Série" fkey="numeroSerie"/>
+          <TxtFilter label="Número do Documento" fkey="numeroDocumento"/>
+          {hasAnyFilter&&<button style={{...S.btnCancel,whiteSpace:"nowrap"}} onClick={()=>setFilterCA({empresa:"",funcionario:"",cpf:"",operadora:"",numeroLinha:"",dataAquisicao:"",numeroSerie:"",numeroDocumento:""})}>Limpar</button>}
+        </div>
+
+        {loading?<Spinner/>:filteredCA.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🖥️</span>{hasAnyFilter?"Nenhum resultado para o filtro aplicado":"Nenhum registro cadastrado"}</div>:(
           isMobile?(
-            <div>{items.map(item=>(
+            <div>{filteredCA.map(item=>(
               <div key={item.id} style={S.mobileCard}>
                 <div style={{fontWeight:700,fontSize:13}}>{item.nomeFuncionario}</div>
                 <div style={{fontSize:12,color:C.textLight,marginBottom:6}}>CPF: {item.cpf||"—"} · {item.totalItens} item(ns)</div>
@@ -2628,7 +2701,7 @@ function ControleAtivosScreen({user}){
             <table style={S.table}><thead><tr>
               {["Funcionário","CPF","Itens","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
             </tr></thead>
-            <tbody>{items.map(item=>(
+            <tbody>{filteredCA.map(item=>(
               <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                 <td style={{...S.td,fontWeight:600}}>{item.nomeFuncionario}</td>
                 <td style={S.td}>{item.cpf||"—"}</td>
