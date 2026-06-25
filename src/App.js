@@ -1968,12 +1968,15 @@ function LinhasFaturadasScreen({user}){
   const[delId,setDelId]=useState(null);
   const[err,setErr]=useState("");
   const[filterItensLinha,setFilterItensLinha]=useState("");
+  const[filterLF,setFilterLF]=useState({empresa:"",operadora:"",numeroLinha:""});
   const isMobile=useIsMobile();
+
+  const[allLinhaItens,setAllLinhaItens]=useState([]);
 
   const load=()=>{
     setLoading(true);
-    Promise.all([api.get("/linhas-faturadas"),api.get("/operadoras"),api.get("/companies")])
-      .then(([lf,op,co])=>{setItems(lf);setOperadoras(op);setCompanies(co);})
+    Promise.all([api.get("/linhas-faturadas"),api.get("/operadoras"),api.get("/companies"),api.get("/linhas-faturadas/itens/all")])
+      .then(([lf,op,co,ai])=>{setItems(lf);setOperadoras(op);setCompanies(co);setAllLinhaItens(ai);})
       .catch(()=>{})
       .finally(()=>setLoading(false));
   };
@@ -2061,6 +2064,18 @@ function LinhasFaturadasScreen({user}){
   const canI=act=>user.permissions?.s17?.[act];
   const MASK_MESANO="99/9999";
 
+  // Filtro da lista principal
+  const idsComNumero=filterLF.numeroLinha
+    ?new Set(allLinhaItens.filter(i=>(i.numeroLinha||"").toLowerCase().includes(filterLF.numeroLinha.toLowerCase())).map(i=>i.linhaFaturadaId))
+    :null;
+  const filteredLF=items.filter(item=>{
+    if(filterLF.empresa&&item.companyId!==filterLF.empresa)return false;
+    if(filterLF.operadora&&item.operadoraId!==filterLF.operadora)return false;
+    if(idsComNumero&&!idsComNumero.has(item.id))return false;
+    return true;
+  });
+  const hasLFFilter=filterLF.empresa||filterLF.operadora||filterLF.numeroLinha;
+
   return(
     <div>
       <div style={S.card}>
@@ -2068,9 +2083,26 @@ function LinhasFaturadasScreen({user}){
           <span style={S.cardTitle}>📱 Linhas Faturadas</span>
           {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({operadoraId:"",companyId:"",mesAno:""});}}>+ Nova Linha</button>}
         </div>
-        {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📱</span>Nenhuma linha faturada cadastrada</div>:(
+        {/* Filtros */}
+        <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+          <select value={filterLF.empresa} onChange={e=>setFilterLF(f=>({...f,empresa:e.target.value}))}
+            style={{...S.select,width:"auto",minWidth:150}}>
+            <option value="">Todas as empresas</option>
+            {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select value={filterLF.operadora} onChange={e=>setFilterLF(f=>({...f,operadora:e.target.value}))}
+            style={{...S.select,width:"auto",minWidth:150}}>
+            <option value="">Todas as operadoras</option>
+            {operadoras.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          <input placeholder="Número Linha..." value={filterLF.numeroLinha}
+            onChange={e=>setFilterLF(f=>({...f,numeroLinha:e.target.value}))}
+            style={{...S.input,width:"auto",minWidth:150,padding:"6px 10px",fontSize:13}}/>
+          {hasLFFilter&&<button style={S.btnCancel} onClick={()=>setFilterLF({empresa:"",operadora:"",numeroLinha:""})}>Limpar</button>}
+        </div>
+        {loading?<Spinner/>:filteredLF.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📱</span>{hasLFFilter?"Nenhum resultado para o filtro aplicado":"Nenhuma linha faturada cadastrada"}</div>:(
           isMobile?(
-            <div>{items.map(item=>(
+            <div>{filteredLF.map(item=>(
               <div key={item.id} style={S.mobileCard}>
                 <div style={{fontWeight:700,fontSize:13,marginBottom:6}}>{item.operadoraName}</div>
                 <div style={{fontSize:12,color:C.textLight,marginBottom:4}}>Empresa: {item.companyName||"—"}</div>
@@ -2090,7 +2122,7 @@ function LinhasFaturadasScreen({user}){
               <table style={S.table}><thead><tr>
                 {["Empresa","Operadora","Mês/Ano","Itens Importados","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
               </tr></thead>
-              <tbody>{items.map(item=>(
+              <tbody>{filteredLF.map(item=>(
                 <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                   <td style={S.td}>{item.companyName||"—"}</td>
                   <td style={{...S.td,fontWeight:600}}>{item.operadoraName}</td>
