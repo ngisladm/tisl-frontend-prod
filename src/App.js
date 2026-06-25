@@ -2022,6 +2022,13 @@ function LinhasFaturadasScreen({user}){
     }catch(e){alert(e.message);}
   };
 
+  const gerarLinhasDisponiveis=async(item)=>{
+    try{
+      const res=await api.post(`/linhas-faturadas/${item.id}/gerar-linhas-disponiveis`,{});
+      alert(`✅ Concluído!\nInseridas: ${res.inseridos}\nIgnoradas (já existiam): ${res.ignorados}\nTotal processado: ${res.total}`);
+    }catch(e){alert(`❌ ${e.message}`);}
+  };
+
   const exportItensPDF=()=>{
     if(!itensModal)return;
     const{linha,itens}=itensModal;
@@ -2073,6 +2080,7 @@ function LinhasFaturadasScreen({user}){
                   {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
                   {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F8F5",color:"#1E8449"}} onClick={()=>{setCsvPreview(null);setCsvFile(null);setImportModal(item);}}>📥 Importar</button>}
                   <button style={{...S.actionBtn,background:"#EBF5FB",color:"#2980B9"}} onClick={()=>verItens(item)}>📋 Itens ({item.totalItens})</button>
+                  {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F0FF",color:"#4A235A"}} onClick={()=>gerarLinhasDisponiveis(item)}>📶 Gerar</button>}
                 </div>
               </div>
             ))}</div>
@@ -2092,6 +2100,7 @@ function LinhasFaturadasScreen({user}){
                     {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
                     {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F8F5",color:"#1E8449"}} onClick={()=>{setCsvPreview(null);setCsvFile(null);setImportModal(item);}}>📥 Importar CSV</button>}
                     <button style={{...S.actionBtn,background:"#EBF5FB",color:"#2980B9"}} onClick={()=>verItens(item)}>📋 Ver Itens ({item.totalItens})</button>
+                    {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F0FF",color:"#4A235A"}} onClick={()=>gerarLinhasDisponiveis(item)}>📶 Gerar Linhas</button>}
                   </td>
                 </tr>
               ))}</tbody></table>
@@ -2192,6 +2201,539 @@ function LinhasFaturadasScreen({user}){
       )}
 
       {delId&&<ConfirmModal msg="Excluir esta linha e todos os seus itens importados?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── TIPO DE ATIVOS (s18) ──────────────────────────────────────
+function TipoAtivosScreen({user}){
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const isMobile=useIsMobile();
+
+  const load=()=>api.get("/tipo-ativos").then(setItems).catch(()=>{}).finally(()=>setLoading(false));
+  useEffect(()=>{load();},[]);
+
+  const save=async()=>{
+    if(!modal.name?.trim()){setErr("Nome é obrigatório.");return;}
+    try{
+      if(modal.id) await api.put(`/tipo-ativos/${modal.id}`,{name:modal.name});
+      else         await api.post("/tipo-ativos",{name:modal.name});
+      setModal(null);load();
+    }catch(e){setErr(e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/tipo-ativos/${delId}`);setDelId(null);load();}
+    catch(e){alert(e.message);}
+  };
+  const canI=act=>user.permissions?.s18?.[act];
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>🗂️ Tipo de Ativo</span>
+        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({name:""});}}>+ Novo Tipo</button>}
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🗂️</span>Nenhum tipo de ativo cadastrado</div>:(
+        isMobile
+          ?<MobileCardList items={items} columns={[{key:"name",label:"Tipo de Ativo"}]} actions={item=>(
+            <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,name:item.name});}}>Editar</button>}
+              {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}</>
+          )}/>
+          :<table style={S.table}><thead><tr><th style={S.th}>Tipo de Ativo</th><th style={{...S.th,width:140}}>Ações</th></tr></thead>
+            <tbody>{items.map(item=>(
+              <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={S.td}>{item.name}</td>
+                <td style={S.td}>
+                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,name:item.name});}}>Editar</button>}
+                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+                </td>
+              </tr>
+            ))}</tbody>
+          </table>
+      )}
+      {modal&&(
+        <Modal title={modal.id?"Editar Tipo de Ativo":"Novo Tipo de Ativo"} onClose={()=>setModal(null)}>
+          <Input label="Tipo de Ativo" value={modal.name} onChange={v=>setModal(m=>({...m,name:v}))} required/>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Excluir este tipo de ativo?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── LINHAS DISPONÍVEIS (s19) ──────────────────────────────────
+const STATUS_LD=["Em análise","Em estoque"];
+function LinhasDisponiveisScreen({user}){
+  const[items,setItems]=useState([]);
+  const[companies,setCompanies]=useState([]);
+  const[operadoras,setOperadoras]=useState([]);
+  const[tipoAtivos,setTipoAtivos]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const[filter,setFilter]=useState({status:"",operadora:""});
+  const isMobile=useIsMobile();
+
+  const load=()=>{
+    setLoading(true);
+    Promise.all([
+      api.get("/linhas-disponiveis"),api.get("/companies"),
+      api.get("/operadoras"),api.get("/tipo-ativos"),
+    ]).then(([ld,co,op,ta])=>{setItems(ld);setCompanies(co);setOperadoras(op);setTipoAtivos(ta);})
+      .catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+
+  const getTelefoniaTipo=()=>tipoAtivos.find(t=>t.name.toLowerCase()==="telefonia");
+
+  const openNew=()=>{
+    const tel=getTelefoniaTipo();
+    if(!tel){alert("É necessário cadastrar um Tipo de Ativo chamado 'Telefonia' antes de inserir uma linha disponível.");return;}
+    setErr("");setModal({companyId:"",operadoraId:"",tipoAtivoId:tel.id,numeroLinha:"",status:"Em análise"});
+  };
+
+  const save=async()=>{
+    if(!modal.numeroLinha?.trim()){setErr("Número da linha é obrigatório.");return;}
+    if(modal.tipoAtivoId){
+      const ta=tipoAtivos.find(t=>t.id===modal.tipoAtivoId);
+      if(ta&&ta.name.toLowerCase()!=="telefonia"){
+        setErr("O Tipo de Ativo deve ser 'Telefonia'.");return;
+      }
+    }
+    try{
+      if(modal.id) await api.put(`/linhas-disponiveis/${modal.id}`,modal);
+      else         await api.post("/linhas-disponiveis",modal);
+      setModal(null);load();
+    }catch(e){setErr(e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/linhas-disponiveis/${delId}`);setDelId(null);load();}
+    catch(e){alert(e.message);}
+  };
+  const canI=act=>user.permissions?.s19?.[act];
+
+  const filtered=items.filter(i=>{
+    if(filter.status&&i.status!==filter.status)return false;
+    if(filter.operadora&&i.operadoraId!==filter.operadora)return false;
+    return true;
+  });
+
+  const statusBadge=s=>s==="Em estoque"
+    ?<span style={{...S.badge,...S.badgeActive}}>Em estoque</span>
+    :<span style={{...S.badge,background:"#FFF3CD",color:"#856404"}}>Em análise</span>;
+
+  return(
+    <div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>
+          <span style={S.cardTitle}>📶 Linhas Disponíveis</span>
+          {canI("insert")&&<button style={S.btnAdd} onClick={openNew}>+ Nova Linha</button>}
+        </div>
+        {/* Filtros */}
+        <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+          <select value={filter.status} onChange={e=>setFilter(f=>({...f,status:e.target.value}))}
+            style={{...S.select,width:"auto",minWidth:140}}>
+            <option value="">Todos os status</option>
+            {STATUS_LD.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={filter.operadora} onChange={e=>setFilter(f=>({...f,operadora:e.target.value}))}
+            style={{...S.select,width:"auto",minWidth:160}}>
+            <option value="">Todas as operadoras</option>
+            {operadoras.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          {(filter.status||filter.operadora)&&<button style={S.btnCancel} onClick={()=>setFilter({status:"",operadora:""})}>Limpar</button>}
+        </div>
+
+        {loading?<Spinner/>:filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📶</span>Nenhuma linha disponível cadastrada</div>:(
+          isMobile?(
+            <div>{filtered.map(item=>(
+              <div key={item.id} style={S.mobileCard}>
+                <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{item.numeroLinha}</div>
+                <div style={{fontSize:12,color:C.textLight,marginBottom:2}}>Operadora: {item.operadoraName||"—"}</div>
+                <div style={{fontSize:12,color:C.textLight,marginBottom:2}}>Empresa: {item.companyName||"—"}</div>
+                <div style={{fontSize:12,marginBottom:6}}>{statusBadge(item.status)}</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",paddingTop:8,borderTop:`1px solid ${C.border}`}}>
+                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}>Editar</button>}
+                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+                </div>
+              </div>
+            ))}</div>
+          ):(
+            <div style={{overflowX:"auto"}}>
+              <table style={S.table}><thead><tr>
+                {["Empresa","Operadora","Tipo de Ativo","Número Linha","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+              </tr></thead>
+              <tbody>{filtered.map(item=>(
+                <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                  <td style={S.td}>{item.companyName||"—"}</td>
+                  <td style={S.td}>{item.operadoraName||"—"}</td>
+                  <td style={S.td}>{item.tipoAtivoName||"—"}</td>
+                  <td style={{...S.td,fontWeight:600}}>{item.numeroLinha}</td>
+                  <td style={S.td}>{statusBadge(item.status)}</td>
+                  <td style={S.td}>
+                    {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}>Editar</button>}
+                    {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+                  </td>
+                </tr>
+              ))}</tbody></table>
+            </div>
+          )
+        )}
+      </div>
+
+      {modal&&(
+        <Modal title={modal.id?"Editar Linha Disponível":"Nova Linha Disponível"} onClose={()=>setModal(null)}>
+          <SelectField label="Empresa" value={modal.companyId} onChange={v=>setModal(m=>({...m,companyId:v}))}
+            options={companies.filter(c=>c.active).map(c=>({value:c.id,label:c.name}))}/>
+          <SelectField label="Operadora" value={modal.operadoraId} onChange={v=>setModal(m=>({...m,operadoraId:v}))}
+            options={operadoras.map(o=>({value:o.id,label:o.name}))}/>
+          <SelectField label="Tipo de Ativo" value={modal.tipoAtivoId} onChange={v=>setModal(m=>({...m,tipoAtivoId:v}))}
+            options={tipoAtivos.filter(t=>t.name.toLowerCase()==="telefonia").map(t=>({value:t.id,label:t.name}))}/>
+          <Input label="Número Linha" value={modal.numeroLinha} onChange={v=>setModal(m=>({...m,numeroLinha:v}))} required/>
+          <SelectField label="Status" value={modal.status} onChange={v=>setModal(m=>({...m,status:v}))}
+            options={STATUS_LD.map(s=>({value:s,label:s}))}/>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Excluir esta linha disponível?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── ATIVOS (s20) ──────────────────────────────────────────────
+function AtivosScreen({user}){
+  const[items,setItems]=useState([]);
+  const[tipoAtivos,setTipoAtivos]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const isMobile=useIsMobile();
+
+  const load=()=>{
+    setLoading(true);
+    Promise.all([api.get("/ativos"),api.get("/tipo-ativos")])
+      .then(([a,ta])=>{setItems(a);setTipoAtivos(ta);})
+      .catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+
+  const save=async()=>{
+    if(!modal.nome?.trim()){setErr("Nome do ativo é obrigatório.");return;}
+    try{
+      if(modal.id) await api.put(`/ativos/${modal.id}`,{nome:modal.nome,tipoAtivoId:modal.tipoAtivoId||null});
+      else         await api.post("/ativos",{nome:modal.nome,tipoAtivoId:modal.tipoAtivoId||null});
+      setModal(null);load();
+    }catch(e){setErr(e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/ativos/${delId}`);setDelId(null);load();}
+    catch(e){alert(e.message);}
+  };
+  const canI=act=>user.permissions?.s20?.[act];
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>📦 Ativos</span>
+        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({nome:"",tipoAtivoId:""});}}>+ Novo Ativo</button>}
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum ativo cadastrado</div>:(
+        isMobile
+          ?<MobileCardList items={items} columns={[{key:"nome",label:"Nome do Ativo"},{key:"tipoAtivoName",label:"Tipo de Ativo"}]} actions={item=>(
+            <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,nome:item.nome,tipoAtivoId:item.tipoAtivoId||""});}}>Editar</button>}
+              {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}</>
+          )}/>
+          :<table style={S.table}><thead><tr>
+            {["Nome do Ativo","Tipo de Ativo","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{items.map(item=>(
+            <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={{...S.td,fontWeight:600}}>{item.nome}</td>
+              <td style={S.td}>{item.tipoAtivoName||"—"}</td>
+              <td style={S.td}>
+                {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,nome:item.nome,tipoAtivoId:item.tipoAtivoId||""});}}>Editar</button>}
+                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+              </td>
+            </tr>
+          ))}</tbody></table>
+      )}
+      {modal&&(
+        <Modal title={modal.id?"Editar Ativo":"Novo Ativo"} onClose={()=>setModal(null)}>
+          <Input label="Nome do Ativo" value={modal.nome} onChange={v=>setModal(m=>({...m,nome:v}))} required/>
+          <SelectField label="Tipo de Ativo" value={modal.tipoAtivoId} onChange={v=>setModal(m=>({...m,tipoAtivoId:v}))}
+            options={tipoAtivos.map(t=>({value:t.id,label:t.name}))}/>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Excluir este ativo?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── CONTROLE DE ATIVOS (s21) ──────────────────────────────────
+function ControleAtivosScreen({user}){
+  const[items,setItems]=useState([]);
+  const[companies,setCompanies]=useState([]);
+  const[tipoAtivos,setTipoAtivos]=useState([]);
+  const[operadoras,setOperadoras]=useState([]);
+  const[linhasEstoque,setLinhasEstoque]=useState([]);
+  const[ativos,setAtivos]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);         // form principal
+  const[itensModal,setItensModal]=useState(null); // {controle, itens[]}
+  const[itemForm,setItemForm]=useState(null);   // form de item
+  const[anexosModal,setAnexosModal]=useState(null); // {controleId, itemId, attachments[]}
+  const[delId,setDelId]=useState(null);
+  const[delItemId,setDelItemId]=useState(null);
+  const[err,setErr]=useState("");
+  const[errItem,setErrItem]=useState("");
+  const isMobile=useIsMobile();
+
+  const load=()=>{
+    setLoading(true);
+    Promise.all([
+      api.get("/controle-ativos"),api.get("/companies"),
+      api.get("/tipo-ativos"),api.get("/operadoras"),
+      api.get("/linhas-disponiveis"),api.get("/ativos"),
+    ]).then(([ca,co,ta,op,ld,av])=>{
+      setItems(ca);setCompanies(co);setTipoAtivos(ta);
+      setOperadoras(op);
+      setLinhasEstoque(ld.filter(l=>l.status==="Em estoque"));
+      setAtivos(av);
+    }).catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+
+  const save=async()=>{
+    if(!modal.nomeFuncionario?.trim()){setErr("Nome do funcionário é obrigatório.");return;}
+    try{
+      if(modal.id) await api.put(`/controle-ativos/${modal.id}`,modal);
+      else         await api.post("/controle-ativos",modal);
+      setModal(null);load();
+    }catch(e){setErr(e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/controle-ativos/${delId}`);setDelId(null);load();}
+    catch(e){alert(e.message);}
+  };
+
+  const openItens=async(controle)=>{
+    const itens=await api.get(`/controle-ativos/${controle.id}/itens`).catch(()=>[]);
+    setItensModal({controle,itens});
+  };
+  const reloadItens=async()=>{
+    if(!itensModal)return;
+    const itens=await api.get(`/controle-ativos/${itensModal.controle.id}/itens`).catch(()=>[]);
+    setItensModal(m=>({...m,itens}));
+    load();
+  };
+
+  const saveItem=async()=>{
+    try{
+      if(itemForm.id)
+        await api.put(`/controle-ativos/${itensModal.controle.id}/itens/${itemForm.id}`,itemForm);
+      else
+        await api.post(`/controle-ativos/${itensModal.controle.id}/itens`,itemForm);
+      setItemForm(null);reloadItens();
+    }catch(e){setErrItem(e.message);}
+  };
+  const delItem=async()=>{
+    try{
+      await api.delete(`/controle-ativos/${itensModal.controle.id}/itens/${delItemId}`);
+      setDelItemId(null);reloadItens();
+    }catch(e){alert(e.message);}
+  };
+
+  // Anexos
+  const openAnexos=(controleId,item)=>setAnexosModal({controleId,itemId:item.id,attachments:item.attachments||[]});
+  const handleAnexoAdd=e=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      setAnexosModal(m=>({...m,attachments:[...m.attachments,{name:file.name,type:file.type,size:file.size,data:ev.target.result}]}));
+    };
+    reader.readAsDataURL(file);
+  };
+  const removeAnexo=idx=>setAnexosModal(m=>({...m,attachments:m.attachments.filter((_,i)=>i!==idx)}));
+  const saveAnexos=async()=>{
+    try{
+      await api.put(`/controle-ativos/${anexosModal.controleId}/itens/${anexosModal.itemId}/anexos`,{attachments:anexosModal.attachments});
+      setAnexosModal(null);reloadItens();
+    }catch(e){alert(e.message);}
+  };
+
+  const canI=act=>user.permissions?.s21?.[act];
+  const MASK_CPF="999.999.999-99";
+
+  const blankItem=()=>({companyId:"",tipoAtivoId:"",operadoraId:"",linhaId:"",imei:"",ativoId:"",numeroSerie:"",numeroDocumento:""});
+
+  return(
+    <div>
+      {/* Lista principal */}
+      <div style={S.card}>
+        <div style={S.cardHeader}>
+          <span style={S.cardTitle}>🖥️ Controle de Ativos</span>
+          {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({nomeFuncionario:"",cpf:""});}}>+ Novo Registro</button>}
+        </div>
+        {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🖥️</span>Nenhum registro cadastrado</div>:(
+          isMobile?(
+            <div>{items.map(item=>(
+              <div key={item.id} style={S.mobileCard}>
+                <div style={{fontWeight:700,fontSize:13}}>{item.nomeFuncionario}</div>
+                <div style={{fontSize:12,color:C.textLight,marginBottom:6}}>CPF: {item.cpf||"—"} · {item.totalItens} item(ns)</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",paddingTop:8,borderTop:`1px solid ${C.border}`}}>
+                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,nomeFuncionario:item.nomeFuncionario,cpf:item.cpf||""});}}>Editar</button>}
+                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+                  <button style={{...S.actionBtn,background:"#EBF5FB",color:"#2980B9"}} onClick={()=>openItens(item)}>📋 Itens ({item.totalItens})</button>
+                </div>
+              </div>
+            ))}</div>
+          ):(
+            <table style={S.table}><thead><tr>
+              {["Funcionário","CPF","Itens","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            </tr></thead>
+            <tbody>{items.map(item=>(
+              <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={{...S.td,fontWeight:600}}>{item.nomeFuncionario}</td>
+                <td style={S.td}>{item.cpf||"—"}</td>
+                <td style={S.td}><span style={{...S.badge,background:"#EBF5FB",color:"#2980B9"}}>{item.totalItens}</span></td>
+                <td style={S.td}>
+                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,nomeFuncionario:item.nomeFuncionario,cpf:item.cpf||""});}}>Editar</button>}
+                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+                  <button style={{...S.actionBtn,background:"#EBF5FB",color:"#2980B9"}} onClick={()=>openItens(item)}>📋 Ver Itens ({item.totalItens})</button>
+                </td>
+              </tr>
+            ))}</tbody></table>
+          )
+        )}
+      </div>
+
+      {/* Form principal */}
+      {modal&&(
+        <Modal title={modal.id?"Editar Registro":"Novo Registro"} onClose={()=>setModal(null)}>
+          <Input label="Nome do Funcionário" value={modal.nomeFuncionario} onChange={v=>setModal(m=>({...m,nomeFuncionario:v}))} required/>
+          <MaskedInput label="CPF" value={modal.cpf} onChange={v=>setModal(m=>({...m,cpf:v}))} mask={MASK_CPF} placeholder="000.000.000-00"/>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Itens modal */}
+      {itensModal&&(
+        <Modal title={`Itens — ${itensModal.controle.nomeFuncionario}`} onClose={()=>setItensModal(null)} extraWide>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <span style={{fontSize:12,color:C.textLight}}>{itensModal.itens.length} item(ns)</span>
+            {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErrItem("");setItemForm(blankItem());}}>+ Novo Item</button>}
+          </div>
+          {itensModal.itens.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum item cadastrado</div>:(
+            <div style={{overflowX:"auto",maxHeight:"55vh",overflowY:"auto"}}>
+              <table style={S.table}><thead><tr>
+                {["Empresa","Tipo","Operadora","Nº Linha","IMEI","Ativo","Nº Série","Nº Doc","Ações"].map(h=><th key={h} style={{...S.th,fontSize:11}}>{h}</th>)}
+              </tr></thead>
+              <tbody>{itensModal.itens.map(item=>(
+                <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                  <td style={{...S.td,fontSize:12}}>{item.companyName||"—"}</td>
+                  <td style={{...S.td,fontSize:12}}>{item.tipoAtivoName||"—"}</td>
+                  <td style={{...S.td,fontSize:12}}>{item.operadoraName||"—"}</td>
+                  <td style={{...S.td,fontSize:12}}>{item.numeroLinha||"—"}</td>
+                  <td style={{...S.td,fontSize:12}}>{item.imei||"—"}</td>
+                  <td style={{...S.td,fontSize:12}}>{item.ativoNome||"—"}</td>
+                  <td style={{...S.td,fontSize:12}}>{item.numeroSerie||"—"}</td>
+                  <td style={{...S.td,fontSize:12}}>{item.numeroDocumento||"—"}</td>
+                  <td style={S.td}>
+                    {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErrItem("");setItemForm({id:item.id,companyId:item.companyId||"",tipoAtivoId:item.tipoAtivoId||"",operadoraId:item.operadoraId||"",linhaId:item.linhaId||"",imei:item.imei||"",ativoId:item.ativoId||"",numeroSerie:item.numeroSerie||"",numeroDocumento:item.numeroDocumento||""});}}>✏️</button>}
+                    {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelItemId(item.id)}>🗑️</button>}
+                    <button style={{...S.actionBtn,background:"#F0E6FF",color:"#6C3483"}} onClick={()=>openAnexos(itensModal.controle.id,item)}>
+                      📎 Anexos{item.attachments?.length?` (${item.attachments.length})`:""}
+                    </button>
+                  </td>
+                </tr>
+              ))}</tbody></table>
+            </div>
+          )}
+          <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+            <button style={S.btnClose} onClick={()=>setItensModal(null)}>Fechar</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Form de item */}
+      {itemForm&&(
+        <Modal title={itemForm.id?"Editar Item":"Novo Item"} onClose={()=>setItemForm(null)} wide>
+          <SelectField label="Empresa" value={itemForm.companyId} onChange={v=>setItemForm(m=>({...m,companyId:v}))}
+            options={companies.filter(c=>c.active).map(c=>({value:c.id,label:c.name}))}/>
+          <SelectField label="Tipo de Ativo" value={itemForm.tipoAtivoId} onChange={v=>setItemForm(m=>({...m,tipoAtivoId:v}))}
+            options={tipoAtivos.map(t=>({value:t.id,label:t.name}))}/>
+          <SelectField label="Operadora" value={itemForm.operadoraId} onChange={v=>setItemForm(m=>({...m,operadoraId:v}))}
+            options={operadoras.map(o=>({value:o.id,label:o.name}))}/>
+          <SelectField label="Número Linha (Em estoque)" value={itemForm.linhaId} onChange={v=>setItemForm(m=>({...m,linhaId:v}))}
+            options={linhasEstoque.map(l=>({value:l.id,label:`${l.numeroLinha}${l.operadoraName?" — "+l.operadoraName:""}`}))}/>
+          <Input label="IMEI" value={itemForm.imei} onChange={v=>setItemForm(m=>({...m,imei:v}))}/>
+          <SelectField label="Nome do Ativo" value={itemForm.ativoId} onChange={v=>setItemForm(m=>({...m,ativoId:v}))}
+            options={ativos.map(a=>({value:a.id,label:a.nome}))}/>
+          <Input label="Número de Série" value={itemForm.numeroSerie} onChange={v=>setItemForm(m=>({...m,numeroSerie:v}))}/>
+          <Input label="Número do Documento" value={itemForm.numeroDocumento} onChange={v=>setItemForm(m=>({...m,numeroDocumento:v}))}/>
+          {errItem&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{errItem}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setItemForm(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={saveItem}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Anexos modal */}
+      {anexosModal&&(
+        <Modal title="Anexos" onClose={()=>setAnexosModal(null)} wide>
+          <div style={{marginBottom:16}}>
+            <label style={{...S.btnAdd,display:"inline-block",cursor:"pointer",fontSize:12,padding:"7px 14px"}}>
+              📎 Adicionar anexo
+              <input type="file" onChange={handleAnexoAdd} style={{display:"none"}}/>
+            </label>
+          </div>
+          {anexosModal.attachments.length===0?<div style={{color:C.textLight,fontSize:13,marginBottom:16}}>Nenhum anexo.</div>:(
+            <div style={{marginBottom:16}}>
+              {anexosModal.attachments.map((a,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",border:`1px solid ${C.border}`,borderRadius:6,marginBottom:6}}>
+                  <div>
+                    <a href={a.data} download={a.name} style={{color:C.primary,fontWeight:600,fontSize:13}}>{a.name}</a>
+                    <span style={{fontSize:11,color:C.textLight,marginLeft:8}}>{a.size?(a.size/1024).toFixed(1)+" KB":""}</span>
+                  </div>
+                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>removeAnexo(i)}>Remover</button>}
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setAnexosModal(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={saveAnexos}>Salvar Anexos</button>
+          </div>
+        </Modal>
+      )}
+
+      {delId&&<ConfirmModal msg="Excluir este registro e todos os seus itens?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+      {delItemId&&<ConfirmModal msg="Excluir este item?" onConfirm={delItem} onCancel={()=>setDelItemId(null)}/>}
     </div>
   );
 }
@@ -2546,14 +3088,18 @@ const navConfig=[
     {id:"s8",label:"Tipo de Veículo", icon:"🚗"},
     {id:"s9",label:"Valor do km",     icon:"💰"},
     {id:"s12",label:"Fornecedores",   icon:"🏭"},
-    {id:"s16",label:"Operadoras",     icon:"📡"},
+    {id:"s16",label:"Operadoras",      icon:"📡"},
     {id:"s17",label:"Linhas Faturadas",icon:"📱"},
+    {id:"s18",label:"Tipo de Ativo",   icon:"🗂️"},
+    {id:"s20",label:"Ativos",          icon:"📦"},
   ]},
   {id:"movimentacoes",label:"Movimentações",icon:"🔄",children:[
     {id:"s5", label:"Sobreaviso/Extra",         icon:"⏱️"},
     {id:"s7", label:"Extra Avulso",             icon:"⚡"},
     {id:"s10",label:"Registro de Km", icon:"🛣️"},
-    {id:"s13",label:"Contratos",                icon:"📄"},
+    {id:"s13",label:"Contratos",           icon:"📄"},
+    {id:"s19",label:"Linhas Disponíveis",  icon:"📶"},
+    {id:"s21",label:"Controle de Ativos",  icon:"🖥️"},
   ]},
   {id:"relatorios",label:"Relatórios",icon:"📊",children:[
     {id:"s6", label:"Relatório de Horas",        icon:"📋"},
@@ -2632,6 +3178,10 @@ const screenTitles={
   s15:"Relatórios › Relatório de Escala",
   s16:"Cadastros › Telefonia › Operadoras",
   s17:"Cadastros › Telefonia › Linhas Faturadas",
+  s18:"Cadastros › Tipo de Ativo",
+  s19:"Movimentações › Linhas Disponíveis",
+  s20:"Cadastros › Ativos",
+  s21:"Movimentações › Controle de Ativos",
   profile:"Meu Perfil",
 };
 
@@ -2673,6 +3223,10 @@ export default function App(){
     s15:<RelatorioEscalaScreen user={user}/>,
     s16:<OperadorasScreen user={user}/>,
     s17:<LinhasFaturadasScreen user={user}/>,
+    s18:<TipoAtivosScreen user={user}/>,
+    s19:<LinhasDisponiveisScreen user={user}/>,
+    s20:<AtivosScreen user={user}/>,
+    s21:<ControleAtivosScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
