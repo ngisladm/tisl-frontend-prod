@@ -2554,13 +2554,15 @@ function FuncionariosScreen({user}){
   const[modal,setModal]=useState(null);
   const[delId,setDelId]=useState(null);
   const[err,setErr]=useState("");
-  const[filter,setFilter]=useState({nome:"",cpf:"",situacao:""});
+  const[filter,setFilter]=useState({nome:"",cpf:"",situacao:"",coligada:""});
+  const[syncing,setSyncing]=useState(false);
+  const[syncMsg,setSyncMsg]=useState("");
   const isMobile=useIsMobile();
 
   const blankFunc=()=>({
     nome:"",matricula:"",centroCusto:"",cargo:"",rg:"",cpf:"",
     logradouro:"",numero:"",bairro:"",cidade:"",estado:"",cep:"",
-    complemento:"",email:"",fone:"",observacao:"",situacao:"Ativo",
+    complemento:"",email:"",fone:"",observacao:"",situacao:"Ativo",coligada:"",
   });
 
   const load=()=>{
@@ -2587,10 +2589,24 @@ function FuncionariosScreen({user}){
   const MASK_CPF="999.999.999-99";
   const MASK_CEP="99999-999";
 
+  const runSync=async()=>{
+    setSyncing(true);setSyncMsg("");
+    try{
+      const r=await api.post("/sync/funcionarios",{});
+      setSyncMsg(`✅ Sync concluído: ${r.inseridos} inseridos, ${r.atualizados} atualizados${r.erros?`, ${r.erros} erros`:""}.`);
+      load();
+    }catch(e){setSyncMsg(`❌ Erro: ${e.message}`);}
+    setSyncing(false);
+  };
+
+  // Extrai coligadas únicas para o filtro
+  const coligadas=[...new Set(items.map(i=>i.coligada).filter(Boolean))].sort();
+
   const filtered=items.filter(i=>{
     if(filter.nome&&!i.nome.toLowerCase().includes(filter.nome.toLowerCase()))return false;
     if(filter.cpf&&!(i.cpf||"").includes(filter.cpf))return false;
     if(filter.situacao&&i.situacao!==filter.situacao)return false;
+    if(filter.coligada&&(i.coligada||"")!==filter.coligada)return false;
     return true;
   });
 
@@ -2613,20 +2629,31 @@ function FuncionariosScreen({user}){
       <div style={S.card}>
         <div style={S.cardHeader}>
           <span style={S.cardTitle}>👤 Funcionários</span>
-          {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal(blankFunc());}}>+ Novo Funcionário</button>}
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {canI("edit")&&<button style={{...S.btnAdd,background:"#2E86C1"}} onClick={runSync} disabled={syncing}>
+              {syncing?"⏳ Sincronizando...":"🔄 Sincronizar"}
+            </button>}
+            {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal(blankFunc());}}>+ Novo Funcionário</button>}
+          </div>
         </div>
+        {syncMsg&&<div style={{...S.errorMsg,background:syncMsg.startsWith("✅")?"#EAF9EF":"#FDEDEC",color:syncMsg.startsWith("✅")?"#1E8449":"#922B21",marginBottom:10}}>{syncMsg}</div>}
         {/* Filtros */}
         <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
           <input placeholder="Buscar por nome..." value={filter.nome} onChange={e=>setFilter(f=>({...f,nome:e.target.value}))}
             style={{...S.input,flex:"1 1 180px",minWidth:150,padding:"6px 10px",fontSize:13}}/>
           <input placeholder="CPF..." value={filter.cpf} onChange={e=>setFilter(f=>({...f,cpf:e.target.value}))}
-            style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+            style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+          <select value={filter.coligada} onChange={e=>setFilter(f=>({...f,coligada:e.target.value}))}
+            style={{...S.select,width:"auto",minWidth:140}}>
+            <option value="">Todas as coligadas</option>
+            {coligadas.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
           <select value={filter.situacao} onChange={e=>setFilter(f=>({...f,situacao:e.target.value}))}
             style={{...S.select,width:"auto",minWidth:130}}>
             <option value="">Todas as situações</option>
             {SITUACAO_OPTS.map(s=><option key={s} value={s}>{s}</option>)}
           </select>
-          {(filter.nome||filter.cpf||filter.situacao)&&<button style={S.btnCancel} onClick={()=>setFilter({nome:"",cpf:"",situacao:""})}>Limpar</button>}
+          {(filter.nome||filter.cpf||filter.situacao||filter.coligada)&&<button style={S.btnCancel} onClick={()=>setFilter({nome:"",cpf:"",situacao:"",coligada:""})}>Limpar</button>}
         </div>
 
         {loading?<Spinner/>:filtered.length===0
@@ -2648,20 +2675,19 @@ function FuncionariosScreen({user}){
           ):(
             <div style={{overflowX:"auto"}}>
               <table style={S.table}><thead><tr>
-                {["Nome","Matrícula","Centro de Custo","Cargo","CPF","E-mail","Fone","Situação","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+                {["Nome","Matrícula","Coligada","Centro de Custo","Cargo","CPF","Situação","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
               </tr></thead>
               <tbody>{filtered.map(item=>(
                 <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                   <td style={{...S.td,fontWeight:600}}>{item.nome}</td>
                   <td style={S.td}>{item.matricula||"—"}</td>
+                  <td style={S.td}>{item.coligada||"—"}</td>
                   <td style={S.td}>{item.centroCusto||"—"}</td>
                   <td style={S.td}>{item.cargo||"—"}</td>
                   <td style={S.td}>{item.cpf||"—"}</td>
-                  <td style={S.td}>{item.email||"—"}</td>
-                  <td style={S.td}>{item.fone||"—"}</td>
                   <td style={S.td}>{situBadge(item.situacao)}</td>
                   <td style={S.td}>
-                    {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}>Editar</button>}
+                    {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item,coligada:item.coligada||""});}}>Editar</button>}
                     {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
                   </td>
                 </tr>
@@ -2714,6 +2740,7 @@ function FuncionariosScreen({user}){
               </select>
             </div>
           </div>
+          {F("Coligada","coligada")}
           <div style={S.formRow}>
             <label style={S.label}>Observação</label>
             <textarea value={modal.observacao||""} onChange={e=>setModal(m=>({...m,observacao:e.target.value}))}
