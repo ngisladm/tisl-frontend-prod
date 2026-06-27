@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -1073,6 +1073,8 @@ function EmpresasScreen({user}){
   const[modal,setModal]=useState(false);const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
   const[form,setForm]=useState({id:null,name:"",cnpj:"",active:true});
+  const[logoModal,setLogoModal]=useState(null);
+  const[savingLogo,setSavingLogo]=useState(false);
   const p=user.permissions?.s3;
   useEffect(()=>{if(!p?.view)return;api.get("/companies").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));},[]);
   const openAdd=()=>{setForm({id:null,name:"",cnpj:"",active:true});setModal(true);};
@@ -1086,6 +1088,23 @@ function EmpresasScreen({user}){
     }catch(e){alert(e.message);}finally{setSaving(false);}
   };
   const del=async()=>{try{await api.delete(`/companies/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+  const openLogo=async(it)=>{
+    setLogoModal({id:it.id,name:it.name,logo:null,loading:true});
+    try{const d=await api.get(`/companies/${it.id}/logo`);setLogoModal(m=>({...m,logo:d.logo,loading:false}));}
+    catch(e){alert(e.message);setLogoModal(null);}
+  };
+  const handleLogoFile=e=>{
+    const file=e.target.files[0];if(!file)return;
+    if(!file.type.startsWith("image/"))return alert("Selecione um arquivo de imagem.");
+    const reader=new FileReader();
+    reader.onload=ev=>setLogoModal(m=>({...m,logo:ev.target.result}));
+    reader.readAsDataURL(file);
+  };
+  const saveLogo=async()=>{
+    setSavingLogo(true);
+    try{await api.put(`/companies/${logoModal.id}/logo`,{logo:logoModal.logo||null});setLogoModal(null);}
+    catch(e){alert(e.message);}finally{setSavingLogo(false);}
+  };
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
   return(
@@ -1103,6 +1122,7 @@ function EmpresasScreen({user}){
             <td style={S.td}>
               {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
               {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+              <button style={{...S.actionBtn,background:"#FFF3E0",color:"#E65100"}} onClick={()=>openLogo(it)}>🖼️ Logo</button>
             </td>
           </tr>
         ))}</tbody></table>
@@ -1122,6 +1142,29 @@ function EmpresasScreen({user}){
             <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
             <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
           </div>
+        </Modal>
+      )}
+      {logoModal&&(
+        <Modal title={`Logo — ${logoModal.name}`} onClose={()=>setLogoModal(null)}>
+          {logoModal.loading?<Spinner/>:(
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+              {logoModal.logo
+                ?<img src={logoModal.logo} alt="Logo" style={{maxWidth:300,maxHeight:200,objectFit:"contain",border:`1px solid ${C.border}`,borderRadius:8,padding:8}}/>
+                :<div style={{color:C.muted,fontSize:14,padding:24,border:`1px dashed ${C.border}`,borderRadius:8}}>Nenhuma logo cadastrada</div>
+              }
+              <label style={{...S.btnAdd,cursor:"pointer",display:"inline-block"}}>
+                📁 Selecionar Imagem
+                <input type="file" accept="image/*" style={{display:"none"}} onChange={handleLogoFile}/>
+              </label>
+              {logoModal.logo&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setLogoModal(m=>({...m,logo:null}))}>🗑️ Remover Logo</button>}
+            </div>
+          )}
+          {!logoModal.loading&&(
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:16}}>
+              <button style={S.btnCancel} onClick={()=>setLogoModal(null)}>Cancelar</button>
+              <button style={{...S.btnSave,opacity:savingLogo?0.7:1}} onClick={saveLogo} disabled={savingLogo}>{savingLogo?"Salvando...":"Salvar Logo"}</button>
+            </div>
+          )}
         </Modal>
       )}
       {delId&&<ConfirmModal msg="Deseja excluir esta empresa?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
@@ -2759,6 +2802,175 @@ function FuncionariosScreen({user}){
   );
 }
 
+// ── MODELOS DE CONTRATO (s23) ─────────────────────────────────
+const CONTRATO_TOKENS=[
+  ["[TPATIVO]","Tipo de Ativo"],["[NMEMP]","Nome da Empresa"],["[CNEMP]","CNPJ da Empresa"],["[LOGOEMP]","Logo da Empresa"],
+  ["[OPERADORA]","Operadora"],["[NRLINHA]","Número de Linha"],["[ICCID]","ICCID"],["[ACESSO]","Acesso"],
+  ["[ESTRUTURA]","Estrutura"],["[TPPACOTE]","Tipo de Pacote"],["[MARCA]","Marca"],["[MODELO]","Modelo"],
+  ["[IMEI1]","IMEI Slot 1"],["[IMEI2]","IMEI Slot 2"],["[NRSER]","Número de Série"],
+  ["[NMFUNC]","Nome do Funcionário"],["[CPFFUNC]","CPF"],["[RGFUNC]","RG"],["[CARGO]","Cargo"],
+  ["[NMEND]","Logradouro"],["[NREND]","Número End."],["[COMPLEND]","Complemento"],
+  ["[BAIRRO]","Bairro"],["[CEPEND]","CEP"],["[CIDADE]","Cidade"],["[ESTADO]","Estado"],
+  ["[Dia]","Dia"],["[Mes]","Mês (extenso)"],["[Ano]","Ano"],
+];
+
+function ModelosContratoScreen({user}){
+  const[items,setItems]=useState([]);
+  const[tipoAtivos,setTipoAtivos]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(false);
+  const[form,setForm]=useState({id:null,nome:"",tipoAtivoId:""});
+  const[delId,setDelId]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const[modeloEditor,setModeloEditor]=useState(null);
+  const[savingModelo,setSavingModelo]=useState(false);
+  const editorRef=useRef(null);
+  const p=user.permissions?.s23;
+
+  const load=()=>{
+    setLoading(true);
+    Promise.all([api.get("/modelos-contrato"),api.get("/tipo-ativos")])
+    .then(([m,t])=>{setItems(m);setTipoAtivos(t);})
+    .catch(e=>alert(e.message))
+    .finally(()=>setLoading(false));
+  };
+  useEffect(()=>{if(!p?.view)return;load();},[]);
+
+  const openAdd=()=>{setForm({id:null,nome:"",tipoAtivoId:""});setModal(true);};
+  const openEdit=it=>{setForm({id:it.id,nome:it.nome,tipoAtivoId:it.tipoAtivoId||""});setModal(true);};
+
+  const save=async()=>{
+    if(!form.nome.trim())return alert("Nome do modelo é obrigatório.");
+    setSaving(true);
+    try{
+      if(form.id){const u=await api.put(`/modelos-contrato/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
+      else{const c=await api.post("/modelos-contrato",form);setItems(is=>[...is,c]);}
+      setModal(false);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+
+  const del=async()=>{
+    try{await api.delete(`/modelos-contrato/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}
+    catch(e){alert(e.message);}
+  };
+
+  const openModelo=async(it)=>{
+    try{
+      const data=await api.get(`/modelos-contrato/${it.id}/conteudo`);
+      setModeloEditor({id:it.id,nome:it.nome,conteudo:data.conteudo||""});
+    }catch(e){alert(e.message);}
+  };
+
+  useEffect(()=>{
+    if(modeloEditor&&editorRef.current){
+      editorRef.current.innerHTML=modeloEditor.conteudo;
+    }
+  },[modeloEditor?.id]);
+
+  const saveModelo=async()=>{
+    if(!editorRef.current)return;
+    setSavingModelo(true);
+    try{
+      await api.put(`/modelos-contrato/${modeloEditor.id}/conteudo`,{conteudo:editorRef.current.innerHTML});
+      setModeloEditor(null);
+    }catch(e){alert(e.message);}finally{setSavingModelo(false);}
+  };
+
+  const execCmd=(cmd,val)=>{editorRef.current?.focus();document.execCommand(cmd,false,val||null);};
+
+  const insertToken=token=>{
+    editorRef.current?.focus();
+    document.execCommand("insertText",false,token);
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>📋 Modelos de Contrato</span>
+        {p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Modelo</button>}
+      </div>
+      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum modelo cadastrado.</div>:(
+        <table style={S.table}><thead><tr>
+          {["Modelo","Tipo de Ativo","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+        </tr></thead>
+        <tbody>{items.map(it=>(
+          <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={S.td}><strong>{it.nome}</strong></td>
+            <td style={S.td}>{it.tipoAtivoName||"—"}</td>
+            <td style={S.td}>
+              <button style={{...S.actionBtn,background:"#E8F4FD",color:"#1565C0",fontWeight:600}} onClick={()=>openModelo(it)}>📄 Modelo</button>
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+            </td>
+          </tr>
+        ))}</tbody></table>
+      )}
+      {modal&&(
+        <Modal title={form.id?"Editar Modelo":"Novo Modelo de Contrato"} onClose={()=>setModal(false)}>
+          <Input label="Nome do Modelo" value={form.nome} onChange={v=>setForm(f=>({...f,nome:v}))} required/>
+          <SelectField label="Tipo de Ativo" value={form.tipoAtivoId} onChange={v=>setForm(f=>({...f,tipoAtivoId:v}))}
+            options={tipoAtivos.map(t=>({value:t.id,label:t.name}))} placeholder="Selecione..." clearable/>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </Modal>
+      )}
+      {modeloEditor&&(
+        <Modal title={`Modelo: ${modeloEditor.nome}`} onClose={()=>setModeloEditor(null)}>
+          <div style={{marginBottom:8}}>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:6}}>
+              {[["bold","N",{fontWeight:"bold"}],["italic","I",{fontStyle:"italic"}],["underline","S",{textDecoration:"underline"}]].map(([cmd,lbl,st])=>(
+                <button key={cmd} style={{...S.actionBtn,minWidth:32,...st}} onMouseDown={e=>{e.preventDefault();execCmd(cmd);}}>{lbl}</button>
+              ))}
+              <select style={{...S.input,width:130,height:30,padding:"0 4px",fontSize:12}} onMouseDown={e=>e.preventDefault()}
+                onChange={e=>{if(e.target.value){execCmd("fontName",e.target.value);e.target.value="";}}}>
+                <option value="">Fonte...</option>
+                {["Arial","Times New Roman","Courier New","Georgia"].map(f=><option key={f} value={f}>{f}</option>)}
+              </select>
+              <select style={{...S.input,width:70,height:30,padding:"0 4px",fontSize:12}} onMouseDown={e=>e.preventDefault()}
+                onChange={e=>{if(e.target.value){execCmd("fontSize",e.target.value);e.target.value==""}}}>
+                <option value="">Tam.</option>
+                {[1,2,3,4,5,6,7].map(s=><option key={s} value={s}>{[8,10,12,14,16,18,24][s-1]}pt</option>)}
+              </select>
+              {[["justifyLeft","⬅"],["justifyCenter","≡"],["justifyRight","➡"]].map(([cmd,lbl])=>(
+                <button key={cmd} style={S.actionBtn} onMouseDown={e=>{e.preventDefault();execCmd(cmd);}}>{lbl}</button>
+              ))}
+              <button style={S.actionBtn} onMouseDown={e=>{e.preventDefault();execCmd("insertUnorderedList");}}>• Lista</button>
+            </div>
+            <details style={{marginBottom:8}}>
+              <summary style={{cursor:"pointer",fontSize:12,color:C.primary,userSelect:"none",padding:"4px 0"}}>
+                📌 Variáveis disponíveis — clique para inserir no cursor
+              </summary>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6,maxHeight:120,overflowY:"auto",padding:4,background:C.bg,borderRadius:6}}>
+                {CONTRATO_TOKENS.map(([tok,desc])=>(
+                  <button key={tok} title={desc}
+                    style={{...S.actionBtn,fontSize:11,padding:"2px 6px",background:"#EEF2FF",color:"#3730A3"}}
+                    onMouseDown={e=>{e.preventDefault();insertToken(tok);}}>{tok}</button>
+                ))}
+              </div>
+            </details>
+            <div ref={editorRef} contentEditable suppressContentEditableWarning
+              style={{minHeight:320,border:`1px solid ${C.border}`,borderRadius:6,padding:12,
+                      outline:"none",fontSize:13,lineHeight:1.6,overflowY:"auto",
+                      maxHeight:400,background:"#fff"}}/>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModeloEditor(null)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:savingModelo?0.7:1}} onClick={saveModelo} disabled={savingModelo}>
+              {savingModelo?"Salvando...":"💾 Salvar Modelo"}
+            </button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Deseja excluir este modelo de contrato?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
 // ── CONTROLE DE ATIVOS (s21) ──────────────────────────────────
 const TIPO_PACOTE_OPTS=["Voz","Dados","Voz e Dados"];
 const CONDICAO_OPTS=["Novo","Usado"];
@@ -2773,6 +2985,7 @@ function ControleAtivosScreen({user}){
   const[linhasEstoque,setLinhasEstoque]=useState([]);
   const[ativos,setAtivos]=useState([]);
   const[funcionarios,setFuncionarios]=useState([]);
+  const[modelos,setModelos]=useState([]);
   const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(null);
   const[itensModal,setItensModal]=useState(null);
@@ -2793,11 +3006,12 @@ function ControleAtivosScreen({user}){
       api.get("/linhas-disponiveis"),api.get("/ativos"),
       api.get("/controle-ativos/itens/all"),
       api.get("/funcionarios"),
-    ]).then(([ca,co,ta,op,ld,av,ai,func])=>{
+      api.get("/modelos-contrato"),
+    ]).then(([ca,co,ta,op,ld,av,ai,func,mc])=>{
       setItems(ca);setCompanies(co);setTipoAtivos(ta);
       setOperadoras(op);
       setLinhasEstoque(ld.filter(l=>l.status==="Em estoque"));
-      setAtivos(av);setAllItens(ai);setFuncionarios(func);
+      setAtivos(av);setAllItens(ai);setFuncionarios(func);setModelos(mc);
     }).catch(()=>{}).finally(()=>setLoading(false));
   };
   useEffect(()=>{load();},[]);
@@ -2850,6 +3064,43 @@ function ControleAtivosScreen({user}){
 
   // Anexos
   const openAnexos=(controleId,item)=>setAnexosModal({controleId,itemId:item.id,attachments:item.attachments||[]});
+
+  const imprimirContrato=async(item)=>{
+    const modelo=modelos.find(m=>m.tipoAtivoId===item.tipoAtivoId);
+    if(!modelo){alert("Nenhum modelo de contrato cadastrado para o Tipo de Ativo: "+(item.tipoAtivoName||"—"));return;}
+    let conteudo="";
+    try{const d=await api.get(`/modelos-contrato/${modelo.id}/conteudo`);conteudo=d.conteudo||"";}
+    catch(e){alert("Erro ao carregar modelo: "+e.message);return;}
+    let logoHtml="";
+    try{const ld=await api.get(`/companies/${item.companyId}/logo`);if(ld.logo)logoHtml=`<img src="${ld.logo}" style="max-width:200px;height:auto;">`;}
+    catch(e){}
+    const funcItem=funcionarios.find(f=>f.id===itensModal.controle.funcionarioId);
+    const compItem=companies.find(c=>c.id===item.companyId);
+    const now=new Date();
+    const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    const subs={
+      "[TPATIVO]":item.tipoAtivoName||"","[NMEMP]":item.companyName||"","[CNEMP]":compItem?.cnpj||"","[LOGOEMP]":logoHtml,
+      "[OPERADORA]":item.operadoraName||"","[NRLINHA]":item.numeroLinha||"","[ICCID]":item.iccid||"",
+      "[ACESSO]":item.acesso||"","[ESTRUTURA]":item.estrutura||"","[TPPACOTE]":item.tipoPacote||"",
+      "[MARCA]":item.marca||"","[MODELO]":item.modelo||"","[IMEI1]":item.imeiSlot1||"","[IMEI2]":item.imeiSlot2||"",
+      "[NRSER]":item.numeroSerie||"","[NMFUNC]":itensModal.controle.nomeFuncionario||"",
+      "[CPFFUNC]":itensModal.controle.cpf||"","[RGFUNC]":funcItem?.rg||"","[CARGO]":funcItem?.cargo||"",
+      "[NMEND]":funcItem?.logradouro||"","[NREND]":funcItem?.numero||"","[COMPLEND]":funcItem?.complemento||"",
+      "[BAIRRO]":funcItem?.bairro||"","[CEPEND]":funcItem?.cep||"","[CIDADE]":funcItem?.cidade||"","[ESTADO]":funcItem?.estado||"",
+      "[Dia]":String(now.getDate()).padStart(2,"0"),"[Mes]":MESES[now.getMonth()],"[Ano]":String(now.getFullYear()),
+    };
+    let html=conteudo;
+    Object.entries(subs).forEach(([k,v])=>{html=html.split(k).join(v);});
+    const win=window.open("","_blank","width=900,height=700");
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Contrato</title>
+<style>body{font-family:Arial,sans-serif;margin:40px;font-size:12pt;color:#222;}img{max-width:100%;}@media print{.no-print{display:none}body{margin:20mm;}}</style>
+</head><body>
+<div class="no-print" style="margin-bottom:20px;display:flex;gap:8px;">
+  <button onclick="window.print()" style="padding:8px 16px;background:#2563EB;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;">🖨️ Imprimir</button>
+  <button onclick="window.close()" style="padding:8px 16px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;">✕ Fechar</button>
+</div>${html}</body></html>`);
+    win.document.close();
+  };
   const handleAnexoAdd=e=>{
     const file=e.target.files[0];if(!file)return;
     const reader=new FileReader();
@@ -3032,6 +3283,7 @@ function ControleAtivosScreen({user}){
                       <button style={{...S.actionBtn,background:"#F0E6FF",color:"#6C3483"}} onClick={()=>openAnexos(itensModal.controle.id,item)}>
                         📎{item.attachments?.length?` (${item.attachments.length})`:""}
                       </button>
+                      {item.tipoAtivoId&&<button style={{...S.actionBtn,background:"#E8F5E9",color:"#1B5E20",fontWeight:600}} onClick={()=>imprimirContrato(item)}>🖨️ Contrato</button>}
                     </td>
                   </tr>
                 );
@@ -3536,6 +3788,7 @@ const navConfig=[
     {id:"s18",label:"Tipo de Ativo",   icon:"🗂️"},
     {id:"s20",label:"Ativos",          icon:"📦"},
     {id:"s22",label:"Funcionários",    icon:"👤"},
+    {id:"s23",label:"Modelos de Contrato",icon:"📋"},
   ]},
   {id:"movimentacoes",label:"Movimentações",icon:"🔄",children:[
     {id:"s5", label:"Sobreaviso/Extra",         icon:"⏱️"},
@@ -3627,6 +3880,7 @@ const screenTitles={
   s20:"Cadastros › Ativos",
   s21:"Movimentações › Controle de Ativos",
   s22:"Cadastros › Funcionários",
+  s23:"Cadastros › Modelos de Contrato",
   profile:"Meu Perfil",
 };
 
@@ -3673,6 +3927,7 @@ export default function App(){
     s20:<AtivosScreen user={user}/>,
     s21:<ControleAtivosScreen user={user}/>,
     s22:<FuncionariosScreen user={user}/>,
+    s23:<ModelosContratoScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
