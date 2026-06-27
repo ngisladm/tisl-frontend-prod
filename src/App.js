@@ -163,6 +163,7 @@ function applyMask(raw,mask){
 const MASK_DATE  ="99/99/9999";
 const MASK_CNPJ  ="99.999.999/9999-99";
 const MASK_PHONE ="(99) 99999-9999";
+const MASK_CEP   ="99999-999";
 function MaskedInput({label,value,onChange,mask,placeholder,required,disabled}){
   const handle=e=>onChange(applyMask(e.target.value,mask));
   return(
@@ -388,11 +389,11 @@ function UsersScreen({user}){
   const[companies,setCompanies]=useState([]);const[teams,setTeams]=useState([]);
   const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
-  const[form,setForm]=useState({id:null,name:"",email:"",password:"",profileId:"",companyId:"",teamId:"",active:true,isMaster:false});
+  const[form,setForm]=useState({id:null,name:"",apelido:"",email:"",password:"",profileId:"",companyId:"",teamId:"",active:true,isMaster:false});
   const p=user.permissions?.s2;
   useEffect(()=>{if(!p?.view)return;Promise.all([api.get("/users"),api.get("/profiles"),api.get("/companies"),api.get("/teams")]).then(([u,pr,c,t])=>{setUsers(u);setProfiles(pr);setCompanies(c);setTeams(t);}).catch(e=>alert(e.message)).finally(()=>setLoading(false));},[]);
-  const openAdd=()=>{setForm({id:null,name:"",email:"",password:"",profileId:"",companyId:"",teamId:"",active:true,isMaster:false});setModal(true);};
-  const openEdit=u=>{setForm({...u,password:""});setModal(true);};
+  const openAdd=()=>{setForm({id:null,name:"",apelido:"",email:"",password:"",profileId:"",companyId:"",teamId:"",active:true,isMaster:false});setModal(true);};
+  const openEdit=u=>{setForm({...u,apelido:u.apelido||"",password:""});setModal(true);};
   const save=async()=>{
     if(!form.name.trim()||!form.email.trim())return alert("Nome e e-mail obrigatórios.");
     if(!form.id&&!form.password.trim())return alert("Senha obrigatória.");
@@ -419,7 +420,8 @@ function UsersScreen({user}){
       )}
       {modal&&(
         <Modal title={form.id?"Editar Usuário":"Novo Usuário"} onClose={()=>setModal(false)}>
-          <Input label="Nome completo" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
+          <Input label="Nome Completo" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
+          <Input label="Apelido (exibido no sistema)" value={form.apelido||""} onChange={v=>setForm(f=>({...f,apelido:v}))} placeholder="Como deseja ser chamado"/>
           <Input label="E-mail" type="email" value={form.email} onChange={v=>setForm(f=>({...f,email:v}))} required/>
           <Input label={form.id?"Nova senha (em branco para manter)":"Senha"} type="password" value={form.password} onChange={v=>setForm(f=>({...f,password:v}))} required={!form.id}/>
           <SelectField label="Empresa"  value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))}/>
@@ -1072,15 +1074,16 @@ function EmpresasScreen({user}){
   const[items,setItems]=useState([]);const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(false);const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
-  const[form,setForm]=useState({id:null,name:"",cnpj:"",active:true});
+  const emptyEmp={id:null,name:"",razaoSocial:"",cnpj:"",inscEstadual:"",inscMunicipal:"",logradouro:"",numero:"",bairro:"",cep:"",cidade:"",estado:"",representanteLegal:"",active:true};
+  const[form,setForm]=useState(emptyEmp);
   const[logoModal,setLogoModal]=useState(null);
   const[savingLogo,setSavingLogo]=useState(false);
   const p=user.permissions?.s3;
   useEffect(()=>{if(!p?.view)return;api.get("/companies").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));},[]);
-  const openAdd=()=>{setForm({id:null,name:"",cnpj:"",active:true});setModal(true);};
-  const openEdit=i=>{setForm({id:i.id,name:i.name,cnpj:i.cnpj||"",active:i.active});setModal(true);};
+  const openAdd=()=>{setForm(emptyEmp);setModal(true);};
+  const openEdit=i=>{setForm({...emptyEmp,...i,cnpj:i.cnpj||"",cep:i.cep||""});setModal(true);};
   const save=async()=>{
-    if(!form.name.trim())return alert("Nome é obrigatório.");setSaving(true);
+    if(!form.name.trim())return alert("Nome Fantasia é obrigatório.");setSaving(true);
     try{
       if(form.id){const u=await api.put(`/companies/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
       else{const c=await api.post("/companies",form);setItems(is=>[...is,c]);}
@@ -1112,10 +1115,11 @@ function EmpresasScreen({user}){
       <div style={S.cardHeader}><span style={S.cardTitle}>🏢 Empresas</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Nova Empresa</button>}</div>
       {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏢</span>Nenhuma empresa.</div>:(
         <table style={S.table}><thead><tr>
-          {["Nome","CNPJ","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          {["Razão Social","Fantasia","CNPJ","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
         <tbody>{items.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={S.td}>{it.razaoSocial||"—"}</td>
             <td style={S.td}><strong>{it.name}</strong></td>
             <td style={S.td}>{it.cnpj||"—"}</td>
             <td style={S.td}><span style={{...S.badge,...(it.active?S.badgeActive:S.badgeInactive)}}>{it.active?"Ativo":"Inativo"}</span></td>
@@ -1129,8 +1133,22 @@ function EmpresasScreen({user}){
       )}
       {modal&&(
         <Modal title={form.id?"Editar Empresa":"Nova Empresa"} onClose={()=>setModal(false)}>
-          <Input label="Nome" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
+          <Input label="Razão Social" value={form.razaoSocial||""} onChange={v=>setForm(f=>({...f,razaoSocial:v}))}/>
+          <Input label="Fantasia" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
           <MaskedInput label="CNPJ" mask={MASK_CNPJ} value={form.cnpj} onChange={v=>setForm(f=>({...f,cnpj:v}))} placeholder="00.000.000/0000-00"/>
+          <Input label="Insc. Estadual" value={form.inscEstadual||""} onChange={v=>setForm(f=>({...f,inscEstadual:v}))}/>
+          <Input label="Insc. Municipal" value={form.inscMunicipal||""} onChange={v=>setForm(f=>({...f,inscMunicipal:v}))}/>
+          <Input label="Logradouro" value={form.logradouro||""} onChange={v=>setForm(f=>({...f,logradouro:v}))}/>
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1}}><Input label="Número" value={form.numero||""} onChange={v=>setForm(f=>({...f,numero:v}))}/></div>
+            <div style={{flex:2}}><Input label="Bairro" value={form.bairro||""} onChange={v=>setForm(f=>({...f,bairro:v}))}/></div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1}}><MaskedInput label="CEP" mask={MASK_CEP} value={form.cep||""} onChange={v=>setForm(f=>({...f,cep:v}))} placeholder="00000-000"/></div>
+            <div style={{flex:2}}><Input label="Cidade" value={form.cidade||""} onChange={v=>setForm(f=>({...f,cidade:v}))}/></div>
+            <div style={{flex:1}}><Input label="Estado" value={form.estado||""} onChange={v=>setForm(f=>({...f,estado:v}))}/></div>
+          </div>
+          <Input label="Representante Legal" value={form.representanteLegal||""} onChange={v=>setForm(f=>({...f,representanteLegal:v}))}/>
           <div style={S.formRow}><label style={S.label}>STATUS</label>
             <div style={{display:"flex",gap:16}}>{[{v:true,l:"Ativo"},{v:false,l:"Inativo"}].map(o=>(
               <label key={String(o.v)} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
@@ -1573,14 +1591,14 @@ function FornecedoresScreen({user}){
   const[items,setItems]=useState([]);const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(false);const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
-  const emptyForm={id:null,name:"",cnpj:"",contactName:"",contactPhone:"",contactEmail:"",observacao:""};
+  const emptyForm={id:null,name:"",razaoSocial:"",cnpj:"",inscEstadual:"",inscMunicipal:"",logradouro:"",numero:"",bairro:"",cep:"",cidade:"",estado:"",contactName:"",contactPhone:"",contactEmail:"",observacao:""};
   const[form,setForm]=useState(emptyForm);
   const p=user.permissions?.s12;
   useEffect(()=>{if(!p?.view)return;api.get("/suppliers").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));},[]);
   const openAdd=()=>{setForm(emptyForm);setModal(true);};
-  const openEdit=i=>{setForm({...i});setModal(true);};
+  const openEdit=i=>{setForm({...emptyForm,...i});setModal(true);};
   const save=async()=>{
-    if(!form.name.trim())return alert("Nome do fornecedor é obrigatório.");setSaving(true);
+    if(!form.name.trim())return alert("Nome Fantasia é obrigatório.");setSaving(true);
     try{
       if(form.id){const u=await api.put(`/suppliers/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
       else{const c=await api.post("/suppliers",form);setItems(is=>[...is,c]);}
@@ -1596,10 +1614,11 @@ function FornecedoresScreen({user}){
       {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏭</span>Nenhum fornecedor.</div>:(
         <div style={{overflowX:"auto"}}>
         <table style={S.table}><thead><tr>
-          {["Fornecedor","CNPJ","Contato","Fone","E-mail","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          {["Razão Social","Fantasia","CNPJ","Contato","Fone","E-mail","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
         <tbody>{items.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={S.td}>{it.razaoSocial||"—"}</td>
             <td style={S.td}><strong>{it.name}</strong></td>
             <td style={S.td}>{it.cnpj||"—"}</td>
             <td style={S.td}>{it.contactName||"—"}</td>
@@ -1615,11 +1634,24 @@ function FornecedoresScreen({user}){
       )}
       {modal&&(
         <Modal title={form.id?"Editar Fornecedor":"Novo Fornecedor"} onClose={()=>setModal(false)}>
-          <Input label="Fornecedor" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
-          <MaskedInput label="CNPJ" mask={MASK_CNPJ} value={form.cnpj} onChange={v=>setForm(f=>({...f,cnpj:v}))} placeholder="00.000.000/0000-00"/>
-          <Input label="Nome do Contato" value={form.contactName} onChange={v=>setForm(f=>({...f,contactName:v}))}/>
-          <MaskedInput label="Fone do Contato" mask={MASK_PHONE} value={form.contactPhone} onChange={v=>setForm(f=>({...f,contactPhone:v}))} placeholder="(11) 99999-9999"/>
-          <Input label="E-mail do Contato" type="email" value={form.contactEmail} onChange={v=>setForm(f=>({...f,contactEmail:v}))}/>
+          <Input label="Razão Social" value={form.razaoSocial||""} onChange={v=>setForm(f=>({...f,razaoSocial:v}))}/>
+          <Input label="Fantasia" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
+          <MaskedInput label="CNPJ" mask={MASK_CNPJ} value={form.cnpj||""} onChange={v=>setForm(f=>({...f,cnpj:v}))} placeholder="00.000.000/0000-00"/>
+          <Input label="Insc. Estadual" value={form.inscEstadual||""} onChange={v=>setForm(f=>({...f,inscEstadual:v}))}/>
+          <Input label="Insc. Municipal" value={form.inscMunicipal||""} onChange={v=>setForm(f=>({...f,inscMunicipal:v}))}/>
+          <Input label="Logradouro" value={form.logradouro||""} onChange={v=>setForm(f=>({...f,logradouro:v}))}/>
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1}}><Input label="Número" value={form.numero||""} onChange={v=>setForm(f=>({...f,numero:v}))}/></div>
+            <div style={{flex:2}}><Input label="Bairro" value={form.bairro||""} onChange={v=>setForm(f=>({...f,bairro:v}))}/></div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1}}><MaskedInput label="CEP" mask={MASK_CEP} value={form.cep||""} onChange={v=>setForm(f=>({...f,cep:v}))} placeholder="00000-000"/></div>
+            <div style={{flex:2}}><Input label="Cidade" value={form.cidade||""} onChange={v=>setForm(f=>({...f,cidade:v}))}/></div>
+            <div style={{flex:1}}><Input label="Estado" value={form.estado||""} onChange={v=>setForm(f=>({...f,estado:v}))}/></div>
+          </div>
+          <Input label="Nome do Contato" value={form.contactName||""} onChange={v=>setForm(f=>({...f,contactName:v}))}/>
+          <MaskedInput label="Fone do Contato" mask={MASK_PHONE} value={form.contactPhone||""} onChange={v=>setForm(f=>({...f,contactPhone:v}))} placeholder="(11) 99999-9999"/>
+          <Input label="E-mail do Contato" type="email" value={form.contactEmail||""} onChange={v=>setForm(f=>({...f,contactEmail:v}))}/>
           <div style={S.formRow}>
             <label style={S.label}>Observação</label>
             <textarea value={form.observacao||""} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))} rows={3}
@@ -1933,8 +1965,9 @@ function OperadorasScreen({user}){
   const save=async()=>{
     if(!modal.name?.trim()){setErr("Nome é obrigatório.");return;}
     try{
-      if(modal.id) await api.put(`/operadoras/${modal.id}`,{name:modal.name});
-      else         await api.post("/operadoras",{name:modal.name});
+      const payload={name:modal.name,contactName:modal.contactName||null,contactPhone:modal.contactPhone||null,contactEmail:modal.contactEmail||null,observacao:modal.observacao||null};
+      if(modal.id) await api.put(`/operadoras/${modal.id}`,payload);
+      else         await api.post("/operadoras",payload);
       setModal(null);load();
     }catch(e){setErr(e.message);}
   };
@@ -1944,26 +1977,28 @@ function OperadorasScreen({user}){
   };
 
   const canI=act=>user.permissions?.s16?.[act];
-  const cols=[{key:"name",label:"Operadora"}];
+  const cols=[{key:"name",label:"Operadora"},{key:"contactName",label:"Contato"},{key:"contactPhone",label:"Fone"}];
 
   return(
     <div style={S.card}>
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>📡 Operadoras</span>
-        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({name:""});}}>+ Nova Operadora</button>}
+        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({name:"",contactName:"",contactPhone:"",contactEmail:"",observacao:""});}}>+ Nova Operadora</button>}
       </div>
       {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📡</span>Nenhuma operadora cadastrada</div>:(
         isMobile
           ?<MobileCardList items={items} columns={cols} actions={item=>(
-            <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,name:item.name});}}>Editar</button>}
+            <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,name:item.name,contactName:item.contactName||"",contactPhone:item.contactPhone||"",contactEmail:item.contactEmail||"",observacao:item.observacao||""});}}>Editar</button>}
               {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}</>
           )}/>
-          :<table style={S.table}><thead><tr><th style={S.th}>Operadora</th><th style={{...S.th,width:140}}>Ações</th></tr></thead>
+          :<table style={S.table}><thead><tr><th style={S.th}>Operadora</th><th style={S.th}>Contato</th><th style={S.th}>Fone</th><th style={{...S.th,width:140}}>Ações</th></tr></thead>
             <tbody>{items.map(item=>(
               <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                 <td style={S.td}>{item.name}</td>
+                <td style={S.td}>{item.contactName||"—"}</td>
+                <td style={S.td}>{item.contactPhone||"—"}</td>
                 <td style={S.td}>
-                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,name:item.name});}}>Editar</button>}
+                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,name:item.name,contactName:item.contactName||"",contactPhone:item.contactPhone||"",contactEmail:item.contactEmail||"",observacao:item.observacao||""});}}>Editar</button>}
                   {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
                 </td>
               </tr>
@@ -1973,6 +2008,14 @@ function OperadorasScreen({user}){
       {modal&&(
         <Modal title={modal.id?"Editar Operadora":"Nova Operadora"} onClose={()=>setModal(null)}>
           <Input label="Operadora" value={modal.name} onChange={v=>setModal(m=>({...m,name:v}))} required/>
+          <Input label="Nome do Contato" value={modal.contactName||""} onChange={v=>setModal(m=>({...m,contactName:v}))}/>
+          <MaskedInput label="Fone do Contato" mask={MASK_PHONE} value={modal.contactPhone||""} onChange={v=>setModal(m=>({...m,contactPhone:v}))} placeholder="(11) 99999-9999"/>
+          <Input label="E-mail do Contato" type="email" value={modal.contactEmail||""} onChange={v=>setModal(m=>({...m,contactEmail:v}))}/>
+          <div style={S.formRow}>
+            <label style={S.label}>Observação</label>
+            <textarea value={modal.observacao||""} onChange={e=>setModal(m=>({...m,observacao:e.target.value}))} rows={3}
+              style={{...S.input,resize:"vertical"}} placeholder="Observações..."/>
+          </div>
           {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
             <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
@@ -3448,6 +3491,7 @@ function ControleAtivosScreen({user}){
 function UserProfileModal({user,onClose,onUserUpdated}){
   const[tab,setTab]=useState("dados");
   const[name,setName]=useState(user.name||"");
+  const[apelido,setApelido]=useState(user.apelido||"");
   const[avatar,setAvatar]=useState(user.avatar||null);
   const[avatarPreview,setAvatarPreview]=useState(user.avatar||null);
   const[curPwd,setCurPwd]=useState("");
@@ -3473,7 +3517,7 @@ function UserProfileModal({user,onClose,onUserUpdated}){
     if(!name.trim()){setErr("Nome é obrigatório.");return;}
     setSaving(true);setErr("");setOk("");
     try{
-      const updated=await api.put("/users/me",{name:name.trim(),avatar});
+      const updated=await api.put("/users/me",{name:name.trim(),apelido:apelido.trim()||null,avatar});
       onUserUpdated({...user,...updated});
       setOk("Perfil atualizado com sucesso!");
     }catch(e){setErr(e.message);}
@@ -3524,7 +3568,8 @@ function UserProfileModal({user,onClose,onUserUpdated}){
               <div style={{fontSize:11,color:C.textLight,marginTop:6}}>JPG, PNG ou GIF. Recomendado: 200×200px</div>
             </div>
           </div>
-          <Input label="Nome" value={name} onChange={setName} required/>
+          <Input label="Nome Completo" value={name} onChange={setName} required/>
+          <Input label="Apelido (exibido no sistema)" value={apelido} onChange={setApelido} placeholder="Como deseja ser chamado"/>
           <Input label="E-mail" value={user.email} onChange={()=>{}} disabled/>
           {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
           {ok&&<div style={{color:C.success,fontSize:12,marginBottom:8}}>{ok}</div>}
@@ -3827,11 +3872,11 @@ function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
         <div style={{width:38,height:38,borderRadius:"50%",overflow:"hidden",border:`2px solid ${C.primary}`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:C.primary}}>
           {user.avatar
             ?<img src={user.avatar} alt="avatar" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-            :<span style={{fontSize:14,fontWeight:700,color:"#fff"}}>{getInit(user.name)}</span>}
+            :<span style={{fontSize:14,fontWeight:700,color:"#fff"}}>{getInit(user.apelido||user.name)}</span>}
         </div>
         <div style={{minWidth:0}}>
           <div style={{fontSize:12,color:"#aaa",marginBottom:1}}>Usuário logado</div>
-          <div style={{fontSize:13,fontWeight:700,color:"#eee",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{user.name}</div>
+          <div style={{fontSize:13,fontWeight:700,color:"#eee",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{user.apelido||user.name}</div>
           <div style={{fontSize:10,color:"#888",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{user.email}</div>
         </div>
       </div>
