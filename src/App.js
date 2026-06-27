@@ -2808,9 +2808,9 @@ const CONTRATO_TOKENS=[
   ["[OPERADORA]","Operadora"],["[NRLINHA]","Número de Linha"],["[ICCID]","ICCID"],["[ACESSO]","Acesso"],
   ["[ESTRUTURA]","Estrutura"],["[TPPACOTE]","Tipo de Pacote"],["[MARCA]","Marca"],["[MODELO]","Modelo"],
   ["[IMEI1]","IMEI Slot 1"],["[IMEI2]","IMEI Slot 2"],["[NRSER]","Número de Série"],
-  ["[NMFUNC]","Nome do Funcionário"],["[CPFFUNC]","CPF"],["[RGFUNC]","RG"],["[CARGO]","Cargo"],
-  ["[NMEND]","Logradouro"],["[NREND]","Número End."],["[COMPLEND]","Complemento"],
-  ["[BAIRRO]","Bairro"],["[CEPEND]","CEP"],["[CIDADE]","Cidade"],["[ESTADO]","Estado"],
+  ["[NMFUN]","Nome do Funcionário"],["[CPF]","CPF"],["[RG]","RG"],["[CARGO]","Cargo"],
+  ["[LOGRAD]","Logradouro"],["[NREND]","Número End."],["[COMPLEM]","Complemento"],
+  ["[BAIRRO]","Bairro"],["[CEP]","CEP"],["[CIDADE]","Cidade"],["[ESTADO]","Estado"],
   ["[Dia]","Dia"],["[Mes]","Mês (extenso)"],["[Ano]","Ano"],
 ];
 
@@ -3074,19 +3074,30 @@ function ControleAtivosScreen({user}){
     let logoHtml="";
     try{const ld=await api.get(`/companies/${item.companyId}/logo`);if(ld.logo)logoHtml=`<img src="${ld.logo}" style="max-width:200px;height:auto;">`;}
     catch(e){}
+    // Busca funcionário pelo funcionarioId vinculado ao controle
     const funcItem=funcionarios.find(f=>f.id===itensModal.controle.funcionarioId);
     const compItem=companies.find(c=>c.id===item.companyId);
     const now=new Date();
     const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
     const subs={
-      "[TPATIVO]":item.tipoAtivoName||"","[NMEMP]":item.companyName||"","[CNEMP]":compItem?.cnpj||"","[LOGOEMP]":logoHtml,
+      "[TPATIVO]":item.tipoAtivoName||"",
+      "[NMEMP]":item.companyName||"","[CNEMP]":compItem?.cnpj||"","[LOGOEMP]":logoHtml,
       "[OPERADORA]":item.operadoraName||"","[NRLINHA]":item.numeroLinha||"","[ICCID]":item.iccid||"",
       "[ACESSO]":item.acesso||"","[ESTRUTURA]":item.estrutura||"","[TPPACOTE]":item.tipoPacote||"",
       "[MARCA]":item.marca||"","[MODELO]":item.modelo||"","[IMEI1]":item.imeiSlot1||"","[IMEI2]":item.imeiSlot2||"",
-      "[NRSER]":item.numeroSerie||"","[NMFUNC]":itensModal.controle.nomeFuncionario||"",
-      "[CPFFUNC]":itensModal.controle.cpf||"","[RGFUNC]":funcItem?.rg||"","[CARGO]":funcItem?.cargo||"",
-      "[NMEND]":funcItem?.logradouro||"","[NREND]":funcItem?.numero||"","[COMPLEND]":funcItem?.complemento||"",
-      "[BAIRRO]":funcItem?.bairro||"","[CEPEND]":funcItem?.cep||"","[CIDADE]":funcItem?.cidade||"","[ESTADO]":funcItem?.estado||"",
+      "[NRSER]":item.numeroSerie||"",
+      // Dados do funcionário — vindos da tela Funcionários via funcionarioId
+      "[NMFUN]":funcItem?.nome||itensModal.controle.nomeFuncionario||"",
+      "[CPF]":funcItem?.cpf||itensModal.controle.cpf||"",
+      "[RG]":funcItem?.rg||"",
+      "[CARGO]":funcItem?.cargo||"",
+      "[LOGRAD]":funcItem?.logradouro||"",
+      "[NREND]":funcItem?.numero||"",
+      "[COMPLEM]":funcItem?.complemento||"",
+      "[BAIRRO]":funcItem?.bairro||"",
+      "[CEP]":funcItem?.cep||"",
+      "[CIDADE]":funcItem?.cidade||"",
+      "[ESTADO]":funcItem?.estado||"",
       "[Dia]":String(now.getDate()).padStart(2,"0"),"[Mes]":MESES[now.getMonth()],"[Ano]":String(now.getFullYear()),
     };
     let html=conteudo;
