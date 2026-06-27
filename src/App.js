@@ -163,7 +163,9 @@ function applyMask(raw,mask){
 const MASK_DATE  ="99/99/9999";
 const MASK_CNPJ  ="99.999.999/9999-99";
 const MASK_PHONE ="(99) 99999-9999";
-const MASK_CEP   ="99999-999";
+const MASK_CEP   ="99.999-999";
+const validarCPF=cpf=>{const n=cpf.replace(/\D/g,"");if(n.length!==11||/^(\d)\1+$/.test(n))return false;let s=0;for(let i=0;i<9;i++)s+=parseInt(n[i])*(10-i);let r=s%11<2?0:11-s%11;if(parseInt(n[9])!==r)return false;s=0;for(let i=0;i<10;i++)s+=parseInt(n[i])*(11-i);r=s%11<2?0:11-s%11;return parseInt(n[10])===r;};
+const validarCNPJ=cnpj=>{const n=cnpj.replace(/\D/g,"");if(n.length!==14||/^(\d)\1+$/.test(n))return false;const calc=l=>{let s=0,p=l-7;for(let i=0;i<l;i++){s+=parseInt(n[i])*p--;if(p<2)p=9;}const r=s%11<2?0:11-s%11;return parseInt(n[l])===r;};return calc(12)&&calc(13);};
 function MaskedInput({label,value,onChange,mask,placeholder,required,disabled}){
   const handle=e=>onChange(applyMask(e.target.value,mask));
   return(
@@ -1083,7 +1085,9 @@ function EmpresasScreen({user}){
   const openAdd=()=>{setForm(emptyEmp);setModal(true);};
   const openEdit=i=>{setForm({...emptyEmp,...i,cnpj:i.cnpj||"",cep:i.cep||""});setModal(true);};
   const save=async()=>{
-    if(!form.name.trim())return alert("Nome Fantasia é obrigatório.");setSaving(true);
+    if(!form.name.trim())return alert("Nome Fantasia é obrigatório.");
+    if(form.cnpj?.replace(/\D/g,"").length===14&&!validarCNPJ(form.cnpj))return alert("CNPJ inválido.");
+    setSaving(true);
     try{
       if(form.id){const u=await api.put(`/companies/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
       else{const c=await api.post("/companies",form);setItems(is=>[...is,c]);}
@@ -1144,7 +1148,7 @@ function EmpresasScreen({user}){
             <div style={{flex:2}}><Input label="Bairro" value={form.bairro||""} onChange={v=>setForm(f=>({...f,bairro:v}))}/></div>
           </div>
           <div style={{display:"flex",gap:10}}>
-            <div style={{flex:1}}><MaskedInput label="CEP" mask={MASK_CEP} value={form.cep||""} onChange={v=>setForm(f=>({...f,cep:v}))} placeholder="00000-000"/></div>
+            <div style={{flex:1}}><MaskedInput label="CEP" mask={MASK_CEP} value={form.cep||""} onChange={v=>setForm(f=>({...f,cep:v}))} placeholder="00.000-000"/></div>
             <div style={{flex:2}}><Input label="Cidade" value={form.cidade||""} onChange={v=>setForm(f=>({...f,cidade:v}))}/></div>
             <div style={{flex:1}}><Input label="Estado" value={form.estado||""} onChange={v=>setForm(f=>({...f,estado:v}))}/></div>
           </div>
@@ -1598,7 +1602,9 @@ function FornecedoresScreen({user}){
   const openAdd=()=>{setForm(emptyForm);setModal(true);};
   const openEdit=i=>{setForm({...emptyForm,...i});setModal(true);};
   const save=async()=>{
-    if(!form.name.trim())return alert("Nome Fantasia é obrigatório.");setSaving(true);
+    if(!form.name.trim())return alert("Nome Fantasia é obrigatório.");
+    if(form.cnpj?.replace(/\D/g,"").length===14&&!validarCNPJ(form.cnpj))return alert("CNPJ inválido.");
+    setSaving(true);
     try{
       if(form.id){const u=await api.put(`/suppliers/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
       else{const c=await api.post("/suppliers",form);setItems(is=>[...is,c]);}
@@ -1645,7 +1651,7 @@ function FornecedoresScreen({user}){
             <div style={{flex:2}}><Input label="Bairro" value={form.bairro||""} onChange={v=>setForm(f=>({...f,bairro:v}))}/></div>
           </div>
           <div style={{display:"flex",gap:10}}>
-            <div style={{flex:1}}><MaskedInput label="CEP" mask={MASK_CEP} value={form.cep||""} onChange={v=>setForm(f=>({...f,cep:v}))} placeholder="00000-000"/></div>
+            <div style={{flex:1}}><MaskedInput label="CEP" mask={MASK_CEP} value={form.cep||""} onChange={v=>setForm(f=>({...f,cep:v}))} placeholder="00.000-000"/></div>
             <div style={{flex:2}}><Input label="Cidade" value={form.cidade||""} onChange={v=>setForm(f=>({...f,cidade:v}))}/></div>
             <div style={{flex:1}}><Input label="Estado" value={form.estado||""} onChange={v=>setForm(f=>({...f,estado:v}))}/></div>
           </div>
@@ -2660,6 +2666,7 @@ function FuncionariosScreen({user}){
 
   const save=async()=>{
     if(!modal.nome?.trim()){setErr("Nome do funcionário é obrigatório.");return;}
+    if(modal.cpf?.replace(/\D/g,"").length===11&&!validarCPF(modal.cpf)){setErr("CPF inválido.");return;}
     try{
       if(modal.id) await api.put(`/funcionarios/${modal.id}`,modal);
       else         await api.post("/funcionarios",modal);
@@ -2673,7 +2680,7 @@ function FuncionariosScreen({user}){
 
   const canI=act=>user.permissions?.s22?.[act];
   const MASK_CPF="999.999.999-99";
-  const MASK_CEP="99999-999";
+  const MASK_CEP="99.999-999";
 
   const runSync=async()=>{
     setSyncing(true);setSyncMsg("");
@@ -2809,7 +2816,7 @@ function FuncionariosScreen({user}){
           <div style={grid3}>
             {F("Bairro","bairro")}
             {F("Cidade","cidade")}
-            <MaskedInput label="CEP" value={modal.cep} onChange={v=>setModal(m=>({...m,cep:v}))} mask="99999-999" placeholder="00000-000"/>
+            <MaskedInput label="CEP" value={modal.cep} onChange={v=>setModal(m=>({...m,cep:v}))} mask="99.999-999" placeholder="00.000-000"/>
           </div>
           <div style={grid2}>
             <div style={S.formRow}>
@@ -2847,22 +2854,38 @@ function FuncionariosScreen({user}){
 
 // ── MODELOS DE CONTRATO (s23) ─────────────────────────────────
 const CONTRATO_TOKENS=[
-  ["[TPATIVO]","Tipo de Ativo"],["[NMEMP]","Nome da Empresa"],["[CNEMP]","CNPJ da Empresa"],["[LOGOEMP]","Logo da Empresa"],
-  ["[OPERADORA]","Operadora"],["[NRLINHA]","Número de Linha"],["[ICCID]","ICCID"],["[ACESSO]","Acesso"],
-  ["[ESTRUTURA]","Estrutura"],["[TPPACOTE]","Tipo de Pacote"],["[MARCA]","Marca"],["[MODELO]","Modelo"],
-  ["[IMEI1]","IMEI Slot 1"],["[IMEI2]","IMEI Slot 2"],["[NRSER]","Número de Série"],
-  ["[NMFUN]","Nome do Funcionário"],["[CPF]","CPF"],["[RG]","RG"],["[CARGO]","Cargo"],
-  ["[LOGRAD]","Logradouro"],["[NREND]","Número End."],["[COMPLEM]","Complemento"],
-  ["[BAIRRO]","Bairro"],["[CEP]","CEP"],["[CIDADE]","Cidade"],["[ESTADO]","Estado"],
+  // Empresa (13)
+  ["[RAZSOCEMP]","Razão Social da Empresa"],["[FANTASEMP]","Fantasia da Empresa"],["[CNPJEMP]","CNPJ da Empresa"],
+  ["[INSCEST]","Insc. Estadual"],["[INSCMUN]","Insc. Municipal"],
+  ["[LOGREMP]","Logradouro da Empresa"],["[NRLOGREMP]","Nº Logradouro (Empresa)"],["[BAIRROEMP]","Bairro da Empresa"],
+  ["[CEPEMP]","CEP da Empresa"],["[CIDEMP]","Cidade da Empresa"],["[ESTEMP]","Estado da Empresa"],
+  ["[REPRLEGEMP]","Representante Legal"],["[LOGOEMP]","Logo da Empresa"],
+  // Funcionário (15)
+  ["[NMFUN]","Nome do Funcionário"],["[CPFFUN]","CPF do Funcionário"],["[RGFUN]","RG do Funcionário"],
+  ["[CARGOFUN]","Cargo do Funcionário"],["[MATRICFUN]","Matrícula do Funcionário"],["[CCUSTOFUN]","Centro de Custo"],
+  ["[FONEFUN]","Fone do Funcionário"],["[EMAILFUN]","E-mail do Funcionário"],
+  ["[LOGRFUN]","Logradouro do Funcionário"],["[NRLOGRFUN]","Nº Logradouro (Funcionário)"],
+  ["[COMPLEMFUN]","Complemento do Funcionário"],["[BAIRROFUN]","Bairro do Funcionário"],
+  ["[CEPFUN]","CEP do Funcionário"],["[CIDFUN]","Cidade do Funcionário"],["[ESTFUN]","Estado do Funcionário"],
+  // Ativo (23)
+  ["[TPATIVO]","Tipo de Ativo"],["[NOMEATIVO]","Nome do Ativo"],["[MARCA]","Marca"],["[MODELO]","Modelo"],
+  ["[NRSER]","Número de Série"],["[SISTOPER]","Sistema Operacional"],["[VERSAO]","Versão"],
+  ["[PROCES]","Processador"],["[MEMORIA]","Memória"],["[HD]","HD"],["[PATRIMONIO]","Patrimônio"],
+  ["[NRDOCUM]","Nº do Documento"],["[VALOR]","Valor"],["[CONDICAO]","Condição"],["[ACESSORIOS]","Acessórios"],
+  ["[IMEI1]","IMEI Slot 1"],["[IMEI2]","IMEI Slot 2"],["[OPERADORA]","Operadora"],
+  ["[NRLINHA]","Número de Linha"],["[ICCID]","ICCID"],["[ACESSO]","Acesso"],
+  ["[ESTRUTURA]","Estrutura"],["[TPPACOTE]","Tipo de Pacote"],
+  // Data (3)
   ["[Dia]","Dia"],["[Mes]","Mês (extenso)"],["[Ano]","Ano"],
 ];
 
 function ModelosContratoScreen({user}){
   const[items,setItems]=useState([]);
   const[tipoAtivos,setTipoAtivos]=useState([]);
+  const[companies,setCompanies]=useState([]);
   const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(false);
-  const[form,setForm]=useState({id:null,nome:"",tipoAtivoId:""});
+  const[form,setForm]=useState({id:null,nome:"",tipoAtivoId:"",empresaId:""});
   const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
   const[modeloEditor,setModeloEditor]=useState(null);
@@ -2872,15 +2895,15 @@ function ModelosContratoScreen({user}){
 
   const load=()=>{
     setLoading(true);
-    Promise.all([api.get("/modelos-contrato"),api.get("/tipo-ativos")])
-    .then(([m,t])=>{setItems(m);setTipoAtivos(t);})
+    Promise.all([api.get("/modelos-contrato"),api.get("/tipo-ativos"),api.get("/companies")])
+    .then(([m,t,c])=>{setItems(m);setTipoAtivos(t);setCompanies(c.filter(x=>x.active));})
     .catch(e=>alert(e.message))
     .finally(()=>setLoading(false));
   };
   useEffect(()=>{if(!p?.view)return;load();},[]);
 
-  const openAdd=()=>{setForm({id:null,nome:"",tipoAtivoId:""});setModal(true);};
-  const openEdit=it=>{setForm({id:it.id,nome:it.nome,tipoAtivoId:it.tipoAtivoId||""});setModal(true);};
+  const openAdd=()=>{setForm({id:null,nome:"",tipoAtivoId:"",empresaId:""});setModal(true);};
+  const openEdit=it=>{setForm({id:it.id,nome:it.nome,tipoAtivoId:it.tipoAtivoId||"",empresaId:it.empresaId||""});setModal(true);};
 
   const save=async()=>{
     if(!form.nome.trim())return alert("Nome do modelo é obrigatório.");
@@ -2937,12 +2960,13 @@ function ModelosContratoScreen({user}){
       </div>
       {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum modelo cadastrado.</div>:(
         <table style={S.table}><thead><tr>
-          {["Modelo","Tipo de Ativo","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          {["Modelo","Tipo de Ativo","Empresa","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
         <tbody>{items.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}><strong>{it.nome}</strong></td>
             <td style={S.td}>{it.tipoAtivoName||"—"}</td>
+            <td style={S.td}>{it.empresaName||"—"}</td>
             <td style={S.td}>
               <button style={{...S.actionBtn,background:"#E8F4FD",color:"#1565C0",fontWeight:600}} onClick={()=>openModelo(it)}>📄 Modelo</button>
               {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
@@ -2956,6 +2980,8 @@ function ModelosContratoScreen({user}){
           <Input label="Nome do Modelo" value={form.nome} onChange={v=>setForm(f=>({...f,nome:v}))} required/>
           <SelectField label="Tipo de Ativo" value={form.tipoAtivoId} onChange={v=>setForm(f=>({...f,tipoAtivoId:v}))}
             options={tipoAtivos.map(t=>({value:t.id,label:t.name}))} placeholder="Selecione..." clearable/>
+          <SelectField label="Empresa" value={form.empresaId} onChange={v=>setForm(f=>({...f,empresaId:v}))}
+            options={companies.map(c=>({value:c.id,label:c.name}))} placeholder="Selecione..." clearable/>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
             <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
             <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
@@ -3109,38 +3135,74 @@ function ControleAtivosScreen({user}){
   const openAnexos=(controleId,item)=>setAnexosModal({controleId,itemId:item.id,attachments:item.attachments||[]});
 
   const imprimirContrato=async(item)=>{
-    const modelo=modelos.find(m=>m.tipoAtivoId===item.tipoAtivoId);
-    if(!modelo){alert("Nenhum modelo de contrato cadastrado para o Tipo de Ativo: "+(item.tipoAtivoName||"—"));return;}
+    const modelo=modelos.find(m=>m.tipoAtivoId===item.tipoAtivoId&&m.empresaId===item.companyId);
+    if(!modelo){alert("Nenhum modelo de contrato cadastrado para o Tipo de Ativo \""+( item.tipoAtivoName||"—")+"\" e a Empresa \""+( item.companyName||"—")+"\".");return;}
     let conteudo="";
     try{const d=await api.get(`/modelos-contrato/${modelo.id}/conteudo`);conteudo=d.conteudo||"";}
     catch(e){alert("Erro ao carregar modelo: "+e.message);return;}
     let logoHtml="";
     try{const ld=await api.get(`/companies/${item.companyId}/logo`);if(ld.logo)logoHtml=`<img src="${ld.logo}" style="max-width:200px;height:auto;">`;}
     catch(e){}
-    // Busca funcionário pelo funcionarioId vinculado ao controle
     const funcItem=funcionarios.find(f=>f.id===itensModal.controle.funcionarioId);
     const compItem=companies.find(c=>c.id===item.companyId);
     const now=new Date();
     const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
     const subs={
-      "[TPATIVO]":item.tipoAtivoName||"",
-      "[NMEMP]":item.companyName||"","[CNEMP]":compItem?.cnpj||"","[LOGOEMP]":logoHtml,
-      "[OPERADORA]":item.operadoraName||"","[NRLINHA]":item.numeroLinha||"","[ICCID]":item.iccid||"",
-      "[ACESSO]":item.acesso||"","[ESTRUTURA]":item.estrutura||"","[TPPACOTE]":item.tipoPacote||"",
-      "[MARCA]":item.marca||"","[MODELO]":item.modelo||"","[IMEI1]":item.imeiSlot1||"","[IMEI2]":item.imeiSlot2||"",
-      "[NRSER]":item.numeroSerie||"",
-      // Dados do funcionário — vindos da tela Funcionários via funcionarioId
+      // Empresa
+      "[RAZSOCEMP]":compItem?.razaoSocial||"",
+      "[FANTASEMP]":compItem?.name||item.companyName||"",
+      "[CNPJEMP]":compItem?.cnpj||"",
+      "[INSCEST]":compItem?.inscEstadual||"",
+      "[INSCMUN]":compItem?.inscMunicipal||"",
+      "[LOGREMP]":compItem?.logradouro||"",
+      "[NRLOGREMP]":compItem?.numero||"",
+      "[BAIRROEMP]":compItem?.bairro||"",
+      "[CEPEMP]":compItem?.cep||"",
+      "[CIDEMP]":compItem?.cidade||"",
+      "[ESTEMP]":compItem?.estado||"",
+      "[REPRLEGEMP]":compItem?.representanteLegal||"",
+      "[LOGOEMP]":logoHtml,
+      // Funcionário
       "[NMFUN]":funcItem?.nome||itensModal.controle.nomeFuncionario||"",
-      "[CPF]":funcItem?.cpf||itensModal.controle.cpf||"",
-      "[RG]":funcItem?.rg||"",
-      "[CARGO]":funcItem?.cargo||"",
-      "[LOGRAD]":funcItem?.logradouro||"",
-      "[NREND]":funcItem?.numero||"",
-      "[COMPLEM]":funcItem?.complemento||"",
-      "[BAIRRO]":funcItem?.bairro||"",
-      "[CEP]":funcItem?.cep||"",
-      "[CIDADE]":funcItem?.cidade||"",
-      "[ESTADO]":funcItem?.estado||"",
+      "[CPFFUN]":funcItem?.cpf||itensModal.controle.cpf||"",
+      "[RGFUN]":funcItem?.rg||"",
+      "[CARGOFUN]":funcItem?.cargo||"",
+      "[MATRICFUN]":funcItem?.matricula||"",
+      "[CCUSTOFUN]":funcItem?.centroCusto||"",
+      "[FONEFUN]":funcItem?.fone||"",
+      "[EMAILFUN]":funcItem?.email||"",
+      "[LOGRFUN]":funcItem?.logradouro||"",
+      "[NRLOGRFUN]":funcItem?.numero||"",
+      "[COMPLEMFUN]":funcItem?.complemento||"",
+      "[BAIRROFUN]":funcItem?.bairro||"",
+      "[CEPFUN]":funcItem?.cep||"",
+      "[CIDFUN]":funcItem?.cidade||"",
+      "[ESTFUN]":funcItem?.estado||"",
+      // Ativo
+      "[TPATIVO]":item.tipoAtivoName||"",
+      "[NOMEATIVO]":item.ativoNome||"",
+      "[MARCA]":item.marca||"",
+      "[MODELO]":item.modelo||"",
+      "[NRSER]":item.numeroSerie||"",
+      "[SISTOPER]":item.sistemaOperacional||"",
+      "[VERSAO]":item.versao||"",
+      "[PROCES]":item.processador||"",
+      "[MEMORIA]":item.memoria||"",
+      "[HD]":item.hd||"",
+      "[PATRIMONIO]":item.patrimonio||"",
+      "[NRDOCUM]":item.numeroDocumento||"",
+      "[VALOR]":item.valor?Number(item.valor).toFixed(2):"",
+      "[CONDICAO]":item.condicao||"",
+      "[ACESSORIOS]":item.acessorios||"",
+      "[IMEI1]":item.imeiSlot1||"",
+      "[IMEI2]":item.imeiSlot2||"",
+      "[OPERADORA]":item.operadoraName||"",
+      "[NRLINHA]":item.numeroLinha||"",
+      "[ICCID]":item.iccid||"",
+      "[ACESSO]":item.acesso||"",
+      "[ESTRUTURA]":item.estrutura||"",
+      "[TPPACOTE]":item.tipoPacote||"",
+      // Data
       "[Dia]":String(now.getDate()).padStart(2,"0"),"[Mes]":MESES[now.getMonth()],"[Ano]":String(now.getFullYear()),
     };
     let html=conteudo;
@@ -3375,6 +3437,14 @@ function ControleAtivosScreen({user}){
             {/* Campos Telefonia */}
             {tel&&(<>
               <div style={gridStyle}>
+                {F("Marca","marca")}
+                {F("Modelo","modelo")}
+              </div>
+              <div style={gridStyle}>
+                {F("IMEI Slot 1","imeiSlot1")}
+                {F("IMEI Slot 2","imeiSlot2")}
+              </div>
+              <div style={gridStyle}>
                 <SelectField label="Operadora" value={itemForm.operadoraId} onChange={v=>setItemForm(m=>({...m,operadoraId:v}))}
                   options={operadoras.map(o=>({value:o.id,label:o.name}))}/>
                 <SelectField label="Número Linha (Em estoque)" value={itemForm.linhaId} onChange={v=>setItemForm(m=>({...m,linhaId:v}))}
@@ -3389,11 +3459,6 @@ function ControleAtivosScreen({user}){
                 <SelectField label="Tipo Pacote" value={itemForm.tipoPacote} onChange={v=>setItemForm(m=>({...m,tipoPacote:v}))}
                   options={TIPO_PACOTE_OPTS.map(s=>({value:s,label:s}))}/>
               </div>
-              <div style={gridStyle}>
-                <MaskedInput label="Data Aquisição" value={itemForm.dataAquisicao} onChange={v=>setItemForm(m=>({...m,dataAquisicao:v}))} mask={MASK_DATA} placeholder="DD/MM/AAAA"/>
-                <SelectField label="Status" value={itemForm.statusAtivo} onChange={v=>setItemForm(m=>({...m,statusAtivo:v}))}
-                  options={STATUS_ATIVO_OPTS.map(s=>({value:s,label:s}))}/>
-              </div>
             </>)}
 
             {/* Campos não-Telefonia */}
@@ -3405,10 +3470,6 @@ function ControleAtivosScreen({user}){
               </div>
               <div style={gridStyle}>
                 {F("Modelo","modelo")}
-                {F("IMEI Slot 1","imeiSlot1")}
-              </div>
-              <div style={gridStyle}>
-                {F("IMEI Slot 2","imeiSlot2")}
                 {F("Número de Série","numeroSerie")}
               </div>
               <div style={gridStyle}>
@@ -3425,7 +3486,11 @@ function ControleAtivosScreen({user}){
               </div>
               <div style={gridStyle}>
                 {F("Número do Documento","numeroDocumento")}
-                {F("Valor","valor","number")}
+                <div style={S.formRow}>
+                  <label style={S.label}>Valor</label>
+                  <input type="number" step="0.01" min="0" value={itemForm.valor||""} onChange={e=>setItemForm(m=>({...m,valor:e.target.value}))}
+                    style={S.input} onFocus={e=>e.target.style.borderColor=C.primary} onBlur={e=>e.target.style.borderColor=C.border}/>
+                </div>
               </div>
               <div style={gridStyle}>
                 <MaskedInput label="Data Aquisição" value={itemForm.dataAquisicao} onChange={v=>setItemForm(m=>({...m,dataAquisicao:v}))} mask={MASK_DATA} placeholder="DD/MM/AAAA"/>
