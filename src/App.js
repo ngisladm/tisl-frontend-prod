@@ -166,7 +166,7 @@ const MASK_PHONE ="(99) 99999-9999";
 const MASK_CEP   ="99.999-999";
 const validarCPF=cpf=>{const n=cpf.replace(/\D/g,"");if(n.length!==11||/^(\d)\1+$/.test(n))return false;let s=0;for(let i=0;i<9;i++)s+=parseInt(n[i])*(10-i);let r=s%11<2?0:11-s%11;if(parseInt(n[9])!==r)return false;s=0;for(let i=0;i<10;i++)s+=parseInt(n[i])*(11-i);r=s%11<2?0:11-s%11;return parseInt(n[10])===r;};
 const validarCNPJ=cnpj=>{const n=cnpj.replace(/\D/g,"");if(n.length!==14||/^(\d)\1+$/.test(n))return false;const calc=l=>{let s=0,p=l-7;for(let i=0;i<l;i++){s+=parseInt(n[i])*p--;if(p<2)p=9;}const r=s%11<2?0:11-s%11;return parseInt(n[l])===r;};return calc(12)&&calc(13);};
-const parseCSV=text=>{const rows=[];const lines=text.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n");for(const line of lines){if(!line.trim())continue;const cols=[];let i=0,cur="";while(i<line.length){if(line[i]==='"'){i++;while(i<line.length){if(line[i]==='"'&&line[i+1]==='"'){cur+='"';i+=2;}else if(line[i]==='"'){i++;break;}else{cur+=line[i++];}}if(line[i]===",")i++;}else{const end=line.indexOf(",",i);if(end===-1){cur=line.slice(i);i=line.length;}else{cur=line.slice(i,end);i=end+1;}}cols.push(cur.trim());cur="";}rows.push(cols);}return rows;};
+const parseCSVRows=text=>{const rows=[];const lines=text.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n");for(const line of lines){if(!line.trim())continue;const cols=[];let i=0,cur="";while(i<line.length){if(line[i]==='"'){i++;while(i<line.length){if(line[i]==='"'&&line[i+1]==='"'){cur+='"';i+=2;}else if(line[i]==='"'){i++;break;}else{cur+=line[i++];}}if(line[i]===",")i++;}else{const end=line.indexOf(",",i);if(end===-1){cur=line.slice(i);i=line.length;}else{cur=line.slice(i,end);i=end+1;}}cols.push(cur.trim());cur="";}rows.push(cols);}return rows;};
 function MaskedInput({label,value,onChange,mask,placeholder,required,disabled}){
   const handle=e=>onChange(applyMask(e.target.value,mask));
   return(
@@ -2601,7 +2601,7 @@ function LinhasDisponiveisScreen({user}){
                 setCargaModal(m=>({...m,processing:true,result:null}));
                 try{
                   const text=await cargaModal.file.text();
-                  let rows=parseCSV(text);
+                  let rows=parseCSVRows(text);
                   if(cargaModal.skipHeader&&rows.length>0)rows=rows.slice(1);
                   const result=await api.post("/linhas-disponiveis/carga-inicial",{rows});
                   setCargaModal(m=>({...m,processing:false,result}));
@@ -3649,7 +3649,7 @@ function ControleAtivosScreen({user}){
                 setCargaModal(m=>({...m,processing:true,result:null}));
                 try{
                   const text=await cargaModal.file.text();
-                  let rows=parseCSV(text);
+                  let rows=parseCSVRows(text);
                   if(cargaModal.skipHeader&&rows.length>0)rows=rows.slice(1);
                   const result=await api.post("/controle-ativos/carga-inicial",{rows});
                   setCargaModal(m=>({...m,processing:false,result}));
