@@ -4385,13 +4385,13 @@ function InventarioAtivosScreen({user}){
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
 
-  const COLS=["Tipo de Ativo","Empresa","Nome do Ativo","Marca","Modelo","Nº Série","IMEI 1","IMEI 2","ICCID","Nº Documento"];
+  const COLS=["Tipo de Ativo","Empresa","Nome do Ativo","Nº Linha","Marca","Modelo","Nº Série","IMEI 1","ICCID","Nº Documento"];
 
   const exportExcel=()=>{
     const rows=[];
     for(const[nome,itens] of grouped){
       rows.push({"Funcionário":nome,...Object.fromEntries(COLS.map(c=>[c,""]))});
-      for(const r of itens) rows.push({"Funcionário":"","Tipo de Ativo":r.tipoAtivoName||"","Empresa":r.companyName||"","Nome do Ativo":r.ativoNome||"","Marca":r.marca||"","Modelo":r.modelo||"","Nº Série":r.numeroSerie||"","IMEI 1":r.imeiSlot1||"","IMEI 2":r.imeiSlot2||"","ICCID":r.iccid||"","Nº Documento":r.numeroDocumento||""});
+      for(const r of itens) rows.push({"Funcionário":"","Tipo de Ativo":r.tipoAtivoName||"","Empresa":r.companyName||"","Nome do Ativo":r.ativoNome||"","Nº Linha":r.numeroLinha||"","Marca":r.marca||"","Modelo":r.modelo||"","Nº Série":r.numeroSerie||"","IMEI 1":r.imeiSlot1||"","ICCID":r.iccid||"","Nº Documento":r.numeroDocumento||""});
     }
     const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Inventário");XLSX.writeFile(wb,"inventario-ativos.xlsx");
   };
@@ -4436,11 +4436,11 @@ function InventarioAtivosScreen({user}){
                   <td style={S.td}>{r.tipoAtivoName||"—"}</td>
                   <td style={S.td}>{r.companyName||"—"}</td>
                   <td style={S.td}>{r.ativoNome||"—"}</td>
+                  <td style={S.td}>{r.numeroLinha||"—"}</td>
                   <td style={S.td}>{r.marca||"—"}</td>
                   <td style={S.td}>{r.modelo||"—"}</td>
                   <td style={S.td}>{r.numeroSerie||"—"}</td>
                   <td style={S.td}>{r.imeiSlot1||"—"}</td>
-                  <td style={S.td}>{r.imeiSlot2||"—"}</td>
                   <td style={S.td}>{r.iccid||"—"}</td>
                   <td style={S.td}>{r.numeroDocumento||"—"}</td>
                 </tr>
