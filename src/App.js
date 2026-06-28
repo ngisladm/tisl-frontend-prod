@@ -3057,7 +3057,7 @@ function ModelosContratoScreen({user}){
                 {["Arial","Times New Roman","Courier New","Georgia"].map(f=><option key={f} value={f}>{f}</option>)}
               </select>
               <select style={{...S.input,width:70,height:30,padding:"0 4px",fontSize:12}} onMouseDown={e=>e.preventDefault()}
-                onChange={e=>{if(e.target.value){execCmd("fontSize",e.target.value);e.target.value==""}}}>
+                onChange={e=>{if(e.target.value){execCmd("fontSize",e.target.value);e.target.value="";}}}>
                 <option value="">Tam.</option>
                 {[1,2,3,4,5,6,7].map(s=><option key={s} value={s}>{[8,10,12,14,16,18,24][s-1]}pt</option>)}
               </select>
