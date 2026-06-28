@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -3404,7 +3404,7 @@ function ControleAtivosScreen({user}){
         <Modal title={modal.id?"Editar Registro":"Novo Registro"} onClose={()=>setModal(null)}>
           <SelectField label="Nome do Funcionário" value={modal.funcionarioId}
             onChange={v=>setModal(m=>({...m,funcionarioId:v}))}
-            options={funcionarios.filter(f=>f.situacao==="Ativo").map(f=>({value:f.id,label:f.nome}))}
+            options={funcionarios.filter(f=>f.situacao==="Ativo"&&(!modal.id?!items.some(i=>i.funcionarioId===f.id):true)).map(f=>({value:f.id,label:f.nome}))}
             required/>
           {modal.funcionarioId&&(()=>{
             const func=funcionarios.find(f=>f.id===modal.funcionarioId);
@@ -4007,6 +4007,452 @@ function HomeScreen({user,navigate}){
   );
 }
 
+// ── RELATÓRIO DE ANÁLISE DE LINHAS (s24) ─────────────────────
+function RelatorioAnaliseLinhasScreen({user}){
+  const p=user.permissions?.s24;
+  const[allData,setAllData]=useState([]);
+  const[companies,setCompanies]=useState([]);
+  const[operadoras,setOperadoras]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[filtEmp,setFiltEmp]=useState("");
+  const[filtOp,setFiltOp]=useState("");
+  const[selMeses,setSelMeses]=useState([]);
+  const[filtNrLinha,setFiltNrLinha]=useState("");
+  const[filtPlano,setFiltPlano]=useState("");
+  const[filtConsumo,setFiltConsumo]=useState("Todos");
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/linhas-faturadas/relatorio"),api.get("/companies"),api.get("/operadoras")])
+      .then(([d,c,o])=>{setAllData(d);setCompanies(c);setOperadoras(o);})
+      .catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[]);
+
+  const mesesDispo=useMemo(()=>{
+    let d=allData;
+    if(filtEmp)d=d.filter(r=>r.companyId===filtEmp);
+    if(filtOp)d=d.filter(r=>r.operadoraId===filtOp);
+    return[...new Set(d.map(r=>r.mesAno))].sort();
+  },[allData,filtEmp,filtOp]);
+
+  useEffect(()=>{setSelMeses([]);},[filtEmp,filtOp]);
+  const toggleMes=m=>setSelMeses(ms=>ms.includes(m)?ms.filter(x=>x!==m):[...ms,m]);
+
+  const isZero=v=>!v||String(v).trim()===""||String(v).trim()==="0"||/^0[.,]?0*\s*(KB|MB|GB|TB|bytes|b)?$/i.test(String(v).trim());
+
+  const activeMeses=selMeses.length>0?selMeses:mesesDispo;
+
+  const pivotData=useMemo(()=>{
+    let d=allData;
+    if(filtEmp)d=d.filter(r=>r.companyId===filtEmp);
+    if(filtOp)d=d.filter(r=>r.operadoraId===filtOp);
+    d=d.filter(r=>activeMeses.includes(r.mesAno));
+    if(filtNrLinha)d=d.filter(r=>(r.numeroLinha||"").toLowerCase().includes(filtNrLinha.toLowerCase()));
+    if(filtPlano)d=d.filter(r=>(r.plano||"").toLowerCase().includes(filtPlano.toLowerCase()));
+    const map=new Map();
+    for(const r of d){
+      const key=`${r.companyId}|${r.operadoraId}|${r.numeroLinha}|${r.plano}`;
+      if(!map.has(key))map.set(key,{companyName:r.companyName,operadoraName:r.operadoraName,numeroLinha:r.numeroLinha,plano:r.plano,meses:{}});
+      map.get(key).meses[r.mesAno]=r.consumoLinha;
+    }
+    let rows=[...map.values()];
+    if(filtConsumo==="Zerados")rows=rows.filter(r=>activeMeses.every(m=>isZero(r.meses[m])));
+    else if(filtConsumo==="Não zerados")rows=rows.filter(r=>activeMeses.some(m=>!isZero(r.meses[m])));
+    return rows;
+  },[allData,filtEmp,filtOp,activeMeses,filtNrLinha,filtPlano,filtConsumo]);
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+
+  const MesChip=({m})=>(
+    <label style={{display:"flex",alignItems:"center",gap:4,fontSize:13,cursor:"pointer",padding:"3px 10px",borderRadius:6,
+      background:selMeses.includes(m)?C.primary:"#fff",color:selMeses.includes(m)?"#fff":C.text,border:`1px solid ${selMeses.includes(m)?C.primary:C.border}`}}>
+      <input type="checkbox" checked={selMeses.includes(m)} onChange={()=>toggleMes(m)} style={{display:"none"}}/>
+      {m}
+    </label>
+  );
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>📊 Relatório de Análise de Linhas</span>
+        <button style={S.btnSave} onClick={()=>{
+          const ws=XLSX.utils.json_to_sheet(pivotData.map(r=>({Empresa:r.companyName||"",Operadora:r.operadoraName||"","Nº Linha":r.numeroLinha||"",Plano:r.plano||"",...Object.fromEntries(activeMeses.map(m=>[m,r.meses[m]||""]))})));
+          const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Análise");XLSX.writeFile(wb,"relatorio-analise-linhas.xlsx");
+        }}>⬇️ Excel</button>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,alignItems:"flex-start"}}>
+        <select value={filtEmp} onChange={e=>setFiltEmp(e.target.value)} style={{...S.select,width:"auto",minWidth:160}}>
+          <option value="">Todas as empresas</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select value={filtOp} onChange={e=>setFiltOp(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
+          <option value="">Todas as operadoras</option>{operadoras.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+        <input placeholder="Nº Linha..." value={filtNrLinha} onChange={e=>setFiltNrLinha(e.target.value)} style={{...S.input,width:"auto",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Plano..." value={filtPlano} onChange={e=>setFiltPlano(e.target.value)} style={{...S.input,width:"auto",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+        <select value={filtConsumo} onChange={e=>setFiltConsumo(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
+          {["Todos","Zerados","Não zerados"].map(v=><option key={v}>{v}</option>)}
+        </select>
+      </div>
+      {mesesDispo.length>0&&(
+        <div style={{marginBottom:14}}>
+          <div style={{...S.label,marginBottom:6}}>Mês/Ano — clique para colunar (vazio = todos)</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:8,padding:10,background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}>
+            {mesesDispo.map(m=><MesChip key={m} m={m}/>)}
+          </div>
+        </div>
+      )}
+      <div style={{fontSize:12,color:C.textLight,marginBottom:8}}>{pivotData.length} linha(s)</div>
+      {pivotData.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📊</span>Nenhum dado encontrado.</div>:(
+        <div style={{overflowX:"auto"}}>
+          <table style={{...S.table,minWidth:600}}>
+            <thead><tr>{["Empresa","Operadora","Nº Linha","Plano",...activeMeses].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
+            <tbody>{pivotData.map((r,i)=>(
+              <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={S.td}>{r.companyName||"—"}</td>
+                <td style={S.td}>{r.operadoraName||"—"}</td>
+                <td style={{...S.td,fontWeight:600}}>{r.numeroLinha||"—"}</td>
+                <td style={S.td}>{r.plano||"—"}</td>
+                {activeMeses.map(m=><td key={m} style={{...S.td,color:isZero(r.meses[m])?C.danger:C.text}}>{r.meses[m]||"—"}</td>)}
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── RELATÓRIO DE RESUMO DE LINHAS (s25) ──────────────────────
+function RelatorioResumoLinhasScreen({user}){
+  const p=user.permissions?.s25;
+  const[allData,setAllData]=useState([]);
+  const[companies,setCompanies]=useState([]);
+  const[operadoras,setOperadoras]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[filtEmp,setFiltEmp]=useState("");
+  const[filtOp,setFiltOp]=useState("");
+  const[selMeses,setSelMeses]=useState([]);
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/linhas-faturadas/relatorio"),api.get("/companies"),api.get("/operadoras")])
+      .then(([d,c,o])=>{setAllData(d);setCompanies(c);setOperadoras(o);})
+      .catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[]);
+
+  const mesesDispo=useMemo(()=>{
+    let d=allData;
+    if(filtEmp)d=d.filter(r=>r.companyId===filtEmp);
+    if(filtOp)d=d.filter(r=>r.operadoraId===filtOp);
+    return[...new Set(d.map(r=>r.mesAno))].sort();
+  },[allData,filtEmp,filtOp]);
+
+  useEffect(()=>{setSelMeses([]);},[filtEmp,filtOp]);
+  const toggleMes=m=>setSelMeses(ms=>ms.includes(m)?ms.filter(x=>x!==m):[...ms,m]);
+
+  const isZero=v=>!v||String(v).trim()===""||String(v).trim()==="0"||/^0[.,]?0*\s*(KB|MB|GB|TB|bytes|b)?$/i.test(String(v).trim());
+  const parseNum=v=>parseFloat(String(v||"").replace(/[^0-9.,]/g,"").replace(",","."))||0;
+
+  const filtered=useMemo(()=>{
+    let d=allData;
+    if(filtEmp)d=d.filter(r=>r.companyId===filtEmp);
+    if(filtOp)d=d.filter(r=>r.operadoraId===filtOp);
+    const meses=selMeses.length>0?selMeses:mesesDispo;
+    return d.filter(r=>meses.includes(r.mesAno));
+  },[allData,filtEmp,filtOp,selMeses,mesesDispo]);
+
+  const summary=useMemo(()=>{
+    const byEmpOp=new Map(),byEmp=new Map(),byOp=new Map();
+    let totLines=new Set(),totZero=new Set(),totC=0,totV=0;
+    for(const r of filtered){
+      const eoKey=`${r.companyId}|${r.operadoraId}`;
+      const lineKey=`${r.companyId}|${r.operadoraId}|${r.numeroLinha}`;
+      if(!byEmpOp.has(eoKey))byEmpOp.set(eoKey,{cn:r.companyName||"(sem empresa)",on:r.operadoraName||"(sem operadora)",lines:new Set(),zero:new Set(),c:0,v:0});
+      if(!byEmp.has(r.companyId))byEmp.set(r.companyId,{n:r.companyName||"(sem empresa)",lines:new Set(),zero:new Set(),c:0,v:0});
+      if(!byOp.has(r.operadoraId))byOp.set(r.operadoraId,{n:r.operadoraName||"(sem operadora)",lines:new Set(),zero:new Set(),c:0,v:0});
+      const eo=byEmpOp.get(eoKey),em=byEmp.get(r.companyId),op=byOp.get(r.operadoraId);
+      eo.lines.add(lineKey);em.lines.add(lineKey);op.lines.add(lineKey);totLines.add(lineKey);
+      if(isZero(r.consumoLinha)){eo.zero.add(lineKey);em.zero.add(lineKey);op.zero.add(lineKey);totZero.add(lineKey);}
+      const c=parseNum(r.consumoLinha),v=parseNum(r.valorLinha);
+      eo.c+=c;eo.v+=v;em.c+=c;em.v+=v;op.c+=c;op.v+=v;totC+=c;totV+=v;
+    }
+    return{
+      byEmpOp:[...byEmpOp.values()].sort((a,b)=>a.cn.localeCompare(b.cn)||a.on.localeCompare(b.on)),
+      byEmp:[...byEmp.values()].sort((a,b)=>a.n.localeCompare(b.n)),
+      byOp:[...byOp.values()].sort((a,b)=>a.n.localeCompare(b.n)),
+      totLines:totLines.size,totZero:totZero.size,totC,totV,
+    };
+  },[filtered]);
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+
+  const fmtNum=v=>v===0?"0":v.toLocaleString("pt-BR",{maximumFractionDigits:2});
+  const TR=({lbl,val,bold})=>(
+    <tr onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+      <td style={{...S.td,paddingLeft:bold?12:24,fontWeight:bold?700:400,color:bold?C.accent:C.text}}>{lbl}</td>
+      <td style={{...S.td,textAlign:"right",fontWeight:bold?700:400}}>{val}</td>
+    </tr>
+  );
+
+  const MesChip=({m})=>(
+    <label style={{display:"flex",alignItems:"center",gap:4,fontSize:13,cursor:"pointer",padding:"3px 10px",borderRadius:6,
+      background:selMeses.includes(m)?C.primary:"#fff",color:selMeses.includes(m)?"#fff":C.text,border:`1px solid ${selMeses.includes(m)?C.primary:C.border}`}}>
+      <input type="checkbox" checked={selMeses.includes(m)} onChange={()=>toggleMes(m)} style={{display:"none"}}/>
+      {m}
+    </label>
+  );
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📋 Relatório de Resumo de Linhas</span></div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <select value={filtEmp} onChange={e=>setFiltEmp(e.target.value)} style={{...S.select,width:"auto",minWidth:160}}>
+          <option value="">Todas as empresas</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select value={filtOp} onChange={e=>setFiltOp(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
+          <option value="">Todas as operadoras</option>{operadoras.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+      </div>
+      {mesesDispo.length>0&&(
+        <div style={{marginBottom:14}}>
+          <div style={{...S.label,marginBottom:6}}>Mês/Ano</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:8,padding:10,background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}>
+            {mesesDispo.map(m=><MesChip key={m} m={m}/>)}
+          </div>
+        </div>
+      )}
+      {filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum dado encontrado.</div>:(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:16}}>
+          {[
+            {title:"Quantidade de Linhas",rows:[...summary.byEmpOp.map(r=>({lbl:`${r.cn} / ${r.on}`,val:r.lines.size})),...summary.byEmp.map(r=>({lbl:`Empresa: ${r.n}`,val:r.lines.size})),...summary.byOp.map(r=>({lbl:`Operadora: ${r.n}`,val:r.lines.size})),{lbl:"Total",val:summary.totLines,bold:true}]},
+            {title:"Linhas com Consumo Zerado",rows:[...summary.byEmpOp.map(r=>({lbl:`${r.cn} / ${r.on}`,val:r.zero.size})),...summary.byEmp.map(r=>({lbl:`Empresa: ${r.n}`,val:r.zero.size})),...summary.byOp.map(r=>({lbl:`Operadora: ${r.n}`,val:r.zero.size})),{lbl:"Total",val:summary.totZero,bold:true}]},
+            {title:"Consumo Total",rows:[...summary.byEmpOp.map(r=>({lbl:`${r.cn} / ${r.on}`,val:fmtNum(r.c)})),...summary.byEmp.map(r=>({lbl:`Empresa: ${r.n}`,val:fmtNum(r.c)})),...summary.byOp.map(r=>({lbl:`Operadora: ${r.n}`,val:fmtNum(r.c)})),{lbl:"Total",val:fmtNum(summary.totC),bold:true}]},
+            {title:"Valor Total (R$)",rows:[...summary.byEmpOp.map(r=>({lbl:`${r.cn} / ${r.on}`,val:fmtNum(r.v)})),...summary.byEmp.map(r=>({lbl:`Empresa: ${r.n}`,val:fmtNum(r.v)})),...summary.byOp.map(r=>({lbl:`Operadora: ${r.n}`,val:fmtNum(r.v)})),{lbl:"Total",val:fmtNum(summary.totV),bold:true}]},
+          ].map(sec=>(
+            <div key={sec.title}>
+              <div style={{fontWeight:700,color:C.accent,marginBottom:8,paddingBottom:6,borderBottom:`2px solid ${C.primary}`}}>{sec.title}</div>
+              <table style={S.table}><tbody>{sec.rows.map((r,i)=><TR key={i} lbl={r.lbl} val={r.val} bold={r.bold}/>)}</tbody></table>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── RESUMO DE ATIVOS (s26) ────────────────────────────────────
+function ResumoAtivosScreen({user}){
+  const p=user.permissions?.s26;
+  const[allData,setAllData]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[filtNome,setFiltNome]=useState("");
+  const[filtTipo,setFiltTipo]=useState("");
+  const[filtEmp,setFiltEmp]=useState("");
+  const[filtAtivo,setFiltAtivo]=useState("");
+  const[filtSerie,setFiltSerie]=useState("");
+  const[filtDoc,setFiltDoc]=useState("");
+  const[filtStatus,setFiltStatus]=useState("");
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    api.get("/controle-ativos/itens/relatorio").then(setAllData).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[]);
+
+  const tipoOpts=useMemo(()=>[...new Set(allData.map(r=>r.tipoAtivoName||"").filter(Boolean))].sort(),[allData]);
+  const empOpts=useMemo(()=>[...new Set(allData.map(r=>r.companyName||"").filter(Boolean))].sort(),[allData]);
+  const stOpts=useMemo(()=>[...new Set(allData.map(r=>r.statusAtivo||"").filter(Boolean))].sort(),[allData]);
+
+  const filtered=useMemo(()=>{
+    let d=allData;
+    if(filtNome)d=d.filter(r=>(r.nomeFuncionario||"").toLowerCase().includes(filtNome.toLowerCase()));
+    if(filtTipo)d=d.filter(r=>r.tipoAtivoName===filtTipo);
+    if(filtEmp)d=d.filter(r=>r.companyName===filtEmp);
+    if(filtAtivo)d=d.filter(r=>(r.ativoNome||"").toLowerCase().includes(filtAtivo.toLowerCase()));
+    if(filtSerie)d=d.filter(r=>(r.numeroSerie||"").toLowerCase().includes(filtSerie.toLowerCase()));
+    if(filtDoc)d=d.filter(r=>(r.numeroDocumento||"").toLowerCase().includes(filtDoc.toLowerCase()));
+    if(filtStatus)d=d.filter(r=>r.statusAtivo===filtStatus);
+    return d;
+  },[allData,filtNome,filtTipo,filtEmp,filtAtivo,filtSerie,filtDoc,filtStatus]);
+
+  const grouped=useMemo(()=>{
+    const map=new Map();
+    for(const r of filtered){
+      const key=`${r.tipoAtivoName||""}|${r.ativoNome||""}`;
+      if(!map.has(key))map.set(key,{tipo:r.tipoAtivoName||"(sem tipo)",ativo:r.ativoNome||"(sem ativo)",count:0});
+      map.get(key).count++;
+    }
+    return[...map.values()].sort((a,b)=>a.tipo.localeCompare(b.tipo)||a.ativo.localeCompare(b.ativo));
+  },[filtered]);
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>📦 Resumo de Ativos</span>
+        <button style={S.btnSave} onClick={()=>{
+          const ws=XLSX.utils.json_to_sheet(grouped.map(r=>({"Tipo de Ativo":r.tipo,"Nome do Ativo":r.ativo,"Quantidade":r.count})));
+          const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Resumo");XLSX.writeFile(wb,"resumo-ativos.xlsx");
+        }}>⬇️ Excel</button>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+        <input placeholder="Nome Funcionário..." value={filtNome} onChange={e=>setFiltNome(e.target.value)} style={{...S.input,width:"auto",minWidth:160,padding:"6px 10px",fontSize:13}}/>
+        <select value={filtTipo} onChange={e=>setFiltTipo(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
+          <option value="">Todos os tipos</option>{tipoOpts.map(t=><option key={t}>{t}</option>)}
+        </select>
+        <select value={filtEmp} onChange={e=>setFiltEmp(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
+          <option value="">Todas as empresas</option>{empOpts.map(e=><option key={e}>{e}</option>)}
+        </select>
+        <input placeholder="Nome do Ativo..." value={filtAtivo} onChange={e=>setFiltAtivo(e.target.value)} style={{...S.input,width:"auto",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Nº de Série..." value={filtSerie} onChange={e=>setFiltSerie(e.target.value)} style={{...S.input,width:"auto",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Nº Documento..." value={filtDoc} onChange={e=>setFiltDoc(e.target.value)} style={{...S.input,width:"auto",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <select value={filtStatus} onChange={e=>setFiltStatus(e.target.value)} style={{...S.select,width:"auto",minWidth:130}}>
+          <option value="">Todos os status</option>{stOpts.map(s=><option key={s}>{s}</option>)}
+        </select>
+      </div>
+      <div style={{fontSize:12,color:C.textLight,marginBottom:8}}>{filtered.length} item(ns) · {grouped.length} grupo(s)</div>
+      {grouped.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum dado encontrado.</div>:(
+        <table style={S.table}>
+          <thead><tr>{["Tipo de Ativo","Nome do Ativo","Quantidade"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
+          <tbody>{grouped.map((r,i)=>{
+            const showTipo=i===0||grouped[i-1].tipo!==r.tipo;
+            return(
+              <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={{...S.td,fontWeight:showTipo?700:400,color:showTipo?C.accent:C.text}}>{showTipo?r.tipo:""}</td>
+                <td style={S.td}>{r.ativo}</td>
+                <td style={{...S.td,textAlign:"center"}}><span style={{...S.badge,background:"#EBF5FB",color:"#2980B9",fontWeight:700}}>{r.count}</span></td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// ── INVENTÁRIO DE ATIVOS (s27) ────────────────────────────────
+function InventarioAtivosScreen({user}){
+  const p=user.permissions?.s27;
+  const[allData,setAllData]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[filtNome,setFiltNome]=useState("");
+  const[filtTipo,setFiltTipo]=useState("");
+  const[filtEmp,setFiltEmp]=useState("");
+  const[filtAtivo,setFiltAtivo]=useState("");
+  const[filtSerie,setFiltSerie]=useState("");
+  const[filtDoc,setFiltDoc]=useState("");
+  const[filtStatus,setFiltStatus]=useState("");
+  const[filtOp,setFiltOp]=useState("");
+  const[filtLinha,setFiltLinha]=useState("");
+  const[filtIccid,setFiltIccid]=useState("");
+  const[filtAcesso,setFiltAcesso]=useState("");
+  const[filtEstrutura,setFiltEstrutura]=useState("");
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    api.get("/controle-ativos/itens/relatorio").then(setAllData).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[]);
+
+  const tipoOpts=useMemo(()=>[...new Set(allData.map(r=>r.tipoAtivoName||"").filter(Boolean))].sort(),[allData]);
+  const empOpts=useMemo(()=>[...new Set(allData.map(r=>r.companyName||"").filter(Boolean))].sort(),[allData]);
+  const stOpts=useMemo(()=>[...new Set(allData.map(r=>r.statusAtivo||"").filter(Boolean))].sort(),[allData]);
+  const opOpts=useMemo(()=>[...new Set(allData.map(r=>r.operadoraName||"").filter(Boolean))].sort(),[allData]);
+
+  const filtered=useMemo(()=>{
+    let d=allData;
+    const fi=(f,fn)=>{if(f)d=d.filter(r=>(r[fn]||"").toLowerCase().includes(f.toLowerCase()));};
+    const fe=(f,fn)=>{if(f)d=d.filter(r=>r[fn]===f);};
+    fi(filtNome,"nomeFuncionario");fe(filtTipo,"tipoAtivoName");fe(filtEmp,"companyName");
+    fi(filtAtivo,"ativoNome");fi(filtSerie,"numeroSerie");fi(filtDoc,"numeroDocumento");
+    fe(filtStatus,"statusAtivo");fe(filtOp,"operadoraName");
+    fi(filtLinha,"numeroLinha");fi(filtIccid,"iccid");fi(filtAcesso,"acesso");fi(filtEstrutura,"estrutura");
+    return d;
+  },[allData,filtNome,filtTipo,filtEmp,filtAtivo,filtSerie,filtDoc,filtStatus,filtOp,filtLinha,filtIccid,filtAcesso,filtEstrutura]);
+
+  const grouped=useMemo(()=>{
+    const map=new Map();
+    for(const r of filtered){
+      const nome=r.nomeFuncionario||"(sem funcionário)";
+      if(!map.has(nome))map.set(nome,[]);
+      map.get(nome).push(r);
+    }
+    return[...map.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+  },[filtered]);
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+
+  const COLS=["Tipo de Ativo","Empresa","Nome do Ativo","Marca","Modelo","Nº Série","IMEI 1","IMEI 2","ICCID","Nº Documento"];
+
+  const exportExcel=()=>{
+    const rows=[];
+    for(const[nome,itens] of grouped){
+      rows.push({"Funcionário":nome,...Object.fromEntries(COLS.map(c=>[c,""]))});
+      for(const r of itens) rows.push({"Funcionário":"","Tipo de Ativo":r.tipoAtivoName||"","Empresa":r.companyName||"","Nome do Ativo":r.ativoNome||"","Marca":r.marca||"","Modelo":r.modelo||"","Nº Série":r.numeroSerie||"","IMEI 1":r.imeiSlot1||"","IMEI 2":r.imeiSlot2||"","ICCID":r.iccid||"","Nº Documento":r.numeroDocumento||""});
+    }
+    const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Inventário");XLSX.writeFile(wb,"inventario-ativos.xlsx");
+  };
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>📋 Inventário de Ativos</span>
+        <button style={S.btnSave} onClick={exportExcel}>⬇️ Excel</button>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+        <input placeholder="Nome Funcionário..." value={filtNome} onChange={e=>setFiltNome(e.target.value)} style={{...S.input,width:"auto",minWidth:160,padding:"6px 10px",fontSize:13}}/>
+        <select value={filtTipo} onChange={e=>setFiltTipo(e.target.value)} style={{...S.select,width:"auto",minWidth:140}}>
+          <option value="">Todos os tipos</option>{tipoOpts.map(t=><option key={t}>{t}</option>)}
+        </select>
+        <select value={filtEmp} onChange={e=>setFiltEmp(e.target.value)} style={{...S.select,width:"auto",minWidth:140}}>
+          <option value="">Todas as empresas</option>{empOpts.map(e=><option key={e}>{e}</option>)}
+        </select>
+        <input placeholder="Nome do Ativo..." value={filtAtivo} onChange={e=>setFiltAtivo(e.target.value)} style={{...S.input,width:"auto",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Nº de Série..." value={filtSerie} onChange={e=>setFiltSerie(e.target.value)} style={{...S.input,width:"auto",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Nº Documento..." value={filtDoc} onChange={e=>setFiltDoc(e.target.value)} style={{...S.input,width:"auto",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <select value={filtStatus} onChange={e=>setFiltStatus(e.target.value)} style={{...S.select,width:"auto",minWidth:120}}>
+          <option value="">Todos os status</option>{stOpts.map(s=><option key={s}>{s}</option>)}
+        </select>
+        <select value={filtOp} onChange={e=>setFiltOp(e.target.value)} style={{...S.select,width:"auto",minWidth:140}}>
+          <option value="">Todas as operadoras</option>{opOpts.map(o=><option key={o}>{o}</option>)}
+        </select>
+        <input placeholder="Nº Linha..." value={filtLinha} onChange={e=>setFiltLinha(e.target.value)} style={{...S.input,width:"auto",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="ICCID..." value={filtIccid} onChange={e=>setFiltIccid(e.target.value)} style={{...S.input,width:"auto",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Acesso..." value={filtAcesso} onChange={e=>setFiltAcesso(e.target.value)} style={{...S.input,width:"auto",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Estrutura..." value={filtEstrutura} onChange={e=>setFiltEstrutura(e.target.value)} style={{...S.input,width:"auto",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+      </div>
+      <div style={{fontSize:12,color:C.textLight,marginBottom:8}}>{filtered.length} item(ns)</div>
+      {grouped.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum dado encontrado.</div>:(
+        <div style={{overflowX:"auto"}}>
+          <table style={{...S.table,minWidth:900}}>
+            <thead><tr>{COLS.map(h=><th key={h} style={{...S.th,fontSize:11}}>{h}</th>)}</tr></thead>
+            <tbody>{grouped.flatMap(([nome,itens])=>[
+              <tr key={`h-${nome}`}><td colSpan={COLS.length} style={{...S.td,background:C.primary,color:"#fff",fontWeight:700,padding:"8px 12px"}}>👤 {nome}</td></tr>,
+              ...itens.map((r,j)=>(
+                <tr key={`${nome}-${j}`} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                  <td style={S.td}>{r.tipoAtivoName||"—"}</td>
+                  <td style={S.td}>{r.companyName||"—"}</td>
+                  <td style={S.td}>{r.ativoNome||"—"}</td>
+                  <td style={S.td}>{r.marca||"—"}</td>
+                  <td style={S.td}>{r.modelo||"—"}</td>
+                  <td style={S.td}>{r.numeroSerie||"—"}</td>
+                  <td style={S.td}>{r.imeiSlot1||"—"}</td>
+                  <td style={S.td}>{r.imeiSlot2||"—"}</td>
+                  <td style={S.td}>{r.iccid||"—"}</td>
+                  <td style={S.td}>{r.numeroDocumento||"—"}</td>
+                </tr>
+              ))
+            ])}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── SIDEBAR ───────────────────────────────────────────────────
 const navConfig=[
   {id:"cadastros",label:"Cadastros",icon:"📁",children:[
@@ -4033,10 +4479,14 @@ const navConfig=[
     {id:"s21",label:"Controle de Ativos",  icon:"🖥️"},
   ]},
   {id:"relatorios",label:"Relatórios",icon:"📊",children:[
-    {id:"s6", label:"Relatório de Horas",        icon:"📋"},
-    {id:"s11",label:"Controle de Km", icon:"📊"},
-    {id:"s14",label:"Relatório de Contratos",    icon:"📑"},
-    {id:"s15",label:"Relatório de Escala",       icon:"📅"},
+    {id:"s6", label:"Relatório de Horas",           icon:"📋"},
+    {id:"s11",label:"Controle de Km",               icon:"📊"},
+    {id:"s14",label:"Relatório de Contratos",       icon:"📑"},
+    {id:"s15",label:"Relatório de Escala",          icon:"📅"},
+    {id:"s24",label:"Análise de Linhas",            icon:"📈"},
+    {id:"s25",label:"Resumo de Linhas",             icon:"📋"},
+    {id:"s26",label:"Resumo de Ativos",             icon:"📦"},
+    {id:"s27",label:"Inventário de Ativos",         icon:"🗂️"},
   ]},
 ];
 function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
@@ -4115,6 +4565,10 @@ const screenTitles={
   s21:"Movimentações › Controle de Ativos",
   s22:"Cadastros › Funcionários",
   s23:"Cadastros › Modelos de Contrato",
+  s24:"Relatórios › Análise de Linhas",
+  s25:"Relatórios › Resumo de Linhas",
+  s26:"Relatórios › Resumo de Ativos",
+  s27:"Relatórios › Inventário de Ativos",
   profile:"Meu Perfil",
 };
 
@@ -4162,6 +4616,10 @@ export default function App(){
     s21:<ControleAtivosScreen user={user}/>,
     s22:<FuncionariosScreen user={user}/>,
     s23:<ModelosContratoScreen user={user}/>,
+    s24:<RelatorioAnaliseLinhasScreen user={user}/>,
+    s25:<RelatorioResumoLinhasScreen user={user}/>,
+    s26:<ResumoAtivosScreen user={user}/>,
+    s27:<InventarioAtivosScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
