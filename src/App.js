@@ -166,6 +166,7 @@ const MASK_PHONE ="(99) 99999-9999";
 const MASK_CEP   ="99.999-999";
 const validarCPF=cpf=>{const n=cpf.replace(/\D/g,"");if(n.length!==11||/^(\d)\1+$/.test(n))return false;let s=0;for(let i=0;i<9;i++)s+=parseInt(n[i])*(10-i);let r=s%11<2?0:11-s%11;if(parseInt(n[9])!==r)return false;s=0;for(let i=0;i<10;i++)s+=parseInt(n[i])*(11-i);r=s%11<2?0:11-s%11;return parseInt(n[10])===r;};
 const validarCNPJ=cnpj=>{const n=cnpj.replace(/\D/g,"");if(n.length!==14||/^(\d)\1+$/.test(n))return false;const calc=l=>{let s=0,p=l-7;for(let i=0;i<l;i++){s+=parseInt(n[i])*p--;if(p<2)p=9;}const r=s%11<2?0:11-s%11;return parseInt(n[l])===r;};return calc(12)&&calc(13);};
+const parseCSV=text=>{const rows=[];const lines=text.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n");for(const line of lines){if(!line.trim())continue;const cols=[];let i=0,cur="";while(i<line.length){if(line[i]==='"'){i++;while(i<line.length){if(line[i]==='"'&&line[i+1]==='"'){cur+='"';i+=2;}else if(line[i]==='"'){i++;break;}else{cur+=line[i++];}}if(line[i]===",")i++;}else{const end=line.indexOf(",",i);if(end===-1){cur=line.slice(i);i=line.length;}else{cur=line.slice(i,end);i=end+1;}}cols.push(cur.trim());cur="";}rows.push(cols);}return rows;};
 function MaskedInput({label,value,onChange,mask,placeholder,required,disabled}){
   const handle=e=>onChange(applyMask(e.target.value,mask));
   return(
@@ -2419,6 +2420,7 @@ function LinhasDisponiveisScreen({user}){
   const[delId,setDelId]=useState(null);
   const[err,setErr]=useState("");
   const[filter,setFilter]=useState({status:"",operadora:"",empresa:"",numeroLinha:""});
+  const[cargaModal,setCargaModal]=useState(null);
   const isMobile=useIsMobile();
 
   const load=()=>{
@@ -2476,7 +2478,10 @@ function LinhasDisponiveisScreen({user}){
       <div style={S.card}>
         <div style={S.cardHeader}>
           <span style={S.cardTitle}>📶 Linhas Disponíveis</span>
-          {canI("insert")&&<button style={S.btnAdd} onClick={openNew}>+ Nova Linha</button>}
+          <div style={{display:"flex",gap:8}}>
+            {user.isMaster&&<button style={{...S.btnAdd,background:"#7B68EE"}} onClick={()=>setCargaModal({file:null,skipHeader:true,processing:false,result:null})}>📥 Carga Inicial</button>}
+            {canI("insert")&&<button style={S.btnAdd} onClick={openNew}>+ Nova Linha</button>}
+          </div>
         </div>
         {/* Filtros */}
         <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
@@ -2557,6 +2562,57 @@ function LinhasDisponiveisScreen({user}){
         </Modal>
       )}
       {delId&&<ConfirmModal msg="Excluir esta linha disponível?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+
+      {cargaModal&&(
+        <Modal title="Carga Inicial — Linhas Disponíveis" onClose={()=>setCargaModal(null)}>
+          <div style={{marginBottom:12,padding:12,background:"#F0F4FF",borderRadius:8,fontSize:12,color:C.text}}>
+            <strong>Formato do CSV (colunas em ordem):</strong><br/>
+            Col 1: Operadora · Col 2: Número da Linha · Col 3: Empresa · Col 4: Tipo de Ativo · Col 5: Status<br/>
+            <span style={{color:C.textLight}}>Linhas com mesma Operadora + Número já existentes serão ignoradas.</span>
+          </div>
+          <div style={{marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+            <input type="checkbox" id="ldSkipHdr" checked={cargaModal.skipHeader}
+              onChange={e=>setCargaModal(m=>({...m,skipHeader:e.target.checked}))}/>
+            <label htmlFor="ldSkipHdr" style={{fontSize:13}}>Ignorar primeira linha (cabeçalho)</label>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Arquivo CSV</label>
+            <input type="file" accept=".csv,text/csv" onChange={e=>setCargaModal(m=>({...m,file:e.target.files[0]||null,result:null}))}
+              style={{...S.input,padding:"6px"}}/>
+          </div>
+          {cargaModal.result&&(
+            <div style={{marginBottom:12,padding:12,background:cargaModal.result.erros?.length?"#FFF8DC":"#F0FFF0",borderRadius:8,fontSize:12}}>
+              <div>✅ <strong>{cargaModal.result.inseridos}</strong> inseridas · ⏭️ <strong>{cargaModal.result.ignorados||0}</strong> ignoradas</div>
+              {cargaModal.result.erros?.length>0&&(
+                <div style={{marginTop:8,maxHeight:120,overflowY:"auto"}}>
+                  {cargaModal.result.erros.map((e,i)=>(
+                    <div key={i} style={{color:C.danger,fontSize:11}}>Linha {e.linha}: {e.msg}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setCargaModal(null)}>Fechar</button>
+            <button style={{...S.btnSave,opacity:cargaModal.processing||!cargaModal.file?0.6:1}}
+              disabled={cargaModal.processing||!cargaModal.file}
+              onClick={async()=>{
+                if(!cargaModal.file)return;
+                setCargaModal(m=>({...m,processing:true,result:null}));
+                try{
+                  const text=await cargaModal.file.text();
+                  let rows=parseCSV(text);
+                  if(cargaModal.skipHeader&&rows.length>0)rows=rows.slice(1);
+                  const result=await api.post("/linhas-disponiveis/carga-inicial",{rows});
+                  setCargaModal(m=>({...m,processing:false,result}));
+                  load();
+                }catch(e){alert("Erro: "+e.message);setCargaModal(m=>({...m,processing:false}));}
+              }}>
+              {cargaModal.processing?"Processando...":"⚙️ Processar"}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -3065,6 +3121,7 @@ function ControleAtivosScreen({user}){
   const[err,setErr]=useState("");
   const[errItem,setErrItem]=useState("");
   const[filterCA,setFilterCA]=useState({empresa:"",funcionario:"",cpf:"",operadora:"",numeroLinha:"",dataAquisicao:"",numeroSerie:"",numeroDocumento:""});
+  const[cargaModal,setCargaModal]=useState(null);
   const isMobile=useIsMobile();
 
   const load=()=>{
@@ -3282,7 +3339,10 @@ function ControleAtivosScreen({user}){
       <div style={S.card}>
         <div style={S.cardHeader}>
           <span style={S.cardTitle}>🖥️ Controle de Ativos</span>
-          {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({funcionarioId:""});}}>+ Novo Registro</button>}
+          <div style={{display:"flex",gap:8}}>
+            {user.isMaster&&<button style={{...S.btnAdd,background:"#7B68EE"}} onClick={()=>setCargaModal({file:null,skipHeader:true,processing:false,result:null})}>📥 Carga Inicial</button>}
+            {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({funcionarioId:""});}}>+ Novo Registro</button>}
+          </div>
         </div>
 
         {/* Filtros */}
@@ -3548,6 +3608,59 @@ function ControleAtivosScreen({user}){
 
       {delId&&<ConfirmModal msg="Excluir este registro e todos os seus itens?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
       {delItemId&&<ConfirmModal msg="Excluir este item?" onConfirm={delItem} onCancel={()=>setDelItemId(null)}/>}
+
+      {cargaModal&&(
+        <Modal title="Carga Inicial — Controle de Ativos" onClose={()=>setCargaModal(null)} extraWide>
+          <div style={{marginBottom:12,padding:12,background:"#F0F4FF",borderRadius:8,fontSize:11,color:C.text,lineHeight:1.7}}>
+            <strong>Formato do CSV (colunas em ordem):</strong><br/>
+            <strong>Col 1:</strong> CPF do Funcionário &nbsp;|&nbsp; <strong>Col 2:</strong> Tipo de Ativo &nbsp;|&nbsp; <strong>Col 3:</strong> Empresa (Fantasia)<br/>
+            <em>Quando Col 2 ≠ "Telefonia":</em> Col 4=Nome Ativo · 5=Marca · 6=Modelo · 7=Nº Série · 8=Sist.Operacional · 9=Versão · 10=Processador · 11=Memória · 12=HD · 13=Patrimônio · 14=Nº Doc · 15=Valor · 16=Data Aquisição (DD/MM/AAAA) · 17=Condição · 18=Acessórios · 19=Status<br/>
+            <em>Quando Col 2 = "Telefonia":</em> Col 20=Marca · 21=Modelo · 22=IMEI1 · 23=IMEI2 · 24=Operadora · 25=Nº Linha · 26=Acesso · 27=Estrutura · 28=ICCID · 29=Tipo Pacote
+          </div>
+          <div style={{marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+            <input type="checkbox" id="caSkipHdr" checked={cargaModal.skipHeader}
+              onChange={e=>setCargaModal(m=>({...m,skipHeader:e.target.checked}))}/>
+            <label htmlFor="caSkipHdr" style={{fontSize:13}}>Ignorar primeira linha (cabeçalho)</label>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Arquivo CSV</label>
+            <input type="file" accept=".csv,text/csv" onChange={e=>setCargaModal(m=>({...m,file:e.target.files[0]||null,result:null}))}
+              style={{...S.input,padding:"6px"}}/>
+          </div>
+          {cargaModal.result&&(
+            <div style={{marginBottom:12,padding:12,background:cargaModal.result.erros?.length?"#FFF8DC":"#F0FFF0",borderRadius:8,fontSize:12}}>
+              <div>✅ <strong>{cargaModal.result.inseridos}</strong> registro(s) importado(s)</div>
+              {cargaModal.result.erros?.length>0&&(
+                <div style={{marginTop:8,maxHeight:150,overflowY:"auto"}}>
+                  <div style={{fontWeight:600,marginBottom:4,color:C.danger}}>{cargaModal.result.erros.length} erro(s):</div>
+                  {cargaModal.result.erros.map((e,i)=>(
+                    <div key={i} style={{color:C.danger,fontSize:11}}>Linha {e.linha}: {e.msg}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setCargaModal(null)}>Fechar</button>
+            <button style={{...S.btnSave,opacity:cargaModal.processing||!cargaModal.file?0.6:1}}
+              disabled={cargaModal.processing||!cargaModal.file}
+              onClick={async()=>{
+                if(!cargaModal.file)return;
+                setCargaModal(m=>({...m,processing:true,result:null}));
+                try{
+                  const text=await cargaModal.file.text();
+                  let rows=parseCSV(text);
+                  if(cargaModal.skipHeader&&rows.length>0)rows=rows.slice(1);
+                  const result=await api.post("/controle-ativos/carga-inicial",{rows});
+                  setCargaModal(m=>({...m,processing:false,result}));
+                  load();
+                }catch(e){alert("Erro: "+e.message);setCargaModal(m=>({...m,processing:false}));}
+              }}>
+              {cargaModal.processing?"Processando...":"⚙️ Processar"}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
