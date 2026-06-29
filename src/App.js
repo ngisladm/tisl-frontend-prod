@@ -4,7 +4,7 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
 
-const API_URL = process.env.REACT_APP_API_URL || "https://sl-ti-api.onrender.com";
+const API_URL = process.env.REACT_APP_API_URL || "/api";
 
 // ── Responsive hook ──────────────────────────────────────────
 function useIsMobile(){ 
