@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import html2canvas from "html2canvas";
 
 const API_URL = process.env.REACT_APP_API_URL || "https://sl-ti-api.onrender.com";
 
@@ -3315,21 +3316,33 @@ function ControleAtivosScreen({user}){
     };
     let html=conteudo;
     Object.entries(subs).forEach(([k,v])=>{html=html.split(k).join(v);});
-    // Gerar PDF a partir do HTML (converte para texto e usa jsPDF)
-    const tmpDiv=document.createElement("div");
-    tmpDiv.innerHTML=html;
-    const plainText=(tmpDiv.textContent||tmpDiv.innerText||"").replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim();
-    const doc=new jsPDF({unit:"mm",format:"a4"});
-    doc.setFontSize(11);
-    const pageW=doc.internal.pageSize.getWidth()-30;
-    const lines=doc.splitTextToSize(plainText,pageW);
-    let y=20;
-    for(const line of lines){if(y>275){doc.addPage();y=20;}doc.text(line,15,y);y+=5.5;}
-    const pdfBase64=doc.output("datauristring");
+    // Renderizar HTML em div oculta e capturar com html2canvas → PDF fiel ao modelo
+    const el=document.createElement("div");
+    el.style.cssText="position:fixed;top:-20000px;left:-20000px;width:794px;background:#fff;font-family:Arial,sans-serif;font-size:12pt;color:#222;padding:40px;box-sizing:border-box;";
+    el.innerHTML=html;
+    document.body.appendChild(el);
     try{
+      const canvas=await html2canvas(el,{scale:2,useCORS:true,allowTaint:true,logging:false,backgroundColor:"#ffffff",windowWidth:874});
+      const imgData=canvas.toDataURL("image/jpeg",0.95);
+      const doc=new jsPDF({unit:"pt",format:"a4",orientation:"portrait"});
+      const pdfW=doc.internal.pageSize.getWidth();
+      const pdfH=doc.internal.pageSize.getHeight();
+      const imgH=(canvas.height*pdfW)/canvas.width;
+      let remaining=imgH;
+      let yPos=0;
+      let firstPage=true;
+      while(remaining>0){
+        if(!firstPage){doc.addPage();}
+        doc.addImage(imgData,"JPEG",0,yPos,pdfW,imgH);
+        yPos-=pdfH;
+        remaining-=pdfH;
+        firstPage=false;
+      }
+      const pdfBase64=doc.output("datauristring");
       await api.post("/email/enviar-contrato",{toEmail:funcItem.email,pdfBase64,funcionarioNome:funcItem.nome||itensModal.controle.nomeFuncionario});
       alert("E-mail enviado com sucesso para "+funcItem.email+"!");
     }catch(e){alert("Erro ao enviar e-mail: "+e.message);}
+    finally{document.body.removeChild(el);}
   };
 
   const handleAnexoAdd=e=>{
