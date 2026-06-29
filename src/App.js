@@ -3274,6 +3274,64 @@ function ControleAtivosScreen({user}){
 </div>${html}</body></html>`);
     win.document.close();
   };
+
+  const enviarContrato=async(item)=>{
+    const funcItem=funcionarios.find(f=>f.id===itensModal.controle.funcionarioId);
+    if(!funcItem?.email?.trim()){
+      alert("O funcionário "+(funcItem?.nome||itensModal.controle.nomeFuncionario||"")+" não possui e-mail cadastrado. Cadastre o e-mail na tela de Funcionários.");
+      return;
+    }
+    const modelo=modelos.find(m=>m.tipoAtivoId===item.tipoAtivoId&&m.empresaId===item.companyId);
+    if(!modelo){alert("Nenhum modelo de contrato cadastrado para o Tipo de Ativo \""+(item.tipoAtivoName||"—")+"\" e a Empresa \""+(item.companyName||"—")+"\".");return;}
+    let conteudo="";
+    try{const d=await api.get(`/modelos-contrato/${modelo.id}/conteudo`);conteudo=d.conteudo||"";}
+    catch(e){alert("Erro ao carregar modelo: "+e.message);return;}
+    let logoHtml="";
+    try{const ld=await api.get(`/companies/${item.companyId}/logo`);if(ld.logo)logoHtml=`<img src="${ld.logo}" style="max-width:200px;height:auto;">`;}
+    catch(e){}
+    const compItem=companies.find(c=>c.id===item.companyId);
+    const now=new Date();
+    const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    const subs={
+      "[RAZSOCEMP]":compItem?.razaoSocial||"","[FANTASEMP]":compItem?.name||item.companyName||"",
+      "[CNPJEMP]":compItem?.cnpj||"","[INSCEST]":compItem?.inscEstadual||"","[INSCMUN]":compItem?.inscMunicipal||"",
+      "[LOGREMP]":compItem?.logradouro||"","[NRLOGREMP]":compItem?.numero||"","[BAIRROEMP]":compItem?.bairro||"",
+      "[CEPEMP]":compItem?.cep||"","[CIDEMP]":compItem?.cidade||"","[ESTEMP]":compItem?.estado||"",
+      "[REPRLEGEMP]":compItem?.representanteLegal||"","[LOGOEMP]":logoHtml,
+      "[NMFUN]":funcItem?.nome||itensModal.controle.nomeFuncionario||"","[CPFFUN]":funcItem?.cpf||itensModal.controle.cpf||"",
+      "[RGFUN]":funcItem?.rg||"","[CARGOFUN]":funcItem?.cargo||"","[MATRICFUN]":funcItem?.matricula||"",
+      "[CCUSTOFUN]":funcItem?.centroCusto||"","[FONEFUN]":funcItem?.fone||"","[EMAILFUN]":funcItem?.email||"",
+      "[LOGRFUN]":funcItem?.logradouro||"","[NRLOGRFUN]":funcItem?.numero||"","[COMPLEMFUN]":funcItem?.complemento||"",
+      "[BAIRROFUN]":funcItem?.bairro||"","[CEPFUN]":funcItem?.cep||"","[CIDFUN]":funcItem?.cidade||"","[ESTFUN]":funcItem?.estado||"",
+      "[TPATIVO]":item.tipoAtivoName||"","[NOMEATIVO]":item.ativoNome||"","[MARCA]":item.marca||"","[MODELO]":item.modelo||"",
+      "[NRSER]":item.numeroSerie||"","[SISTOPER]":item.sistemaOperacional||"","[VERSAO]":item.versao||"",
+      "[PROCES]":item.processador||"","[MEMORIA]":item.memoria||"","[HD]":item.hd||"","[PATRIMONIO]":item.patrimonio||"",
+      "[NRDOCUM]":item.numeroDocumento||"","[VALOR]":item.valor?Number(item.valor).toFixed(2):"",
+      "[CONDICAO]":item.condicao||"","[ACESSORIOS]":item.acessorios||"",
+      "[IMEI1]":item.imeiSlot1||"","[IMEI2]":item.imeiSlot2||"","[OPERADORA]":item.operadoraName||"",
+      "[NRLINHA]":item.numeroLinha||"","[ICCID]":item.iccid||"","[ACESSO]":item.acesso||"",
+      "[ESTRUTURA]":item.estrutura||"","[TPPACOTE]":item.tipoPacote||"",
+      "[Dia]":String(now.getDate()).padStart(2,"0"),"[Mes]":MESES[now.getMonth()],"[Ano]":String(now.getFullYear()),
+    };
+    let html=conteudo;
+    Object.entries(subs).forEach(([k,v])=>{html=html.split(k).join(v);});
+    // Gerar PDF a partir do HTML (converte para texto e usa jsPDF)
+    const tmpDiv=document.createElement("div");
+    tmpDiv.innerHTML=html;
+    const plainText=(tmpDiv.textContent||tmpDiv.innerText||"").replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim();
+    const doc=new jsPDF({unit:"mm",format:"a4"});
+    doc.setFontSize(11);
+    const pageW=doc.internal.pageSize.getWidth()-30;
+    const lines=doc.splitTextToSize(plainText,pageW);
+    let y=20;
+    for(const line of lines){if(y>275){doc.addPage();y=20;}doc.text(line,15,y);y+=5.5;}
+    const pdfBase64=doc.output("datauristring");
+    try{
+      await api.post("/email/enviar-contrato",{toEmail:funcItem.email,pdfBase64,funcionarioNome:funcItem.nome||itensModal.controle.nomeFuncionario});
+      alert("E-mail enviado com sucesso para "+funcItem.email+"!");
+    }catch(e){alert("Erro ao enviar e-mail: "+e.message);}
+  };
+
   const handleAnexoAdd=e=>{
     const file=e.target.files[0];if(!file)return;
     const reader=new FileReader();
@@ -3460,6 +3518,7 @@ function ControleAtivosScreen({user}){
                         📎{item.attachments?.length?` (${item.attachments.length})`:""}
                       </button>
                       {item.tipoAtivoId&&<button style={{...S.actionBtn,background:"#E8F5E9",color:"#1B5E20",fontWeight:600}} onClick={()=>imprimirContrato(item)}>🖨️ Contrato</button>}
+                      {item.tipoAtivoId&&<button style={{...S.actionBtn,background:"#E3F2FD",color:"#0D47A1",fontWeight:600}} onClick={()=>enviarContrato(item)}>📧 Enviar</button>}
                     </td>
                   </tr>
                 );
@@ -4007,6 +4066,106 @@ function HomeScreen({user,navigate}){
   );
 }
 
+// ── CONFIGURAÇÃO DE E-MAIL (s28) ─────────────────────────────
+function ConfiguracaoEmailScreen({user}){
+  const p=user.permissions?.s28;
+  const[cfg,setCfg]=useState({host:"",port:"587",secure:false,userEmail:"",password:"",fromName:"",fromEmail:""});
+  const[loading,setLoading]=useState(true);
+  const[saving,setSaving]=useState(false);
+  const[testing,setTesting]=useState(false);
+  const[showPwd,setShowPwd]=useState(false);
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    api.get("/email-config")
+      .then(d=>{ if(d) setCfg({host:d.host||"",port:String(d.port||587),secure:d.secure||false,userEmail:d.userEmail||"",password:"",fromName:d.fromName||"",fromEmail:d.fromEmail||""}); })
+      .catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[]);
+
+  const save=async()=>{
+    if(!cfg.host?.trim()||!cfg.userEmail?.trim()) return alert("Servidor SMTP e E-mail são obrigatórios.");
+    setSaving(true);
+    try{
+      await api.put("/email-config",{host:cfg.host.trim(),port:parseInt(cfg.port)||587,secure:cfg.secure,userEmail:cfg.userEmail.trim(),password:cfg.password||undefined,fromName:cfg.fromName.trim(),fromEmail:cfg.fromEmail.trim()});
+      alert("Configuração salva com sucesso!");
+      setCfg(c=>({...c,password:""}));
+    }catch(e){alert(e.message);}
+    finally{setSaving(false);}
+  };
+
+  const testar=async()=>{
+    setTesting(true);
+    try{
+      await api.post("/email-config/testar",{});
+      alert("Teste enviado! Verifique a caixa de entrada de "+cfg.fromEmail+".");
+    }catch(e){alert("Falha no teste: "+e.message);}
+    finally{setTesting(false);}
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+
+  const F=({label,children})=>(
+    <div style={S.formRow}>
+      <label style={S.label}>{label}</label>
+      {children}
+    </div>
+  );
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>⚙️ Configuração de E-mail</span></div>
+      <div style={{maxWidth:560}}>
+        <div style={{padding:"12px 16px",background:"#EBF5FB",borderRadius:8,marginBottom:20,fontSize:13,color:"#1A5276",border:"1px solid #AED6F1"}}>
+          Configure o servidor SMTP para envio automático de contratos por e-mail. O sistema suporta Gmail, Outlook, e outros provedores.
+        </div>
+
+        <F label="Servidor SMTP *">
+          <input value={cfg.host} onChange={e=>setCfg(c=>({...c,host:e.target.value}))} placeholder="ex: smtp.gmail.com" style={S.input}/>
+        </F>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <F label="Porta *">
+            <input value={cfg.port} onChange={e=>setCfg(c=>({...c,port:e.target.value}))} placeholder="587" type="number" style={S.input}/>
+          </F>
+          <F label="Segurança">
+            <select value={cfg.secure?"ssl":"starttls"} onChange={e=>setCfg(c=>({...c,secure:e.target.value==="ssl"}))} style={S.select}>
+              <option value="starttls">STARTTLS (porta 587)</option>
+              <option value="ssl">SSL/TLS (porta 465)</option>
+            </select>
+          </F>
+        </div>
+        <F label="E-mail do remetente *">
+          <input value={cfg.userEmail} onChange={e=>setCfg(c=>({...c,userEmail:e.target.value}))} placeholder="ti@empresa.com.br" type="email" style={S.input}/>
+        </F>
+        <F label="Senha / App Password">
+          <div style={{position:"relative"}}>
+            <input value={cfg.password} onChange={e=>setCfg(c=>({...c,password:e.target.value}))} placeholder="Deixe em branco para manter a senha atual"
+              type={showPwd?"text":"password"} style={{...S.input,paddingRight:44}}/>
+            <button onClick={()=>setShowPwd(s=>!s)} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:C.textLight}}>
+              {showPwd?"🙈":"👁️"}
+            </button>
+          </div>
+        </F>
+        <div style={{padding:"10px 14px",background:"#FDFEE8",border:"1px solid #F9E79F",borderRadius:8,fontSize:12,color:"#7D6608",marginBottom:12}}>
+          <strong>Gmail:</strong> Ative a verificação em duas etapas e use uma <em>App Password</em> (Conta Google → Segurança → Senhas de App).<br/>
+          <strong>Outlook/Hotmail:</strong> Use smtp.office365.com, porta 587, STARTTLS.
+        </div>
+        <F label="Nome exibido no e-mail">
+          <input value={cfg.fromName} onChange={e=>setCfg(c=>({...c,fromName:e.target.value}))} placeholder="TI - Empresa" style={S.input}/>
+        </F>
+        <F label="E-mail de exibição">
+          <input value={cfg.fromEmail} onChange={e=>setCfg(c=>({...c,fromEmail:e.target.value}))} placeholder="ti@empresa.com.br (padrão: mesmo acima)" type="email" style={S.input}/>
+        </F>
+
+        <div style={{display:"flex",gap:12,marginTop:8}}>
+          {(p?.edit||p?.insert)&&<button style={S.btnSave} onClick={save} disabled={saving}>{saving?"Salvando...":"💾 Salvar"}</button>}
+          <button style={{...S.btnSave,background:C.accent}} onClick={testar} disabled={testing}>{testing?"Enviando...":"📧 Testar Configuração"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── RELATÓRIO DE ANÁLISE DE LINHAS (s24) ─────────────────────
 function RelatorioAnaliseLinhasScreen({user}){
   const p=user.permissions?.s24;
@@ -4469,6 +4628,7 @@ const navConfig=[
     {id:"s20",label:"Ativos",          icon:"📦"},
     {id:"s22",label:"Funcionários",    icon:"👤"},
     {id:"s23",label:"Modelos de Contrato",icon:"📋"},
+    {id:"s28",label:"Configuração de E-mail",icon:"📧"},
   ]},
   {id:"movimentacoes",label:"Movimentações",icon:"🔄",children:[
     {id:"s5", label:"Sobreaviso/Extra",         icon:"⏱️"},
@@ -4565,6 +4725,7 @@ const screenTitles={
   s21:"Movimentações › Controle de Ativos",
   s22:"Cadastros › Funcionários",
   s23:"Cadastros › Modelos de Contrato",
+  s28:"Cadastros › Configuração de E-mail",
   s24:"Relatórios › Análise de Linhas",
   s25:"Relatórios › Resumo de Linhas",
   s26:"Relatórios › Resumo de Ativos",
@@ -4616,6 +4777,7 @@ export default function App(){
     s21:<ControleAtivosScreen user={user}/>,
     s22:<FuncionariosScreen user={user}/>,
     s23:<ModelosContratoScreen user={user}/>,
+    s28:<ConfiguracaoEmailScreen user={user}/>,
     s24:<RelatorioAnaliseLinhasScreen user={user}/>,
     s25:<RelatorioResumoLinhasScreen user={user}/>,
     s26:<ResumoAtivosScreen user={user}/>,
