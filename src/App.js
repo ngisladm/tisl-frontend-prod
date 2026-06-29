@@ -3267,7 +3267,12 @@ function ControleAtivosScreen({user}){
     Object.entries(subs).forEach(([k,v])=>{html=html.split(k).join(v);});
     const win=window.open("","_blank","width=900,height=700");
     win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Contrato</title>
-<style>body{font-family:Arial,sans-serif;margin:40px;font-size:12pt;color:#222;}img{max-width:100%;}@media print{.no-print{display:none}body{margin:20mm;}}</style>
+<style>
+  @page{margin:20mm;size:A4 portrait;}
+  body{font-family:Arial,sans-serif;margin:40px;font-size:12pt;color:#222;line-height:1.5;}
+  img{max-width:100%;}
+  @media print{.no-print{display:none;}body{margin:0;}}
+</style>
 </head><body>
 <div class="no-print" style="margin-bottom:20px;display:flex;gap:8px;">
   <button onclick="window.print()" style="padding:8px 16px;background:#2563EB;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;">🖨️ Imprimir</button>
@@ -3316,26 +3321,35 @@ function ControleAtivosScreen({user}){
     };
     let html=conteudo;
     Object.entries(subs).forEach(([k,v])=>{html=html.split(k).join(v);});
-    // Renderizar HTML em div oculta e capturar com html2canvas → PDF fiel ao modelo
+    // Renderizar HTML em div oculta com mesmas margens da impressão A4
     const el=document.createElement("div");
-    el.style.cssText="position:fixed;top:-20000px;left:-20000px;width:794px;background:#fff;font-family:Arial,sans-serif;font-size:12pt;color:#222;padding:40px;box-sizing:border-box;";
+    // 794px ≈ largura A4 a 96dpi; padding 57px ≈ 15mm (margem interna do conteúdo)
+    el.style.cssText="position:fixed;top:-20000px;left:-20000px;width:794px;background:#fff;font-family:Arial,sans-serif;font-size:12pt;color:#222;line-height:1.5;padding:57px;box-sizing:border-box;";
     el.innerHTML=html;
     document.body.appendChild(el);
     try{
-      const canvas=await html2canvas(el,{scale:2,useCORS:true,allowTaint:true,logging:false,backgroundColor:"#ffffff",windowWidth:874});
+      const canvas=await html2canvas(el,{scale:2,useCORS:true,allowTaint:true,logging:false,backgroundColor:"#ffffff",windowWidth:794});
       const imgData=canvas.toDataURL("image/jpeg",0.95);
       const doc=new jsPDF({unit:"pt",format:"a4",orientation:"portrait"});
-      const pdfW=doc.internal.pageSize.getWidth();
-      const pdfH=doc.internal.pageSize.getHeight();
-      const imgH=(canvas.height*pdfW)/canvas.width;
-      let remaining=imgH;
-      let yPos=0;
+      const pdfW=doc.internal.pageSize.getWidth();   // 595.28 pt
+      const pdfH=doc.internal.pageSize.getHeight();  // 841.89 pt
+      const margin=56.69;  // 20mm em pt (20 * 2.8346)
+      const contentW=pdfW-2*margin;
+      const imgH=(canvas.height*contentW)/canvas.width;
+      const contentH=pdfH-2*margin;
+      let offsetY=0;
       let firstPage=true;
-      while(remaining>0){
-        if(!firstPage){doc.addPage();}
-        doc.addImage(imgData,"JPEG",0,yPos,pdfW,imgH);
-        yPos-=pdfH;
-        remaining-=pdfH;
+      while(offsetY<imgH){
+        if(!firstPage)doc.addPage();
+        // Posiciona a imagem de forma que a fatia correta fique dentro da área de conteúdo
+        doc.addImage(imgData,"JPEG",margin,margin-offsetY,contentW,imgH);
+        // Máscaras brancas para cobrir o que transborda além das margens superior e inferior
+        doc.setFillColor(255,255,255);
+        doc.rect(0,0,pdfW,margin,"F");                  // margem superior
+        doc.rect(0,pdfH-margin,pdfW,margin+1,"F");      // margem inferior
+        doc.rect(0,0,margin,pdfH,"F");                  // margem esquerda
+        doc.rect(pdfW-margin,0,margin+1,pdfH,"F");      // margem direita
+        offsetY+=contentH;
         firstPage=false;
       }
       const pdfBase64=doc.output("datauristring");
