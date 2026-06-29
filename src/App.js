@@ -4067,6 +4067,14 @@ function HomeScreen({user,navigate}){
 }
 
 // ── CONFIGURAÇÃO DE E-MAIL (s28) ─────────────────────────────
+function EmailFormRow({label,children}){
+  return(
+    <div style={S.formRow}>
+      <label style={S.label}>{label}</label>
+      {children}
+    </div>
+  );
+}
 function ConfiguracaoEmailScreen({user}){
   const p=user.permissions?.s28;
   const[cfg,setCfg]=useState({host:"",port:"587",secure:false,userEmail:"",password:"",fromName:"",fromEmail:""});
@@ -4105,12 +4113,7 @@ function ConfiguracaoEmailScreen({user}){
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
 
-  const F=({label,children})=>(
-    <div style={S.formRow}>
-      <label style={S.label}>{label}</label>
-      {children}
-    </div>
-  );
+  const F=EmailFormRow;
 
   return(
     <div style={S.card}>
