@@ -2079,7 +2079,7 @@ function LinhasFaturadasScreen({user}){
   const save=async()=>{
     if(!modal.operadoraId||!modal.mesAno?.trim()){setErr("Operadora e Mês/Ano são obrigatórios.");return;}
     try{
-      const payload={operadoraId:modal.operadoraId,companyId:modal.companyId||null,mesAno:modal.mesAno};
+      const payload={operadoraId:modal.operadoraId,companyId:modal.companyId||null,mesAno:modal.mesAno,fatura:modal.fatura||null};
       if(modal.id) await api.put(`/linhas-faturadas/${modal.id}`,payload);
       else         await api.post("/linhas-faturadas",payload);
       setModal(null);load();
@@ -2203,7 +2203,7 @@ function LinhasFaturadasScreen({user}){
                 <div style={{fontSize:12,color:C.textLight,marginBottom:4}}>Mês/Ano: {item.mesAno}</div>
                 <div style={{fontSize:12,color:C.textLight,marginBottom:8}}>Itens importados: <strong>{item.totalItens}</strong></div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",paddingTop:8,borderTop:`1px solid ${C.border}`}}>
-                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,operadoraId:item.operadoraId,companyId:item.companyId||"",mesAno:item.mesAno});}}>Editar</button>}
+                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,operadoraId:item.operadoraId,companyId:item.companyId||"",mesAno:item.mesAno,fatura:item.fatura||""});}}>Editar</button>}
                   {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
                   {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F8F5",color:"#1E8449"}} onClick={()=>{setCsvPreview(null);setCsvFile(null);setImportModal(item);}}>📥 Importar</button>}
                   <button style={{...S.actionBtn,background:"#EBF5FB",color:"#2980B9"}} onClick={()=>verItens(item)}>📋 Itens ({item.totalItens})</button>
@@ -2223,7 +2223,7 @@ function LinhasFaturadasScreen({user}){
                   <td style={S.td}>{item.mesAno}</td>
                   <td style={S.td}><span style={{...S.badge,background:"#EBF5FB",color:"#2980B9"}}>{item.totalItens} {item.totalItens===1?"item":"itens"}</span></td>
                   <td style={S.td}>
-                    {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,operadoraId:item.operadoraId,companyId:item.companyId||"",mesAno:item.mesAno});}}>Editar</button>}
+                    {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,operadoraId:item.operadoraId,companyId:item.companyId||"",mesAno:item.mesAno,fatura:item.fatura||""});}}>Editar</button>}
                     {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
                     {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F8F5",color:"#1E8449"}} onClick={()=>{setCsvPreview(null);setCsvFile(null);setImportModal(item);}}>📥 Importar CSV</button>}
                     <button style={{...S.actionBtn,background:"#EBF5FB",color:"#2980B9"}} onClick={()=>verItens(item)}>📋 Ver Itens ({item.totalItens})</button>
@@ -2244,6 +2244,7 @@ function LinhasFaturadasScreen({user}){
           <SelectField label="Operadora" value={modal.operadoraId} onChange={v=>setModal(m=>({...m,operadoraId:v}))} required
             options={operadoras.map(o=>({value:o.id,label:o.name}))}/>
           <MaskedInput label="Mês/Ano" value={modal.mesAno} onChange={v=>setModal(m=>({...m,mesAno:v}))} mask={MASK_MESANO} placeholder="MM/AAAA" required/>
+          <Input label="Fatura" value={modal.fatura||""} onChange={v=>setModal(m=>({...m,fatura:v}))}/>
           {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
             <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
@@ -2410,7 +2411,7 @@ function TipoAtivosScreen({user}){
 }
 
 // ── LINHAS DISPONÍVEIS (s19) ──────────────────────────────────
-const STATUS_LD=["Em análise","Em estoque"];
+const STATUS_LD=["Em análise","Em estoque","Em uso","Baixado"];
 function LinhasDisponiveisScreen({user}){
   const[items,setItems]=useState([]);
   const[companies,setCompanies]=useState([]);
@@ -2439,7 +2440,7 @@ function LinhasDisponiveisScreen({user}){
   const openNew=()=>{
     const tel=getTelefoniaTipo();
     if(!tel){alert("É necessário cadastrar um Tipo de Ativo chamado 'Telefonia' antes de inserir uma linha disponível.");return;}
-    setErr("");setModal({companyId:"",operadoraId:"",tipoAtivoId:tel.id,numeroLinha:"",status:"Em análise"});
+    setErr("");setModal({companyId:"",operadoraId:"",tipoAtivoId:tel.id,numeroLinha:"",status:"Em análise",acesso:"",estrutura:"",iccid:"",tipoPacote:""});
   };
 
   const save=async()=>{
@@ -2470,9 +2471,12 @@ function LinhasDisponiveisScreen({user}){
     return true;
   });
 
-  const statusBadge=s=>s==="Em estoque"
-    ?<span style={{...S.badge,...S.badgeActive}}>Em estoque</span>
-    :<span style={{...S.badge,background:"#FFF3CD",color:"#856404"}}>Em análise</span>;
+  const statusBadge=s=>{
+    if(s==="Em estoque")return<span style={{...S.badge,...S.badgeActive}}>Em estoque</span>;
+    if(s==="Em uso")return<span style={{...S.badge,background:"#E3F2FD",color:"#1565C0"}}>Em uso</span>;
+    if(s==="Baixado")return<span style={{...S.badge,background:"#FFEBEE",color:"#B71C1C"}}>Baixado</span>;
+    return<span style={{...S.badge,background:"#FFF3CD",color:"#856404"}}>{s||"Em análise"}</span>;
+  };
 
   return(
     <div>
@@ -2545,16 +2549,32 @@ function LinhasDisponiveisScreen({user}){
       </div>
 
       {modal&&(
-        <Modal title={modal.id?"Editar Linha Disponível":"Nova Linha Disponível"} onClose={()=>setModal(null)}>
-          <SelectField label="Empresa" value={modal.companyId} onChange={v=>setModal(m=>({...m,companyId:v}))}
-            options={companies.filter(c=>c.active).map(c=>({value:c.id,label:c.name}))}/>
-          <SelectField label="Operadora" value={modal.operadoraId} onChange={v=>setModal(m=>({...m,operadoraId:v}))}
-            options={operadoras.map(o=>({value:o.id,label:o.name}))}/>
-          <SelectField label="Tipo de Ativo" value={modal.tipoAtivoId} onChange={v=>setModal(m=>({...m,tipoAtivoId:v}))}
-            options={tipoAtivos.filter(t=>t.name.toLowerCase()==="telefonia").map(t=>({value:t.id,label:t.name}))}/>
-          <Input label="Número Linha" value={modal.numeroLinha} onChange={v=>setModal(m=>({...m,numeroLinha:v}))} required/>
-          <SelectField label="Status" value={modal.status} onChange={v=>setModal(m=>({...m,status:v}))}
-            options={STATUS_LD.map(s=>({value:s,label:s}))}/>
+        <Modal title={modal.id?"Editar Linha Disponível":"Nova Linha Disponível"} onClose={()=>setModal(null)} wide>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            <SelectField label="Empresa" value={modal.companyId} onChange={v=>setModal(m=>({...m,companyId:v}))}
+              options={companies.filter(c=>c.active).map(c=>({value:c.id,label:c.name}))}/>
+            <SelectField label="Operadora" value={modal.operadoraId} onChange={v=>setModal(m=>({...m,operadoraId:v}))}
+              options={operadoras.map(o=>({value:o.id,label:o.name}))}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            <SelectField label="Tipo de Ativo" value={modal.tipoAtivoId} onChange={v=>setModal(m=>({...m,tipoAtivoId:v}))}
+              options={tipoAtivos.filter(t=>t.name.toLowerCase()==="telefonia").map(t=>({value:t.id,label:t.name}))}/>
+            <Input label="Número Linha" value={modal.numeroLinha} onChange={v=>setModal(m=>({...m,numeroLinha:v}))} required/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            <Input label="Acesso" value={modal.acesso||""} onChange={v=>setModal(m=>({...m,acesso:v}))}/>
+            <Input label="Estrutura" value={modal.estrutura||""} onChange={v=>setModal(m=>({...m,estrutura:v}))}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            <Input label="ICCID" value={modal.iccid||""} onChange={v=>setModal(m=>({...m,iccid:v}))}/>
+            <SelectField label="Tipo Pacote" value={modal.tipoPacote||""} onChange={v=>setModal(m=>({...m,tipoPacote:v}))}
+              options={TIPO_PACOTE_OPTS.map(s=>({value:s,label:s}))}/>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Status</label>
+            <input value={modal.status||"Em análise"} readOnly
+              style={{...S.input,background:"#f5f5f5",color:C.textLight,cursor:"default"}}/>
+          </div>
           {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
             <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
@@ -2619,19 +2639,26 @@ function LinhasDisponiveisScreen({user}){
 }
 
 // ── ATIVOS (s20) ──────────────────────────────────────────────
+const CONDICAO_ATIVO_OPTS=["Novo","Usado","Danificado"];
 function AtivosScreen({user}){
   const[items,setItems]=useState([]);
   const[tipoAtivos,setTipoAtivos]=useState([]);
+  const[companies,setCompanies]=useState([]);
   const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(null);
   const[delId,setDelId]=useState(null);
   const[err,setErr]=useState("");
   const isMobile=useIsMobile();
 
+  const blankAtivo=()=>({nome:"",tipoAtivoId:"",companyId:"",marca:"",modelo:"",
+    numeroSerie:"",sistemaOperacional:"",versao:"",processador:"",memoria:"",hd:"",
+    patrimonio:"",numeroDocumento:"",valor:"",dataAquisicao:"",condicao:"",
+    acessorios:"",imeiSlot1:"",imeiSlot2:""});
+
   const load=()=>{
     setLoading(true);
-    Promise.all([api.get("/ativos"),api.get("/tipo-ativos")])
-      .then(([a,ta])=>{setItems(a);setTipoAtivos(ta);})
+    Promise.all([api.get("/ativos"),api.get("/tipo-ativos"),api.get("/companies")])
+      .then(([a,ta,co])=>{setItems(a);setTipoAtivos(ta);setCompanies(co);})
       .catch(()=>{}).finally(()=>setLoading(false));
   };
   useEffect(()=>{load();},[]);
@@ -2639,8 +2666,8 @@ function AtivosScreen({user}){
   const save=async()=>{
     if(!modal.nome?.trim()){setErr("Nome do ativo é obrigatório.");return;}
     try{
-      if(modal.id) await api.put(`/ativos/${modal.id}`,{nome:modal.nome,tipoAtivoId:modal.tipoAtivoId||null});
-      else         await api.post("/ativos",{nome:modal.nome,tipoAtivoId:modal.tipoAtivoId||null});
+      if(modal.id) await api.put(`/ativos/${modal.id}`,modal);
+      else         await api.post("/ativos",modal);
       setModal(null);load();
     }catch(e){setErr(e.message);}
   };
@@ -2649,38 +2676,102 @@ function AtivosScreen({user}){
     catch(e){alert(e.message);}
   };
   const canI=act=>user.permissions?.s20?.[act];
+  const F=(label,key,type="text")=>(
+    <div style={S.formRow}>
+      <label style={S.label}>{label}</label>
+      <input type={type} value={modal?.[key]||""} onChange={e=>setModal(m=>({...m,[key]:e.target.value}))}
+        style={S.input} onFocus={e=>e.target.style.borderColor=C.primary} onBlur={e=>e.target.style.borderColor=C.border}/>
+    </div>
+  );
+  const g2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"};
+
+  const statusBadgeAtivo=s=>{
+    if(s==="Em uso")return<span style={{...S.badge,background:"#E3F2FD",color:"#1565C0"}}>Em uso</span>;
+    if(s==="Baixado")return<span style={{...S.badge,background:"#FFEBEE",color:"#B71C1C"}}>Baixado</span>;
+    return<span style={{...S.badge,...S.badgeActive}}>Em Estoque</span>;
+  };
 
   return(
     <div style={S.card}>
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>📦 Ativos</span>
-        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({nome:"",tipoAtivoId:""});}}>+ Novo Ativo</button>}
+        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal(blankAtivo());}}>+ Novo Ativo</button>}
       </div>
       {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum ativo cadastrado</div>:(
-        isMobile
-          ?<MobileCardList items={items} columns={[{key:"nome",label:"Nome do Ativo"},{key:"tipoAtivoName",label:"Tipo de Ativo"}]} actions={item=>(
-            <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,nome:item.nome,tipoAtivoId:item.tipoAtivoId||""});}}>Editar</button>}
-              {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}</>
-          )}/>
-          :<table style={S.table}><thead><tr>
-            {["Nome do Ativo","Tipo de Ativo","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+        <div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Nome do Ativo","Tipo de Ativo","Empresa","Marca","Modelo","Nº Série","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
           <tbody>{items.map(item=>(
             <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={{...S.td,fontWeight:600}}>{item.nome}</td>
               <td style={S.td}>{item.tipoAtivoName||"—"}</td>
+              <td style={S.td}>{item.companyName||"—"}</td>
+              <td style={S.td}>{item.marca||"—"}</td>
+              <td style={S.td}>{item.modelo||"—"}</td>
+              <td style={S.td}>{item.numeroSerie||"—"}</td>
+              <td style={S.td}>{statusBadgeAtivo(item.status)}</td>
               <td style={S.td}>
-                {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,nome:item.nome,tipoAtivoId:item.tipoAtivoId||""});}}>Editar</button>}
-                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+                {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}> ✏️</button>}
+                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>🗑️</button>}
               </td>
             </tr>
           ))}</tbody></table>
+        </div>
       )}
       {modal&&(
-        <Modal title={modal.id?"Editar Ativo":"Novo Ativo"} onClose={()=>setModal(null)}>
-          <Input label="Nome do Ativo" value={modal.nome} onChange={v=>setModal(m=>({...m,nome:v}))} required/>
-          <SelectField label="Tipo de Ativo" value={modal.tipoAtivoId} onChange={v=>setModal(m=>({...m,tipoAtivoId:v}))}
-            options={tipoAtivos.map(t=>({value:t.id,label:t.name}))}/>
+        <Modal title={modal.id?"Editar Ativo":"Novo Ativo"} onClose={()=>setModal(null)} extraWide>
+          <div style={g2}>
+            <Input label="Nome do Ativo *" value={modal.nome} onChange={v=>setModal(m=>({...m,nome:v}))} required/>
+            <SelectField label="Tipo de Ativo" value={modal.tipoAtivoId||""} onChange={v=>setModal(m=>({...m,tipoAtivoId:v}))}
+              options={tipoAtivos.map(t=>({value:t.id,label:t.name}))}/>
+          </div>
+          <div style={g2}>
+            <SelectField label="Empresa" value={modal.companyId||""} onChange={v=>setModal(m=>({...m,companyId:v}))}
+              options={companies.filter(c=>c.active).map(c=>({value:c.id,label:c.name}))}/>
+            {F("Marca","marca")}
+          </div>
+          <div style={g2}>
+            {F("Modelo","modelo")}
+            {F("Nº de Série","numeroSerie")}
+          </div>
+          <div style={g2}>
+            {F("Sistema Operacional","sistemaOperacional")}
+            {F("Versão","versao")}
+          </div>
+          <div style={g2}>
+            {F("Processador","processador")}
+            {F("Memória","memoria")}
+          </div>
+          <div style={g2}>
+            {F("HD","hd")}
+            {F("Patrimônio","patrimonio")}
+          </div>
+          <div style={g2}>
+            {F("Nº Documento","numeroDocumento")}
+            {F("Valor","valor","number")}
+          </div>
+          <div style={g2}>
+            <MaskedInput label="Data Aquisição" value={modal.dataAquisicao||""} onChange={v=>setModal(m=>({...m,dataAquisicao:v}))} mask={MASK_DATA} placeholder="DD/MM/AAAA"/>
+            <SelectField label="Condição" value={modal.condicao||""} onChange={v=>setModal(m=>({...m,condicao:v}))}
+              options={CONDICAO_ATIVO_OPTS.map(s=>({value:s,label:s}))}/>
+          </div>
+          <div style={g2}>
+            {F("IMEI Slot 1","imeiSlot1")}
+            {F("IMEI Slot 2","imeiSlot2")}
+          </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Acessórios</label>
+            <textarea value={modal.acessorios||""} onChange={e=>setModal(m=>({...m,acessorios:e.target.value}))}
+              style={{...S.input,height:60,resize:"vertical"}}/>
+          </div>
+          {modal.id&&(
+            <div style={S.formRow}>
+              <label style={S.label}>Status</label>
+              <input value={modal.status||"Em Estoque"} readOnly
+                style={{...S.input,background:"#f5f5f5",color:C.textLight,cursor:"default"}}/>
+            </div>
+          )}
           {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
             <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
@@ -3097,10 +3188,50 @@ function ModelosContratoScreen({user}){
   );
 }
 
+// ── Modal de Movimentações de Ativos ─────────────────────────
+function MovimentacoesModal({movModal,onClose,itensModal,funcionarios,onDone}){
+  const[tipoMov,setTipoMov]=useState("Transferência");
+  const[movFuncId,setMovFuncId]=useState("");
+  const[movErr,setMovErr]=useState("");
+  const[movSaving,setMovSaving]=useState(false);
+  const doMov=async()=>{
+    if(tipoMov==="Transferência"&&!movFuncId){setMovErr("Selecione o funcionário de destino.");return;}
+    setMovSaving(true);
+    try{
+      await api.post(`/controle-ativos/${movModal.controleId}/itens/${movModal.item.id}/movimentacao`,
+        {tipoMovimentacao:tipoMov,funcionarioId:movFuncId||null});
+      onDone();
+    }catch(e){setMovErr(e.message);}finally{setMovSaving(false);}
+  };
+  return(
+    <Modal title="Registrar Movimentação" onClose={onClose}>
+      <div style={{marginBottom:12,padding:10,background:"#F8F9FA",borderRadius:6,fontSize:12,color:C.text}}>
+        <strong>Item:</strong> {movModal.item.ativoNome||movModal.item.numeroLinha||"—"}<br/>
+        <strong>Funcionário atual:</strong> {itensModal?.controle.nomeFuncionario||"—"}
+      </div>
+      <SelectField label="Tipo de Movimentação" value={tipoMov} onChange={v=>{setTipoMov(v);setMovFuncId("");setMovErr("");}}
+        options={["Transferência","Baixa","Devolução Estoque"].map(s=>({value:s,label:s}))}/>
+      {tipoMov==="Transferência"&&(
+        <SelectField label="Funcionário de Destino *" value={movFuncId} onChange={setMovFuncId}
+          options={funcionarios.filter(f=>f.situacao==="Ativo").map(f=>({value:f.id,label:f.nome}))}/>
+      )}
+      {tipoMov==="Baixa"&&<div style={{padding:"8px 12px",background:"#FFF3E0",borderRadius:6,fontSize:12,color:"#E65100",marginBottom:8}}>O ativo e a linha serão marcados como <strong>Baixado</strong> e o item será removido.</div>}
+      {tipoMov==="Devolução Estoque"&&<div style={{padding:"8px 12px",background:"#E8F5E9",borderRadius:6,fontSize:12,color:"#2E7D32",marginBottom:8}}>O ativo e a linha voltarão ao status <strong>Em Estoque</strong> e o item será removido.</div>}
+      {movErr&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{movErr}</div>}
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <button style={S.btnCancel} onClick={onClose}>Cancelar</button>
+        <button style={{...S.btnSave,opacity:movSaving?0.6:1}} disabled={movSaving} onClick={doMov}>
+          {movSaving?"Salvando...":"Confirmar"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ── CONTROLE DE ATIVOS (s21) ──────────────────────────────────
 const TIPO_PACOTE_OPTS=["Voz","Dados","Voz e Dados"];
-const CONDICAO_OPTS=["Novo","Usado"];
-const STATUS_ATIVO_OPTS=["Em uso","Devolvido","Baixado"];
+const CONDICAO_OPTS=["Novo","Usado","Danificado"];
+const STATUS_ATIVO_OPTS=["Em Estoque","Em uso","Baixado"];
 
 function ControleAtivosScreen({user}){
   const[items,setItems]=useState([]);
@@ -3121,7 +3252,8 @@ function ControleAtivosScreen({user}){
   const[delItemId,setDelItemId]=useState(null);
   const[err,setErr]=useState("");
   const[errItem,setErrItem]=useState("");
-  const[filterCA,setFilterCA]=useState({empresa:"",funcionario:"",cpf:"",operadora:"",numeroLinha:"",dataAquisicao:"",numeroSerie:"",numeroDocumento:""});
+  const[filterCA,setFilterCA]=useState({empresa:"",funcionario:"",cpf:"",operadora:"",numeroLinha:"",dataAquisicao:"",numeroSerie:"",numeroDocumento:"",patrimonio:"",imeiSlot1:""});
+  const[movModal,setMovModal]=useState(null); // {item, controleId}
   const[cargaModal,setCargaModal]=useState(null);
   const isMobile=useIsMobile();
 
@@ -3139,6 +3271,7 @@ function ControleAtivosScreen({user}){
       setOperadoras(op);
       setLinhasEstoque(ld.filter(l=>l.status==="Em estoque"));
       setAtivos(av);setAllItens(ai);setFuncionarios(func);setModelos(mc);
+      // ativosEstoque exposto via closure na tela
     }).catch(()=>{}).finally(()=>setLoading(false));
   };
   useEffect(()=>{load();},[]);
@@ -3394,7 +3527,7 @@ function ControleAtivosScreen({user}){
   });
 
   // Filtro: campos de item criam um Set de controleAtivoIds compatíveis
-  const hasItemFilter=filterCA.empresa||filterCA.operadora||filterCA.numeroLinha||filterCA.dataAquisicao||filterCA.numeroSerie||filterCA.numeroDocumento;
+  const hasItemFilter=filterCA.empresa||filterCA.operadora||filterCA.numeroLinha||filterCA.dataAquisicao||filterCA.numeroSerie||filterCA.numeroDocumento||filterCA.patrimonio||filterCA.imeiSlot1;
   const matchingIds=hasItemFilter?new Set(
     allItens.filter(i=>{
       if(filterCA.empresa&&i.companyId!==filterCA.empresa)return false;
@@ -3403,6 +3536,8 @@ function ControleAtivosScreen({user}){
       if(filterCA.dataAquisicao&&!(i.dataAquisicao||"").includes(filterCA.dataAquisicao))return false;
       if(filterCA.numeroSerie&&!(i.numeroSerie||"").toLowerCase().includes(filterCA.numeroSerie.toLowerCase()))return false;
       if(filterCA.numeroDocumento&&!(i.numeroDocumento||"").toLowerCase().includes(filterCA.numeroDocumento.toLowerCase()))return false;
+      if(filterCA.patrimonio&&!(i.patrimonio||"").toLowerCase().includes(filterCA.patrimonio.toLowerCase()))return false;
+      if(filterCA.imeiSlot1&&!(i.imeiSlot1||"").toLowerCase().includes(filterCA.imeiSlot1.toLowerCase()))return false;
       return true;
     }).map(i=>i.controleAtivoId)
   ):null;
@@ -3448,7 +3583,9 @@ function ControleAtivosScreen({user}){
           <TxtFilter label="Data Aquisição (DD/MM/AAAA)" fkey="dataAquisicao"/>
           <TxtFilter label="Número de Série" fkey="numeroSerie"/>
           <TxtFilter label="Número do Documento" fkey="numeroDocumento"/>
-          {hasAnyFilter&&<button style={{...S.btnCancel,whiteSpace:"nowrap"}} onClick={()=>setFilterCA({empresa:"",funcionario:"",cpf:"",operadora:"",numeroLinha:"",dataAquisicao:"",numeroSerie:"",numeroDocumento:""})}>Limpar</button>}
+          <TxtFilter label="Patrimônio" fkey="patrimonio"/>
+          <TxtFilter label="IMEI Slot 1" fkey="imeiSlot1"/>
+          {hasAnyFilter&&<button style={{...S.btnCancel,whiteSpace:"nowrap"}} onClick={()=>setFilterCA({empresa:"",funcionario:"",cpf:"",operadora:"",numeroLinha:"",dataAquisicao:"",numeroSerie:"",numeroDocumento:"",patrimonio:"",imeiSlot1:""})}>Limpar</button>}
         </div>
 
         {loading?<Spinner/>:filteredCA.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🖥️</span>{hasAnyFilter?"Nenhum resultado para o filtro aplicado":"Nenhum registro cadastrado"}</div>:(
@@ -3539,8 +3676,10 @@ function ControleAtivosScreen({user}){
                         processador:item.processador||"",memoria:item.memoria||"",hd:item.hd||"",patrimonio:item.patrimonio||"",
                         numeroDocumento:item.numeroDocumento||"",valor:item.valor||"",dataAquisicao:item.dataAquisicao||"",
                         condicao:item.condicao||"",acessorios:item.acessorios||"",statusAtivo:item.statusAtivo||"",
+                        ativoNome:item.ativoNome||"",numeroLinha:item.numeroLinha||"",operadoraName:item.operadoraName||"",
                       });}}>✏️</button>}
                       {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelItemId(item.id)}>🗑️</button>}
+                      <button style={{...S.actionBtn,background:"#FFF3E0",color:"#E65100",fontWeight:600}} onClick={()=>setMovModal({item,controleId:itensModal.controle.id})}>🔄 Mov.</button>
                       <button style={{...S.actionBtn,background:"#F0E6FF",color:"#6C3483"}} onClick={()=>openAnexos(itensModal.controle.id,item)}>
                         📎{item.attachments?.length?` (${item.attachments.length})`:""}
                       </button>
@@ -3561,95 +3700,104 @@ function ControleAtivosScreen({user}){
       {/* Form de item */}
       {itemForm&&(()=>{
         const tel=isTelefonia(itemForm.tipoAtivoId);
-        const F=(label,key,type="text")=>(
+        const ativosEstoque=ativos.filter(a=>a.status==="Em Estoque"||(itemForm.id&&a.id===itemForm.ativoId));
+        const linhasEstoqueForm=linhasEstoque.concat(
+          itemForm.id&&itemForm.linhaId&&!linhasEstoque.find(l=>l.id===itemForm.linhaId)
+            ?[{id:itemForm.linhaId,numeroLinha:itemForm.numeroLinha||"?",operadoraName:itemForm.operadoraName||""}]
+            :[]
+        );
+        const RO=(label,value)=>(
           <div style={S.formRow}>
             <label style={S.label}>{label}</label>
-            <input type={type} value={itemForm[key]||""} onChange={e=>setItemForm(m=>({...m,[key]:e.target.value}))}
-              style={S.input}
-              onFocus={e=>e.target.style.borderColor=C.primary}
-              onBlur={e=>e.target.style.borderColor=C.border}/>
+            <input value={value||""} readOnly style={{...S.input,background:"#f5f5f5",color:C.textLight,cursor:"default"}}/>
           </div>
         );
-        const gridStyle={display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"};
+        const g2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"};
         return(
           <Modal title={itemForm.id?"Editar Item":"Novo Item"} onClose={()=>setItemForm(null)} extraWide>
-            <div style={gridStyle}>
-              <SelectField label="Tipo de Ativo" value={itemForm.tipoAtivoId} onChange={v=>setItemForm(m=>({...m,tipoAtivoId:v,operadoraId:"",linhaId:"",ativoId:""}))}
+            <div style={g2}>
+              <SelectField label="Tipo de Ativo *" value={itemForm.tipoAtivoId} onChange={v=>setItemForm(m=>({...m,tipoAtivoId:v,operadoraId:"",linhaId:"",ativoId:""}))}
                 options={tipoAtivos.map(t=>({value:t.id,label:t.name}))}/>
-              <SelectField label="Empresa" value={itemForm.companyId} onChange={v=>setItemForm(m=>({...m,companyId:v}))}
+              <SelectField label="Empresa *" value={itemForm.companyId} onChange={v=>setItemForm(m=>({...m,companyId:v}))}
                 options={companies.filter(c=>c.active).map(c=>({value:c.id,label:c.name}))}/>
             </div>
 
             {/* Campos Telefonia */}
             {tel&&(<>
-              <div style={gridStyle}>
-                {F("Marca","marca")}
-                {F("Modelo","modelo")}
+              <div style={g2}>
+                {RO("Marca",itemForm.marca)}
+                {RO("Modelo",itemForm.modelo)}
               </div>
-              <div style={gridStyle}>
-                {F("IMEI Slot 1","imeiSlot1")}
-                {F("IMEI Slot 2","imeiSlot2")}
+              <div style={g2}>
+                {RO("IMEI Slot 1",itemForm.imeiSlot1)}
+                {RO("IMEI Slot 2",itemForm.imeiSlot2)}
               </div>
-              <div style={gridStyle}>
-                <SelectField label="Operadora" value={itemForm.operadoraId} onChange={v=>setItemForm(m=>({...m,operadoraId:v}))}
-                  options={operadoras.map(o=>({value:o.id,label:o.name}))}/>
-                <SelectField label="Número Linha (Em estoque)" value={itemForm.linhaId} onChange={v=>setItemForm(m=>({...m,linhaId:v}))}
-                  options={linhasEstoque.map(l=>({value:l.id,label:`${l.numeroLinha}${l.operadoraName?" — "+l.operadoraName:""}`}))}/>
+              {RO("Operadora",itemForm.operadoraName||operadoras.find(o=>o.id===itemForm.operadoraId)?.name)}
+              <SelectField label="Número Linha (Em estoque) *" value={itemForm.linhaId} onChange={v=>{
+                const l=linhasEstoqueForm.find(x=>x.id===v);
+                setItemForm(m=>({...m,linhaId:v,
+                  operadoraId:l?.operadoraId||m.operadoraId,
+                  acesso:l?.acesso||"",estrutura:l?.estrutura||"",
+                  iccid:l?.iccid||"",tipoPacote:l?.tipoPacote||"",
+                }));
+              }} options={linhasEstoqueForm.map(l=>({value:l.id,label:`${l.numeroLinha}${l.operadoraName?" — "+l.operadoraName:""}`}))}/>
+              <div style={g2}>
+                {RO("Acesso",itemForm.acesso)}
+                {RO("Estrutura",itemForm.estrutura)}
               </div>
-              <div style={gridStyle}>
-                {F("Acesso","acesso")}
-                {F("Estrutura","estrutura")}
-              </div>
-              <div style={gridStyle}>
-                {F("ICCID","iccid")}
-                <SelectField label="Tipo Pacote" value={itemForm.tipoPacote} onChange={v=>setItemForm(m=>({...m,tipoPacote:v}))}
-                  options={TIPO_PACOTE_OPTS.map(s=>({value:s,label:s}))}/>
+              <div style={g2}>
+                {RO("ICCID",itemForm.iccid)}
+                {RO("Tipo Pacote",itemForm.tipoPacote)}
               </div>
             </>)}
 
             {/* Campos não-Telefonia */}
             {itemForm.tipoAtivoId&&!tel&&(<>
-              <div style={gridStyle}>
-                <SelectField label="Nome do Ativo" value={itemForm.ativoId} onChange={v=>setItemForm(m=>({...m,ativoId:v}))}
-                  options={ativos.map(a=>({value:a.id,label:a.nome}))}/>
-                {F("Marca","marca")}
+              <SelectField label="Nome do Ativo (Em Estoque) *" value={itemForm.ativoId} onChange={v=>{
+                const a=ativosEstoque.find(x=>x.id===v);
+                setItemForm(m=>({...m,ativoId:v,
+                  marca:a?.marca||"",modelo:a?.modelo||"",
+                  numeroSerie:a?.numeroSerie||"",sistemaOperacional:a?.sistemaOperacional||"",
+                  versao:a?.versao||"",processador:a?.processador||"",
+                  memoria:a?.memoria||"",hd:a?.hd||"",patrimonio:a?.patrimonio||"",
+                  numeroDocumento:a?.numeroDocumento||"",valor:a?.valor||"",
+                  dataAquisicao:a?.dataAquisicao||"",condicao:a?.condicao||"",
+                  acessorios:a?.acessorios||"",imeiSlot1:a?.imeiSlot1||"",imeiSlot2:a?.imeiSlot2||"",
+                }));
+              }} options={ativosEstoque.map(a=>({value:a.id,label:`${a.nome}${a.marca?" | "+a.marca:""}${a.modelo?" | "+a.modelo:""}${a.numeroSerie?" | "+a.numeroSerie:""}`}))}/>
+              <div style={g2}>
+                {RO("Marca",itemForm.marca)}
+                {RO("Modelo",itemForm.modelo)}
               </div>
-              <div style={gridStyle}>
-                {F("Modelo","modelo")}
-                {F("Número de Série","numeroSerie")}
+              <div style={g2}>
+                {RO("Nº de Série",itemForm.numeroSerie)}
+                {RO("Sistema Operacional",itemForm.sistemaOperacional)}
               </div>
-              <div style={gridStyle}>
-                {F("Sistema Operacional","sistemaOperacional")}
-                {F("Versão","versao")}
+              <div style={g2}>
+                {RO("Versão",itemForm.versao)}
+                {RO("Processador",itemForm.processador)}
               </div>
-              <div style={gridStyle}>
-                {F("Processador","processador")}
-                {F("Memória","memoria")}
+              <div style={g2}>
+                {RO("Memória",itemForm.memoria)}
+                {RO("HD",itemForm.hd)}
               </div>
-              <div style={gridStyle}>
-                {F("HD","hd")}
-                {F("Patrimônio","patrimonio")}
+              <div style={g2}>
+                {RO("Patrimônio",itemForm.patrimonio)}
+                {RO("Nº Documento",itemForm.numeroDocumento)}
               </div>
-              <div style={gridStyle}>
-                {F("Número do Documento","numeroDocumento")}
-                <div style={S.formRow}>
-                  <label style={S.label}>Valor</label>
-                  <input type="number" step="0.01" min="0" value={itemForm.valor||""} onChange={e=>setItemForm(m=>({...m,valor:e.target.value}))}
-                    style={S.input} onFocus={e=>e.target.style.borderColor=C.primary} onBlur={e=>e.target.style.borderColor=C.border}/>
-                </div>
+              <div style={g2}>
+                {RO("Valor",itemForm.valor)}
+                {RO("Data Aquisição",itemForm.dataAquisicao)}
               </div>
-              <div style={gridStyle}>
-                <MaskedInput label="Data Aquisição" value={itemForm.dataAquisicao} onChange={v=>setItemForm(m=>({...m,dataAquisicao:v}))} mask={MASK_DATA} placeholder="DD/MM/AAAA"/>
-                <SelectField label="Condição" value={itemForm.condicao} onChange={v=>setItemForm(m=>({...m,condicao:v}))}
-                  options={CONDICAO_OPTS.map(s=>({value:s,label:s}))}/>
+              <div style={g2}>
+                {RO("Condição",itemForm.condicao)}
+                {RO("IMEI 1",itemForm.imeiSlot1)}
               </div>
-              <div style={S.formRow}>
-                <label style={S.label}>Acessórios</label>
-                <textarea value={itemForm.acessorios||""} onChange={e=>setItemForm(m=>({...m,acessorios:e.target.value}))}
-                  style={{...S.input,height:64,resize:"vertical"}}/>
+              <div style={g2}>
+                {RO("IMEI 2",itemForm.imeiSlot2)}
+                {RO("Status",itemForm.statusAtivo||"Em Estoque")}
               </div>
-              <SelectField label="Status" value={itemForm.statusAtivo} onChange={v=>setItemForm(m=>({...m,statusAtivo:v}))}
-                options={STATUS_ATIVO_OPTS.map(s=>({value:s,label:s}))}/>
+              {RO("Acessórios",itemForm.acessorios)}
             </>)}
 
             {!itemForm.tipoAtivoId&&<div style={{color:C.textLight,fontSize:12,marginBottom:12}}>Selecione o Tipo de Ativo para ver os campos correspondentes.</div>}
@@ -3694,6 +3842,15 @@ function ControleAtivosScreen({user}){
 
       {delId&&<ConfirmModal msg="Excluir este registro e todos os seus itens?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
       {delItemId&&<ConfirmModal msg="Excluir este item?" onConfirm={delItem} onCancel={()=>setDelItemId(null)}/>}
+
+      {/* Modal Movimentações */}
+      {movModal&&(
+        <MovimentacoesModal
+          movModal={movModal} onClose={()=>setMovModal(null)}
+          itensModal={itensModal} funcionarios={funcionarios}
+          onDone={()=>{setMovModal(null);reloadItens();}}
+        />
+      )}
 
       {cargaModal&&(
         <Modal title="Carga Inicial — Controle de Ativos" onClose={()=>setCargaModal(null)} extraWide>
@@ -4642,6 +4799,83 @@ function InventarioAtivosScreen({user}){
   );
 }
 
+// ── HISTÓRICO DE MOVIMENTAÇÕES DE ATIVOS (s29) ────────────────
+function HistoricoMovimentacoesScreen({user}){
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[filter,setFilter]=useState({tipo:"",funcionario:"",ativo:"",linha:""});
+  const isMobile=useIsMobile();
+
+  useEffect(()=>{
+    api.get("/historico-movimentacoes")
+      .then(setItems).catch(()=>{}).finally(()=>setLoading(false));
+  },[]);
+
+  const filtered=items.filter(i=>{
+    if(filter.tipo&&i.tipoMovimentacao!==filter.tipo)return false;
+    if(filter.funcionario&&!(i.funcionarioNome||"").toLowerCase().includes(filter.funcionario.toLowerCase()))return false;
+    if(filter.ativo&&!(i.ativoNome||"").toLowerCase().includes(filter.ativo.toLowerCase()))return false;
+    if(filter.linha&&!(i.numeroLinha||"").toLowerCase().includes(filter.linha.toLowerCase()))return false;
+    return true;
+  });
+
+  const tipoBadge=t=>{
+    const colors={
+      "Inclusão":{bg:"#E8F5E9",cl:"#1B5E20"},
+      "Edição":{bg:"#E3F2FD",cl:"#0D47A1"},
+      "Exclusão":{bg:"#FFEBEE",cl:"#B71C1C"},
+      "Transferência":{bg:"#FFF3E0",cl:"#E65100"},
+      "Baixa":{bg:"#FCE4EC",cl:"#880E4F"},
+      "Devolução Estoque":{bg:"#F3E5F5",cl:"#4A148C"},
+    };
+    const{bg,cl}=colors[t]||{bg:"#F5F5F5",cl:"#444"};
+    return<span style={{...S.badge,background:bg,color:cl}}>{t}</span>;
+  };
+
+  const TIPOS=["Inclusão","Edição","Exclusão","Transferência","Baixa","Devolução Estoque"];
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>📜 Histórico de Movimentações de Ativos</span>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+        <select value={filter.tipo} onChange={e=>setFilter(f=>({...f,tipo:e.target.value}))}
+          style={{...S.select,width:"auto",minWidth:160}}>
+          <option value="">Todos os tipos</option>
+          {TIPOS.map(t=><option key={t} value={t}>{t}</option>)}
+        </select>
+        <input placeholder="Funcionário..." value={filter.funcionario} onChange={e=>setFilter(f=>({...f,funcionario:e.target.value}))}
+          style={{...S.input,width:"auto",minWidth:140,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Ativo..." value={filter.ativo} onChange={e=>setFilter(f=>({...f,ativo:e.target.value}))}
+          style={{...S.input,width:"auto",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Nº Linha..." value={filter.linha} onChange={e=>setFilter(f=>({...f,linha:e.target.value}))}
+          style={{...S.input,width:"auto",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        {(filter.tipo||filter.funcionario||filter.ativo||filter.linha)&&
+          <button style={S.btnCancel} onClick={()=>setFilter({tipo:"",funcionario:"",ativo:"",linha:""})}>Limpar</button>}
+      </div>
+      {loading?<Spinner/>:filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📜</span>Nenhuma movimentação registrada</div>:(
+        <div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Data/Hora","Tipo","Funcionário","Ativo / Linha","Tipo de Ativo","Empresa","Usuário"].map(h=><th key={h} style={{...S.th,fontSize:11}}>{h}</th>)}
+          </tr></thead>
+          <tbody>{filtered.map(item=>(
+            <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={{...S.td,fontSize:11,whiteSpace:"nowrap"}}>{item.dataHora||"—"}</td>
+              <td style={{...S.td,fontSize:11}}>{tipoBadge(item.tipoMovimentacao)}</td>
+              <td style={{...S.td,fontSize:12}}><div style={{fontWeight:600}}>{item.funcionarioNome||"—"}</div><div style={{fontSize:11,color:C.textLight}}>{item.funcionarioCpf||""}</div></td>
+              <td style={{...S.td,fontSize:12}}>{item.ativoNome||item.numeroLinha||"—"}</td>
+              <td style={{...S.td,fontSize:12}}>{item.tipoAtivoName||"—"}</td>
+              <td style={{...S.td,fontSize:12}}>{item.companyName||"—"}</td>
+              <td style={{...S.td,fontSize:12}}>{item.usuarioNome||"—"}</td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── SIDEBAR ───────────────────────────────────────────────────
 const navConfig=[
   {id:"cadastros",label:"Cadastros",icon:"📁",children:[
@@ -4667,6 +4901,7 @@ const navConfig=[
     {id:"s13",label:"Contratos",           icon:"📄"},
     {id:"s19",label:"Linhas Disponíveis",  icon:"📶"},
     {id:"s21",label:"Controle de Ativos",  icon:"🖥️"},
+    {id:"s29",label:"Histórico de Movimentações",icon:"📜"},
   ]},
   {id:"relatorios",label:"Relatórios",icon:"📊",children:[
     {id:"s6", label:"Relatório de Horas",           icon:"📋"},
@@ -4760,6 +4995,7 @@ const screenTitles={
   s25:"Relatórios › Resumo de Linhas",
   s26:"Relatórios › Resumo de Ativos",
   s27:"Relatórios › Inventário de Ativos",
+  s29:"Movimentações › Histórico de Movimentações de Ativos",
   profile:"Meu Perfil",
 };
 
@@ -4769,6 +5005,7 @@ export default function App(){
   const isMobile=useIsMobile();
   const[sidebarOpen,setSidebarOpen]=useState(false);
   const[profileOpen,setProfileOpen]=useState(false);
+  const[sidebarCollapsed,setSidebarCollapsed]=useState(true);
 
   useEffect(()=>{const saved=localStorage.getItem("sl_session");if(saved){try{const{user,token}=JSON.parse(saved);api.setToken(token);setUser(user);}catch{localStorage.removeItem("sl_session");}}},[]);
 
@@ -4812,6 +5049,7 @@ export default function App(){
     s25:<RelatorioResumoLinhasScreen user={user}/>,
     s26:<ResumoAtivosScreen user={user}/>,
     s27:<InventarioAtivosScreen user={user}/>,
+    s29:<HistoricoMovimentacoesScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
@@ -4823,7 +5061,24 @@ export default function App(){
   return(
     <div style={S.layout}>
       {/* Desktop sidebar */}
-      {!isMobile&&<Sidebar user={user} currentScreen={screen} onNavigate={setScreen} onLogout={handleLogout}/>}
+      {!isMobile&&(
+        sidebarCollapsed?(
+          <div style={{width:52,background:C.sidebar,display:"flex",flexDirection:"column",alignItems:"center",padding:"16px 0",flexShrink:0,gap:4}}>
+            <button onClick={()=>setSidebarCollapsed(false)} title="Expandir menu"
+              style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:22,lineHeight:1,padding:"4px"}}>☰</button>
+          </div>
+        ):(
+          <div style={{position:"relative",flexShrink:0}}>
+            <Sidebar user={user} currentScreen={screen} onNavigate={setScreen} onLogout={handleLogout}/>
+            <button onClick={()=>setSidebarCollapsed(true)} title="Recolher menu"
+              style={{position:"absolute",right:-12,top:68,background:C.primary,border:"none",color:"#fff",
+                cursor:"pointer",borderRadius:"50%",width:24,height:24,fontSize:13,zIndex:200,
+                boxShadow:"0 1px 4px rgba(0,0,0,.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              ‹
+            </button>
+          </div>
+        )
+      )}
 
       {/* Mobile sidebar overlay */}
       {isMobile&&sidebarOpen&&(
