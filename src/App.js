@@ -2201,6 +2201,7 @@ function LinhasFaturadasScreen({user}){
                 <div style={{fontWeight:700,fontSize:13,marginBottom:6}}>{item.operadoraName}</div>
                 <div style={{fontSize:12,color:C.textLight,marginBottom:4}}>Empresa: {item.companyName||"—"}</div>
                 <div style={{fontSize:12,color:C.textLight,marginBottom:4}}>Mês/Ano: {item.mesAno}</div>
+                <div style={{fontSize:12,color:C.textLight,marginBottom:4}}>Fatura: {item.fatura||"—"}</div>
                 <div style={{fontSize:12,color:C.textLight,marginBottom:8}}>Itens importados: <strong>{item.totalItens}</strong></div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",paddingTop:8,borderTop:`1px solid ${C.border}`}}>
                   {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,operadoraId:item.operadoraId,companyId:item.companyId||"",mesAno:item.mesAno,fatura:item.fatura||""});}}>Editar</button>}
@@ -2214,13 +2215,14 @@ function LinhasFaturadasScreen({user}){
           ):(
             <div style={{overflowX:"auto"}}>
               <table style={S.table}><thead><tr>
-                {["Empresa","Operadora","Mês/Ano","Itens Importados","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+                {["Empresa","Operadora","Mês/Ano","Fatura","Itens Importados","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
               </tr></thead>
               <tbody>{filteredLF.map(item=>(
                 <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                   <td style={S.td}>{item.companyName||"—"}</td>
                   <td style={{...S.td,fontWeight:600}}>{item.operadoraName}</td>
                   <td style={S.td}>{item.mesAno}</td>
+                  <td style={S.td}>{item.fatura||"—"}</td>
                   <td style={S.td}><span style={{...S.badge,background:"#EBF5FB",color:"#2980B9"}}>{item.totalItens} {item.totalItens===1?"item":"itens"}</span></td>
                   <td style={S.td}>
                     {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,operadoraId:item.operadoraId,companyId:item.companyId||"",mesAno:item.mesAno,fatura:item.fatura||""});}}>Editar</button>}
@@ -2700,7 +2702,7 @@ function AtivosScreen({user}){
       {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum ativo cadastrado</div>:(
         <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
-            {["Nome do Ativo","Tipo de Ativo","Empresa","Marca","Modelo","Nº Série","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            {["Nome do Ativo","Tipo de Ativo","Empresa","Marca","Modelo","Nº Série","IMEI Slot 1","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
           <tbody>{items.map(item=>(
             <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
@@ -2710,6 +2712,7 @@ function AtivosScreen({user}){
               <td style={S.td}>{item.marca||"—"}</td>
               <td style={S.td}>{item.modelo||"—"}</td>
               <td style={S.td}>{item.numeroSerie||"—"}</td>
+              <td style={S.td}>{item.imeiSlot1||"—"}</td>
               <td style={S.td}>{statusBadgeAtivo(item.status)}</td>
               <td style={S.td}>
                 {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}> ✏️</button>}
@@ -2752,7 +2755,7 @@ function AtivosScreen({user}){
             {F("Valor","valor","number")}
           </div>
           <div style={g2}>
-            <MaskedInput label="Data Aquisição" value={modal.dataAquisicao||""} onChange={v=>setModal(m=>({...m,dataAquisicao:v}))} mask={MASK_DATA} placeholder="DD/MM/AAAA"/>
+            <MaskedInput label="Data Aquisição" value={modal.dataAquisicao||""} onChange={v=>setModal(m=>({...m,dataAquisicao:v}))} mask={MASK_DATE} placeholder="DD/MM/AAAA"/>
             <SelectField label="Condição" value={modal.condicao||""} onChange={v=>setModal(m=>({...m,condicao:v}))}
               options={CONDICAO_ATIVO_OPTS.map(s=>({value:s,label:s}))}/>
           </div>
@@ -4857,13 +4860,14 @@ function HistoricoMovimentacoesScreen({user}){
       {loading?<Spinner/>:filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📜</span>Nenhuma movimentação registrada</div>:(
         <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
-            {["Data/Hora","Tipo","Funcionário","Ativo / Linha","Tipo de Ativo","Empresa","Usuário"].map(h=><th key={h} style={{...S.th,fontSize:11}}>{h}</th>)}
+            {["Data/Hora","Tipo","Funcionário","Func. Destino","Ativo / Linha","Tipo de Ativo","Empresa","Usuário"].map(h=><th key={h} style={{...S.th,fontSize:11}}>{h}</th>)}
           </tr></thead>
           <tbody>{filtered.map(item=>(
             <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={{...S.td,fontSize:11,whiteSpace:"nowrap"}}>{item.dataHora||"—"}</td>
               <td style={{...S.td,fontSize:11}}>{tipoBadge(item.tipoMovimentacao)}</td>
               <td style={{...S.td,fontSize:12}}><div style={{fontWeight:600}}>{item.funcionarioNome||"—"}</div><div style={{fontSize:11,color:C.textLight}}>{item.funcionarioCpf||""}</div></td>
+              <td style={{...S.td,fontSize:12}}>{item.tipoMovimentacao==="Transferência"?(item.funcionarioDestinoNome||"—"):"—"}</td>
               <td style={{...S.td,fontSize:12}}>{item.ativoNome||item.numeroLinha||"—"}</td>
               <td style={{...S.td,fontSize:12}}>{item.tipoAtivoName||"—"}</td>
               <td style={{...S.td,fontSize:12}}>{item.companyName||"—"}</td>
@@ -4919,7 +4923,7 @@ function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
   const toggle=id=>setExpanded(e=>({...e,[id]:!e[id]}));
   const handleNav=id=>{onNavigate(id);if(isMobile&&onClose)onClose();};
   return(
-    <div style={{...S.sidebar,...(isMobile?{position:"fixed",top:0,left:0,height:"100vh",zIndex:300,overflowY:"auto"}:{})}}>
+    <div style={{...S.sidebar,...(isMobile?{position:"fixed",top:0,left:0,height:"100vh",zIndex:300,overflowY:"auto"}:{height:"100vh"})}}>
       <div style={{padding:"20px 16px",borderBottom:"1px solid #444",display:"flex",alignItems:"center"}}><Logo size={28}/></div>
       <div style={{padding:"12px 16px 8px",borderBottom:"1px solid #444",display:"flex",alignItems:"center",gap:10}}>
         <div style={{width:38,height:38,borderRadius:"50%",overflow:"hidden",border:`2px solid ${C.primary}`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:C.primary}}>
@@ -5005,7 +5009,7 @@ export default function App(){
   const isMobile=useIsMobile();
   const[sidebarOpen,setSidebarOpen]=useState(false);
   const[profileOpen,setProfileOpen]=useState(false);
-  const[sidebarCollapsed,setSidebarCollapsed]=useState(true);
+  const[sidebarCollapsed,setSidebarCollapsed]=useState(false);
 
   useEffect(()=>{const saved=localStorage.getItem("sl_session");if(saved){try{const{user,token}=JSON.parse(saved);api.setToken(token);setUser(user);}catch{localStorage.removeItem("sl_session");}}},[]);
 
