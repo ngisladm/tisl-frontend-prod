@@ -2512,6 +2512,11 @@ function LinhasDisponiveisScreen({user}){
     try{await api.delete(`/linhas-disponiveis/${delId}`);setDelId(null);load();}
     catch(e){alert(e.message);}
   };
+  const reverterBaixa=async(id)=>{
+    if(!window.confirm("Reverter a baixa desta linha e retornar ao estoque?"))return;
+    try{await api.post(`/linhas-disponiveis/${id}/reverter-baixa`,{});load();}
+    catch(e){alert(e.message);}
+  };
   const canI=act=>user.permissions?.s19?.[act];
 
   const filtered=items.filter(i=>{
@@ -2573,6 +2578,7 @@ function LinhasDisponiveisScreen({user}){
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",paddingTop:8,borderTop:`1px solid ${C.border}`}}>
                   {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}>Editar</button>}
                   {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+                  {user.isMaster&&item.status==="Baixado"&&<button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"1px solid #A5D6A7"}} onClick={()=>reverterBaixa(item.id)}>↩ Reverter Baixa</button>}
                 </div>
               </div>
             ))}</div>
@@ -2591,6 +2597,7 @@ function LinhasDisponiveisScreen({user}){
                   <td style={S.td}>
                     {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}>Editar</button>}
                     {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+                    {user.isMaster&&item.status==="Baixado"&&<button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"1px solid #A5D6A7"}} onClick={()=>reverterBaixa(item.id)}>↩ Reverter Baixa</button>}
                   </td>
                 </tr>
               ))}</tbody></table>
