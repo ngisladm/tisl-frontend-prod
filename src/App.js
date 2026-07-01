@@ -142,13 +142,62 @@ function Input({label,value,onChange,type="text",placeholder,required,disabled})
   );
 }
 function SelectField({label,value,onChange,options,required}){
+  const[open,setOpen]=useState(false);
+  const[search,setSearch]=useState("");
+  const[dropPos,setDropPos]=useState({top:0,left:0,width:200});
+  const triggerRef=useRef(null);
+  const selectedLabel=(options.find(o=>String(o.value)===String(value||""))||{}).label||"";
+  const filtered=options.filter(o=>(o.label||"").toLowerCase().includes(search.toLowerCase()));
+  useEffect(()=>{
+    if(!open)return;
+    const h=e=>{if(triggerRef.current&&!triggerRef.current.contains(e.target))setOpen(false);};
+    document.addEventListener("mousedown",h);
+    return()=>document.removeEventListener("mousedown",h);
+  },[open]);
+  const handleOpen=()=>{
+    if(triggerRef.current){
+      const r=triggerRef.current.getBoundingClientRect();
+      setDropPos({top:r.bottom+4,left:r.left,width:r.width});
+    }
+    setOpen(o=>!o);
+    setSearch("");
+  };
   return(
     <div style={S.formRow}>
       <label style={S.label}>{label}{required&&" *"}</label>
-      <select value={value||""} onChange={e=>onChange(e.target.value)} style={S.select}>
-        <option value="">Selecione...</option>
-        {options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
+      <div ref={triggerRef} style={{position:"relative"}}>
+        <div onClick={handleOpen}
+          style={{...S.select,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",userSelect:"none",minHeight:36,padding:"0 10px"}}>
+          <span style={{color:value?C.text:C.textLight,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,fontSize:13}}>{selectedLabel||"Selecione..."}</span>
+          <span style={{marginLeft:6,fontSize:10,color:C.textLight,flexShrink:0}}>{open?"▲":"▼"}</span>
+        </div>
+        {open&&(
+          <div style={{position:"fixed",top:dropPos.top,left:dropPos.left,width:Math.max(dropPos.width,320),zIndex:9999,
+            background:C.white,border:`1px solid ${C.border}`,borderRadius:4,boxShadow:"0 6px 24px rgba(0,0,0,.22)",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"6px 8px",borderBottom:`1px solid ${C.border}`}}>
+              <input autoFocus value={search} onChange={e=>setSearch(e.target.value)}
+                placeholder="Pesquisar..." style={{...S.input,margin:0,padding:"4px 8px",fontSize:12,width:"100%",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{overflowY:"auto",maxHeight:360}}>
+              <div style={{padding:"8px 12px",cursor:"pointer",color:C.textLight,fontSize:13}}
+                onMouseDown={()=>{onChange("");setOpen(false);}}>Selecione...</div>
+              {filtered.length===0
+                ?<div style={{padding:"10px 12px",color:C.textLight,fontSize:13}}>Nenhum resultado</div>
+                :filtered.map(o=>(
+                  <div key={o.value} onMouseDown={()=>{onChange(o.value);setOpen(false);}}
+                    style={{padding:"8px 12px",cursor:"pointer",fontSize:13,
+                      background:String(o.value)===String(value||"")?"#EBF5FB":"none",
+                      fontWeight:String(o.value)===String(value||"")?600:400}}
+                    onMouseOver={e=>e.currentTarget.style.background="#f0f4f8"}
+                    onMouseOut={e=>e.currentTarget.style.background=String(o.value)===String(value||"")?"#EBF5FB":"none"}>
+                    {o.label}
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -3767,7 +3816,7 @@ function ControleAtivosScreen({user}){
                   dataAquisicao:a?.dataAquisicao||"",condicao:a?.condicao||"",
                   acessorios:a?.acessorios||"",imeiSlot1:a?.imeiSlot1||"",imeiSlot2:a?.imeiSlot2||"",
                 }));
-              }} options={ativosEstoque.map(a=>({value:a.id,label:`${a.nome}${a.marca?" | "+a.marca:""}${a.modelo?" | "+a.modelo:""}${a.numeroSerie?" | "+a.numeroSerie:""}`}))}/>
+              }} options={ativosEstoque.map(a=>({value:a.id,label:`${a.nome}${a.marca?" | "+a.marca:""}${a.modelo?" | "+a.modelo:""}${a.numeroSerie?" | "+a.numeroSerie:""}${a.imeiSlot1?" | "+a.imeiSlot1:""}`}))}/>
               <div style={g2}>
                 {RO("Marca",itemForm.marca)}
                 {RO("Modelo",itemForm.modelo)}
@@ -4809,10 +4858,13 @@ function HistoricoMovimentacoesScreen({user}){
   const[filter,setFilter]=useState({tipo:"",funcionario:"",ativo:"",linha:""});
   const isMobile=useIsMobile();
 
-  useEffect(()=>{
+  const loadData=()=>{
+    setLoading(true);
     api.get("/historico-movimentacoes")
       .then(setItems).catch(()=>{}).finally(()=>setLoading(false));
-  },[]);
+  };
+
+  useEffect(()=>{loadData();},[]);
 
   const filtered=items.filter(i=>{
     if(filter.tipo&&i.tipoMovimentacao!==filter.tipo)return false;
@@ -4841,6 +4893,7 @@ function HistoricoMovimentacoesScreen({user}){
     <div style={S.card}>
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>📜 Histórico de Movimentações de Ativos</span>
+        <button style={{...S.actionBtn,background:"#EBF5FB",color:"#2980B9"}} onClick={loadData}>🔄 Atualizar</button>
       </div>
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
         <select value={filter.tipo} onChange={e=>setFilter(f=>({...f,tipo:e.target.value}))}
