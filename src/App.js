@@ -2733,6 +2733,11 @@ function AtivosScreen({user}){
     try{await api.delete(`/ativos/${delId}`);setDelId(null);load();}
     catch(e){alert(e.message);}
   };
+  const reverterBaixaAtivo=async(id)=>{
+    if(!window.confirm("Reverter a baixa deste ativo e retornar ao estoque?"))return;
+    try{await api.post(`/ativos/${id}/reverter-baixa`,{});load();}
+    catch(e){alert(e.message);}
+  };
   const canI=act=>user.permissions?.s20?.[act];
   const F=(label,key,type="text")=>(
     <div style={S.formRow}>
@@ -2773,6 +2778,7 @@ function AtivosScreen({user}){
               <td style={S.td}>
                 {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}> ✏️</button>}
                 {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>🗑️</button>}
+                {user.isMaster&&item.status==="Baixado"&&<button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"1px solid #A5D6A7"}} onClick={()=>reverterBaixaAtivo(item.id)}>↩ Reverter Baixa</button>}
               </td>
             </tr>
           ))}</tbody></table>
