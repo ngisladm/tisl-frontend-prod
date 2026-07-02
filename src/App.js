@@ -4946,6 +4946,298 @@ function HistoricoMovimentacoesScreen({user}){
   );
 }
 
+// ── FÉRIAS (s30) ─────────────────────────────────────────────
+
+function PeriodoFeriasModal({feriasId,equipe,user,onClose,onRefresh}){
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[form,setForm]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const STATUS_PERIODO=["Pendente","Gozadas"];
+
+  const calcDias=(di,df)=>{
+    if(!di||!df)return 0;
+    const p=s=>{const[d,m,y]=s.split("/");return new Date(`${y}-${m}-${d}`);};
+    const diff=p(df)-p(di);
+    return diff<0?0:Math.round(diff/86400000);
+  };
+
+  const load=()=>{
+    setLoading(true);
+    api.get(`/ferias/${feriasId}/equipe/${equipe.id}/periodos`)
+      .then(setItems).catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+
+  const blankForm=()=>({dataInicial:"",dataFinal:"",status:"Pendente"});
+
+  const save=async()=>{
+    try{
+      if(form.id) await api.put(`/ferias/${feriasId}/equipe/${equipe.id}/periodos/${form.id}`,form);
+      else        await api.post(`/ferias/${feriasId}/equipe/${equipe.id}/periodos`,form);
+      setForm(null);load();onRefresh();
+    }catch(e){setErr(e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/ferias/${feriasId}/equipe/${equipe.id}/periodos/${delId}`);setDelId(null);load();onRefresh();}
+    catch(e){alert(e.message);}
+  };
+
+  const qtdePreview=form?calcDias(form.dataInicial,form.dataFinal):0;
+
+  return(
+    <Modal title={`Períodos de Férias — ${equipe.funcionarioNome||"—"}`} onClose={onClose} wide>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
+        <button style={S.btnAdd} onClick={()=>{setErr("");setForm(blankForm());}}>+ Novo Período</button>
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📅</span>Nenhum período cadastrado</div>:(
+        <div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Data Inicial","Data Final","Qtde Dias","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{items.map(it=>(
+            <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={S.td}>{it.dataInicial||"—"}</td>
+              <td style={S.td}>{it.dataFinal||"—"}</td>
+              <td style={{...S.td,fontWeight:600,textAlign:"center"}}>{it.qtdeDias}</td>
+              <td style={S.td}>
+                <span style={{...S.badge,background:it.status==="Gozadas"?"#E8F5E9":"#FFF3E0",color:it.status==="Gozadas"?"#2E7D32":"#E65100"}}>
+                  {it.status}
+                </span>
+              </td>
+              <td style={S.td}>
+                <button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setForm({...it});}}>✏️</button>
+                <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>
+              </td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      )}
+      {form&&(
+        <Modal title={form.id?"Editar Período":"Novo Período"} onClose={()=>setForm(null)}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            <MaskedInput label="Data Inicial" value={form.dataInicial||""} onChange={v=>setForm(f=>({...f,dataInicial:v}))} mask={MASK_DATE} placeholder="DD/MM/AAAA"/>
+            <MaskedInput label="Data Final"   value={form.dataFinal||""}   onChange={v=>setForm(f=>({...f,dataFinal:v}))}   mask={MASK_DATE} placeholder="DD/MM/AAAA"/>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Qtde Dias (calculado)</label>
+            <input readOnly value={qtdePreview} style={{...S.input,background:"#f5f5f5",color:C.textLight,cursor:"default"}}/>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Status</label>
+            <select value={form.status||"Pendente"} onChange={e=>setForm(f=>({...f,status:e.target.value}))} style={S.select}>
+              {STATUS_PERIODO.map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+            <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Excluir este período?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </Modal>
+  );
+}
+
+function FeriasEquipeModal({ferias,user,onClose}){
+  const[items,setItems]=useState([]);
+  const[funcionarios,setFuncionarios]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[form,setForm]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const[periodoModal,setPeriodoModal]=useState(null);
+
+  const load=()=>{
+    setLoading(true);
+    Promise.all([
+      api.get(`/ferias/${ferias.id}/equipe`),
+      api.get("/funcionarios"),
+    ]).then(([eq,fn])=>{setItems(eq);setFuncionarios(fn);})
+      .catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+
+  const blankForm=()=>({funcionarioId:"",dataLimite:"",totalDias:30,diasVendidos:0});
+
+  const save=async()=>{
+    if(!form.funcionarioId){setErr("Selecione um funcionário.");return;}
+    try{
+      if(form.id) await api.put(`/ferias/${ferias.id}/equipe/${form.id}`,form);
+      else        await api.post(`/ferias/${ferias.id}/equipe`,form);
+      setForm(null);load();
+    }catch(e){setErr(e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/ferias/${ferias.id}/equipe/${delId}`);setDelId(null);load();}
+    catch(e){alert(e.message);}
+  };
+
+  const diasGozo=f=>((parseInt(f.totalDias)||30)-(parseInt(f.diasVendidos)||0));
+
+  const numBadge=(n,warn=false)=>(
+    <span style={{fontWeight:700,color:n<0?"#B71C1C":warn&&n===0?"#E65100":"inherit"}}>{n}</span>
+  );
+
+  return(
+    <Modal title={`Férias Equipe — ${ferias.teamName||ferias.companyName||""} (${ferias.ano})`} onClose={onClose} extraWide>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
+        <button style={S.btnAdd} onClick={()=>{setErr("");setForm(blankForm());}}>+ Novo Funcionário</button>
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏖️</span>Nenhum funcionário adicionado</div>:(
+        <div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Funcionário","Data Limite","Total Dias","Dias Vendidos","Dias P/ Gozo","Saldo de Dias","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{items.map(it=>(
+            <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={{...S.td,fontWeight:600}}>{it.funcionarioNome||"—"}</td>
+              <td style={S.td}>{it.dataLimite||"—"}</td>
+              <td style={{...S.td,textAlign:"center"}}>{it.totalDias}</td>
+              <td style={{...S.td,textAlign:"center"}}>{it.diasVendidos}</td>
+              <td style={{...S.td,textAlign:"center"}}>{numBadge(it.diasGozo)}</td>
+              <td style={{...S.td,textAlign:"center"}}>{numBadge(it.saldoDias,true)}</td>
+              <td style={S.td}>
+                <button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setForm({...it,totalDias:it.totalDias||30,diasVendidos:it.diasVendidos||0});}}>✏️</button>
+                <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>
+                <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB",marginLeft:4}} onClick={()=>setPeriodoModal(it)}>📅 Período Férias</button>
+              </td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      )}
+      {form&&(
+        <Modal title={form.id?"Editar Funcionário":"Novo Funcionário"} onClose={()=>setForm(null)}>
+          <SelectField label="Funcionário *" value={form.funcionarioId||""}
+            onChange={v=>setForm(f=>({...f,funcionarioId:v}))}
+            options={funcionarios.filter(fn=>fn.situacao!=="Inativo").map(fn=>({value:fn.id,label:fn.nome}))}/>
+          <MaskedInput label="Data Limite" value={form.dataLimite||""} onChange={v=>setForm(f=>({...f,dataLimite:v}))} mask={MASK_DATE} placeholder="DD/MM/AAAA"/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            <div style={S.formRow}>
+              <label style={S.label}>Total Dias</label>
+              <input type="number" value={form.totalDias||30} onChange={e=>setForm(f=>({...f,totalDias:e.target.value}))} style={S.input}/>
+            </div>
+            <div style={S.formRow}>
+              <label style={S.label}>Dias Vendidos</label>
+              <input type="number" value={form.diasVendidos||0} onChange={e=>setForm(f=>({...f,diasVendidos:e.target.value}))} style={S.input}/>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            <div style={S.formRow}>
+              <label style={S.label}>Dias P/ Gozo (calculado)</label>
+              <input readOnly value={diasGozo(form)} style={{...S.input,background:"#f5f5f5",color:C.textLight,cursor:"default"}}/>
+            </div>
+          </div>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+            <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Excluir este funcionário da equipe?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+      {periodoModal&&(
+        <PeriodoFeriasModal
+          feriasId={ferias.id}
+          equipe={periodoModal}
+          user={user}
+          onClose={()=>setPeriodoModal(null)}
+          onRefresh={load}
+        />
+      )}
+    </Modal>
+  );
+}
+
+function FeriasScreen({user}){
+  const[items,setItems]=useState([]);
+  const[companies,setCompanies]=useState([]);
+  const[teams,setTeams]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const[equipeModal,setEquipeModal]=useState(null);
+
+  const load=()=>{
+    setLoading(true);
+    Promise.all([api.get("/ferias"),api.get("/companies"),api.get("/teams")])
+      .then(([f,co,te])=>{setItems(f);setCompanies(co);setTeams(te);})
+      .catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+
+  const blankForm=()=>({companyId:"",teamId:"",ano:new Date().getFullYear()});
+
+  const save=async()=>{
+    if(!modal.ano){setErr("Ano é obrigatório.");return;}
+    try{
+      if(modal.id) await api.put(`/ferias/${modal.id}`,modal);
+      else         await api.post("/ferias",modal);
+      setModal(null);load();
+    }catch(e){setErr(e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/ferias/${delId}`);setDelId(null);load();}
+    catch(e){alert(e.message);}
+  };
+  const p=user.permissions?.s30;
+
+  return(
+    <div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>
+          <span style={S.cardTitle}>🏖️ Férias</span>
+          {p?.insert&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal(blankForm());}}>+ Novo</button>}
+        </div>
+        {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏖️</span>Nenhum registro de férias cadastrado</div>:(
+          <div style={{overflowX:"auto"}}>
+            <table style={S.table}><thead><tr>
+              {["Empresa","Equipe","Ano","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            </tr></thead>
+            <tbody>{items.map(item=>(
+              <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={S.td}>{item.companyName||"—"}</td>
+                <td style={S.td}>{item.teamName||"—"}</td>
+                <td style={{...S.td,fontWeight:600}}>{item.ano}</td>
+                <td style={S.td}>
+                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}>✏️ Editar</button>}
+                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>🗑️ Excluir</button>}
+                  <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}} onClick={()=>setEquipeModal(item)}>👁 Detalhe</button>
+                </td>
+              </tr>
+            ))}</tbody></table>
+          </div>
+        )}
+      </div>
+
+      {modal&&(
+        <Modal title={modal.id?"Editar Férias":"Novo Registro de Férias"} onClose={()=>setModal(null)} wide>
+          <SelectField label="Empresa" value={modal.companyId||""} onChange={v=>setModal(m=>({...m,companyId:v}))}
+            options={companies.filter(c=>c.active).map(c=>({value:c.id,label:c.name}))}/>
+          <SelectField label="Equipe" value={modal.teamId||""} onChange={v=>setModal(m=>({...m,teamId:v}))}
+            options={teams.map(t=>({value:t.id,label:t.name}))}/>
+          <div style={S.formRow}>
+            <label style={S.label}>Ano *</label>
+            <input type="number" value={modal.ano||""} onChange={e=>setModal(m=>({...m,ano:e.target.value}))}
+              style={S.input} min="2000" max="2100"/>
+          </div>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+            <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Excluir este registro de férias?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+      {equipeModal&&<FeriasEquipeModal ferias={equipeModal} user={user} onClose={()=>setEquipeModal(null)}/>}
+    </div>
+  );
+}
+
 // ── SIDEBAR ───────────────────────────────────────────────────
 const navConfig=[
   {id:"cadastros",label:"Cadastros",icon:"📁",children:[
@@ -4972,6 +5264,7 @@ const navConfig=[
     {id:"s19",label:"Linhas Disponíveis",  icon:"📶"},
     {id:"s21",label:"Controle de Ativos",  icon:"🖥️"},
     {id:"s29",label:"Histórico de Movimentações",icon:"📜"},
+    {id:"s30",label:"Férias",                   icon:"🏖️"},
   ]},
   {id:"relatorios",label:"Relatórios",icon:"📊",children:[
     {id:"s6", label:"Relatório de Horas",           icon:"📋"},
@@ -5120,6 +5413,7 @@ export default function App(){
     s26:<ResumoAtivosScreen user={user}/>,
     s27:<InventarioAtivosScreen user={user}/>,
     s29:<HistoricoMovimentacoesScreen user={user}/>,
+    s30:<FeriasScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
