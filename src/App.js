@@ -4960,7 +4960,7 @@ function PeriodoFeriasModal({feriasId,equipe,user,onClose,onRefresh}){
     if(!di||!df)return 0;
     const p=s=>{const[d,m,y]=s.split("/");return new Date(`${y}-${m}-${d}`);};
     const diff=p(df)-p(di);
-    return diff<0?0:Math.round(diff/86400000);
+    return diff<0?0:Math.round(diff/86400000)+1;
   };
 
   const load=()=>{
@@ -5061,7 +5061,7 @@ function FeriasEquipeModal({ferias,user,onClose}){
   };
   useEffect(()=>{load();},[]);
 
-  const blankForm=()=>({funcionarioId:"",dataLimite:"",totalDias:30,diasVendidos:0});
+  const blankForm=()=>({funcionarioId:"",dataLimite:"",dtInicFer:"",dtFinalFer:"",chamado:"",totalDias:30,diasVendidos:0});
 
   const save=async()=>{
     if(!form.funcionarioId){setErr("Selecione um funcionário.");return;}
@@ -5090,18 +5090,21 @@ function FeriasEquipeModal({ferias,user,onClose}){
       {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏖️</span>Nenhum funcionário adicionado</div>:(
         <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
-            {["Funcionário","Data Limite","Total Dias","Dias Vendidos","Dias P/ Gozo","Saldo de Dias","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            {["Funcionário","Data Limite","Dt Inic Fer","Dt Final Fer","Chamado","Total Dias","Dias Vendidos","Dias P/ Gozo","Saldo de Dias","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
           <tbody>{items.map(it=>(
             <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={{...S.td,fontWeight:600}}>{it.funcionarioNome||"—"}</td>
               <td style={S.td}>{it.dataLimite||"—"}</td>
+              <td style={S.td}>{it.dtInicFer||"—"}</td>
+              <td style={S.td}>{it.dtFinalFer||"—"}</td>
+              <td style={S.td}>{it.chamado||"—"}</td>
               <td style={{...S.td,textAlign:"center"}}>{it.totalDias}</td>
               <td style={{...S.td,textAlign:"center"}}>{it.diasVendidos}</td>
               <td style={{...S.td,textAlign:"center"}}>{numBadge(it.diasGozo)}</td>
               <td style={{...S.td,textAlign:"center"}}>{numBadge(it.saldoDias,true)}</td>
               <td style={S.td}>
-                <button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setForm({...it,totalDias:it.totalDias||30,diasVendidos:it.diasVendidos||0});}}>✏️</button>
+                <button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setForm({...it,totalDias:it.totalDias||30,diasVendidos:it.diasVendidos||0,dtInicFer:it.dtInicFer||"",dtFinalFer:it.dtFinalFer||""});}}>✏️</button>
                 <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>
                 <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB",marginLeft:4}} onClick={()=>setPeriodoModal(it)}>📅 Período Férias</button>
               </td>
@@ -5114,7 +5117,17 @@ function FeriasEquipeModal({ferias,user,onClose}){
           <SelectField label="Funcionário *" value={form.funcionarioId||""}
             onChange={v=>setForm(f=>({...f,funcionarioId:v}))}
             options={funcionarios.filter(fn=>fn.situacao!=="Inativo").map(fn=>({value:fn.id,label:fn.nome}))}/>
-          <MaskedInput label="Data Limite" value={form.dataLimite||""} onChange={v=>setForm(f=>({...f,dataLimite:v}))} mask={MASK_DATE} placeholder="DD/MM/AAAA"/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            <MaskedInput label="Data Limite"  value={form.dataLimite||""} onChange={v=>setForm(f=>({...f,dataLimite:v}))}  mask={MASK_DATE} placeholder="DD/MM/AAAA"/>
+            <MaskedInput label="Dt Inic Fer"  value={form.dtInicFer||""}  onChange={v=>setForm(f=>({...f,dtInicFer:v}))}   mask={MASK_DATE} placeholder="DD/MM/AAAA"/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            <MaskedInput label="Dt Final Fer" value={form.dtFinalFer||""} onChange={v=>setForm(f=>({...f,dtFinalFer:v}))} mask={MASK_DATE} placeholder="DD/MM/AAAA"/>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Chamado</label>
+            <input value={form.chamado||""} onChange={e=>setForm(f=>({...f,chamado:e.target.value}))} style={S.input}/>
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
             <div style={S.formRow}>
               <label style={S.label}>Total Dias</label>
