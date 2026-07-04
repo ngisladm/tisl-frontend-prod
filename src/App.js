@@ -5090,7 +5090,7 @@ function FeriasEquipeModal({ferias,user,onClose}){
       {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏖️</span>Nenhum funcionário adicionado</div>:(
         <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
-            {["Funcionário","Data Limite","Dt Inic Fer","Dt Final Fer","Chamado","Total Dias","Dias Vendidos","Dias P/ Gozo","Saldo de Dias","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            {["Funcionário","Data Limite","Dt Inic Fer","Dt Final Fer","Chamado","Total Dias","Dias Vendidos","Dias P/ Gozo","Dias não Programados","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
           <tbody>{items.map(it=>(
             <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
@@ -5258,10 +5258,16 @@ function RelatorioFeriasScreen({user}){
   const[teams,setTeams]=useState([]);
   const[funcionarios,setFuncionarios]=useState([]);
   const[filtEmp,setFiltEmp]=useState("");
-  const[filtTeam,setFiltTeam]=useState("");
+  const[filtTeams,setFiltTeams]=useState([]);   // multiselect
+  const[teamOpen,setTeamOpen]=useState(false);
   const[filtAno,setFiltAno]=useState(String(new Date().getFullYear()));
   const[filtFunc,setFiltFunc]=useState("");
   const[filtChamado,setFiltChamado]=useState("");
+  const[filtDnp,setFiltDnp]=useState("");             // "" | "zerado" | "naoZerado"
+  const[filtDtInicFerDe,setFiltDtInicFerDe]=useState("");
+  const[filtDtInicFerAte,setFiltDtInicFerAte]=useState("");
+  const[filtDtInicProgrDe,setFiltDtInicProgrDe]=useState("");
+  const[filtDtInicProgrAte,setFiltDtInicProgrAte]=useState("");
   const[rows,setRows]=useState(null);
   const[loading,setLoading]=useState(false);
   const[err,setErr]=useState("");
@@ -5273,15 +5279,22 @@ function RelatorioFeriasScreen({user}){
       .catch(()=>{});
   },[]);
 
+  const toggleTeam=id=>setFiltTeams(ts=>ts.includes(id)?ts.filter(x=>x!==id):[...ts,id]);
+
   const buscar=async()=>{
-    setLoading(true);setErr("");setRows(null);
+    setLoading(true);setErr("");setRows(null);setTeamOpen(false);
     try{
       const qs=new URLSearchParams();
       if(filtEmp)    qs.set("companyId",filtEmp);
-      if(filtTeam)   qs.set("teamId",filtTeam);
+      if(filtTeams.length) qs.set("teamIds",filtTeams.join(","));
       if(filtAno)    qs.set("ano",filtAno);
       if(filtFunc)   qs.set("funcionarioId",filtFunc);
-      if(filtChamado.trim())qs.set("chamado",filtChamado.trim());
+      if(filtChamado.trim()) qs.set("chamado",filtChamado.trim());
+      if(filtDnp)    qs.set("diasNaoProgramados",filtDnp);
+      if(filtDtInicFerDe)   qs.set("dtInicFerDe",filtDtInicFerDe);
+      if(filtDtInicFerAte)  qs.set("dtInicFerAte",filtDtInicFerAte);
+      if(filtDtInicProgrDe)  qs.set("dtInicProgrDe",filtDtInicProgrDe);
+      if(filtDtInicProgrAte) qs.set("dtInicProgrAte",filtDtInicProgrAte);
       const data=await api.get(`/ferias/relatorio?${qs}`);
       setRows(data);
     }catch(e){setErr(e.message);}
@@ -5299,13 +5312,13 @@ function RelatorioFeriasScreen({user}){
       doc.text(`${r.empresaNome||"—"} | ${r.equipeNome||"—"} | Ano ${r.ano} | ${r.funcionarioNome||"—"}`,14,y);
       y+=6;
       doc.setFont(undefined,"normal");doc.setFontSize(9);
-      doc.text(`Inic: ${r.dtInicFer||"—"}  Final: ${r.dtFinalFer||"—"}  Chamado: ${r.chamado||"—"}  Vendidos: ${r.diasVendidos??0}  Total: ${r.totalDias??0}  P/Gozo: ${r.diasGozo??0}  Saldo: ${r.saldoDias??0}`,14,y);
+      doc.text(`Limite: ${r.dataLimite||"—"}  Inic: ${r.dtInicFer||"—"}  Final: ${r.dtFinalFer||"—"}  Chamado: ${r.chamado||"—"}  Total: ${r.totalDias??0}  Vendidos: ${r.diasVendidos??0}  P/Gozo: ${r.diasGozo??0}  Não Prog.: ${r.saldoDias??0}`,14,y);
       y+=4;
       if(r.periodos&&r.periodos.length){
         autoTable(doc,{
           startY:y,
-          head:[["Data Inicial","Data Final","Qtde Dias"]],
-          body:r.periodos.map(p=>[p.dataInicial||"—",p.dataFinal||"—",p.qtdeDias??0]),
+          head:[["Data Inicial","Data Final","Qtde Dias","Status"]],
+          body:r.periodos.map(px=>[px.dataInicial||"—",px.dataFinal||"—",px.qtdeDias??0,px.status||"—"]),
           styles:{fontSize:8},margin:{left:18},
           headStyles:{fillColor:[37,99,235],textColor:255},
           tableWidth:"auto",
@@ -5316,31 +5329,68 @@ function RelatorioFeriasScreen({user}){
     doc.save("Relatorio_Ferias.pdf");
   };
 
+  const DtRange=({label,vDe,setDe,vAte,setAte})=>(
+    <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:200}}>
+      <label style={S.label}>{label}</label>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <input type="date" value={vDe} onChange={e=>setDe(e.target.value)}
+          style={{...S.input,flex:1,minWidth:0}} title="De"/>
+        <span style={{fontSize:11,color:C.textLight,flexShrink:0}}>até</span>
+        <input type="date" value={vAte} onChange={e=>setAte(e.target.value)}
+          style={{...S.input,flex:1,minWidth:0}} title="Até"/>
+      </div>
+    </div>
+  );
+
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+
+  const teamsLabel=filtTeams.length===0?"Todas"
+    :filtTeams.length===1?(teams.find(t=>t.id===filtTeams[0])?.name||"1 equipe")
+    :`${filtTeams.length} equipes`;
 
   return(
     <div>
       <div style={S.card}>
         <div style={S.cardHeader}><span style={S.cardTitle}>🏖️ Relatório de Férias</span></div>
-        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",marginBottom:12}}>
-          <div style={{flex:1,minWidth:160}}>
+
+        {/* Linha 1: filtros principais */}
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",marginBottom:10}}>
+          <div style={{flex:1,minWidth:150}}>
             <label style={S.label}>Empresa</label>
             <select value={filtEmp} onChange={e=>setFiltEmp(e.target.value)} style={S.select}>
               <option value="">Todas</option>
               {companies.filter(c=>c.active).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
-          <div style={{flex:1,minWidth:160}}>
+
+          {/* Equipe — multiselect dropdown */}
+          <div style={{flex:1,minWidth:160,position:"relative"}}>
             <label style={S.label}>Equipe</label>
-            <select value={filtTeam} onChange={e=>setFiltTeam(e.target.value)} style={S.select}>
-              <option value="">Todas</option>
-              {teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+            <button onClick={()=>setTeamOpen(o=>!o)}
+              style={{...S.select,textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",background:C.white}}>
+              <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{teamsLabel}</span>
+              <span style={{marginLeft:6,fontSize:10}}>{teamOpen?"▲":"▼"}</span>
+            </button>
+            {teamOpen&&(
+              <div style={{position:"absolute",zIndex:200,top:"100%",left:0,right:0,background:C.white,
+                border:`1px solid ${C.border}`,borderRadius:6,boxShadow:"0 4px 12px rgba(0,0,0,.12)",
+                maxHeight:220,overflowY:"auto",padding:"6px 0"}}>
+                {teams.map(t=>(
+                  <label key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 12px",cursor:"pointer",
+                    background:filtTeams.includes(t.id)?"#EFF6FF":C.white}}>
+                    <input type="checkbox" checked={filtTeams.includes(t.id)} onChange={()=>toggleTeam(t.id)}/>
+                    <span style={{fontSize:13}}>{t.name}</span>
+                  </label>
+                ))}
+                {teams.length===0&&<div style={{padding:"8px 12px",fontSize:12,color:C.textLight}}>Sem equipes</div>}
+              </div>
+            )}
           </div>
-          <div style={{minWidth:90}}>
+
+          <div style={{minWidth:88}}>
             <label style={S.label}>Ano</label>
             <input type="number" value={filtAno} onChange={e=>setFiltAno(e.target.value)}
-              style={{...S.input,width:90}} min="2000" max="2100" placeholder="Ano"/>
+              style={{...S.input,width:88}} min="2000" max="2100" placeholder="Ano"/>
           </div>
           <div style={{flex:1,minWidth:180}}>
             <label style={S.label}>Funcionário</label>
@@ -5349,14 +5399,36 @@ function RelatorioFeriasScreen({user}){
               {funcionarios.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
             </select>
           </div>
-          <div style={{flex:1,minWidth:140}}>
+          <div style={{flex:1,minWidth:130}}>
             <label style={S.label}>Chamado</label>
             <input value={filtChamado} onChange={e=>setFiltChamado(e.target.value)}
               style={S.input} placeholder="Número do chamado"/>
           </div>
+          <div style={{minWidth:170}}>
+            <label style={S.label}>Dias não Programados</label>
+            <select value={filtDnp} onChange={e=>setFiltDnp(e.target.value)} style={S.select}>
+              <option value="">Todos</option>
+              <option value="zerado">Zerado</option>
+              <option value="naoZerado">Não Zerado</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Linha 2: filtros de data */}
+        <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-start",marginBottom:12,
+          padding:"10px 12px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}>
+          <DtRange label="Período Inic Férias"
+            vDe={filtDtInicFerDe} setDe={setFiltDtInicFerDe}
+            vAte={filtDtInicFerAte} setAte={setFiltDtInicFerAte}/>
+          <DtRange label="Período Inic Progr."
+            vDe={filtDtInicProgrDe} setDe={setFiltDtInicProgrDe}
+            vAte={filtDtInicProgrAte} setAte={setFiltDtInicProgrAte}/>
+        </div>
+
+        <div style={{display:"flex",justifyContent:"flex-end"}}>
           <button style={S.btnAdd} onClick={buscar} disabled={loading}>{loading?"Carregando...":"🔍 Gerar"}</button>
         </div>
-        {err&&<div style={{...S.errorMsg,textAlign:"left"}}>{err}</div>}
+        {err&&<div style={{...S.errorMsg,textAlign:"left",marginTop:8}}>{err}</div>}
       </div>
 
       {rows!==null&&(
@@ -5380,13 +5452,14 @@ function RelatorioFeriasScreen({user}){
                   {/* Dados do cabeçalho */}
                   <div style={{display:"flex",flexWrap:"wrap",gap:0,background:"#f0f4ff",borderBottom:`1px solid ${C.border}`}}>
                     {[
+                      ["Data Limite",    r.dataLimite||"—"],
                       ["Dt Inic Férias", r.dtInicFer||"—"],
                       ["Dt Final Férias",r.dtFinalFer||"—"],
                       ["Chamado",        r.chamado||"—"],
-                      ["Dias Vendidos",  r.diasVendidos??0],
                       ["Total Dias",     r.totalDias??0],
+                      ["Dias Vendidos",  r.diasVendidos??0],
                       ["Dias P/ Gozo",   r.diasGozo??0],
-                      ["Saldo de Dias",  r.saldoDias??0],
+                      ["Dias não Programados", r.saldoDias??0],
                     ].map(([lbl,val])=>(
                       <div key={lbl} style={{padding:"6px 14px",borderRight:`1px solid ${C.border}`,minWidth:100}}>
                         <div style={{fontSize:10,color:C.textLight,marginBottom:2}}>{lbl}</div>
@@ -5399,7 +5472,7 @@ function RelatorioFeriasScreen({user}){
                     <div style={{overflowX:"auto"}}>
                       <table style={{...S.table,margin:0}}>
                         <thead><tr>
-                          {["Data Inicial","Data Final","Qtde Dias"].map(h=><th key={h} style={{...S.th,background:"#e8edf5"}}>{h}</th>)}
+                          {["Data Inicial","Data Final","Qtde Dias","Status"].map(h=><th key={h} style={{...S.th,background:"#e8edf5"}}>{h}</th>)}
                         </tr></thead>
                         <tbody>
                           {r.periodos.map((p,pi)=>(
@@ -5407,6 +5480,7 @@ function RelatorioFeriasScreen({user}){
                               <td style={S.td}>{p.dataInicial||"—"}</td>
                               <td style={S.td}>{p.dataFinal||"—"}</td>
                               <td style={S.td}>{p.qtdeDias??0}</td>
+                              <td style={S.td}>{p.status||"—"}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -5461,7 +5535,7 @@ const navConfig=[
     {id:"s25",label:"Resumo de Linhas",             icon:"📋"},
     {id:"s26",label:"Resumo de Ativos",             icon:"📦"},
     {id:"s27",label:"Inventário de Ativos",         icon:"🗂️"},
-    {id:"s31",label:"Férias",                        icon:"🏖️"},
+    {id:"s31",label:"Relatório de Férias",             icon:"🏖️"},
   ]},
 ];
 function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
