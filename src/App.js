@@ -524,11 +524,12 @@ function EquipesScreen({user}){
         ?<div style={S.emptyState}><span style={S.emptyIcon}>👷</span>Nenhuma equipe cadastrada.</div>
         :(
           <table style={S.table}><thead><tr>
-            {["Nome","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            {["Nome","Membros","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
           <tbody>{items.map(item=>(
             <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={{...S.td,fontWeight:600}}>{item.name}</td>
+              <td style={S.td}><span style={{...S.badge,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}}>{item.membros??0} pessoa{(item.membros??0)!==1?"s":""}</span></td>
               <td style={S.td}><span style={{...S.badge,...(item.active?S.badgeActive:S.badgeInactive)}}>{item.active?"Ativo":"Inativo"}</span></td>
               <td style={S.td}>
                 <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}}
@@ -700,7 +701,8 @@ function ControleHorasScreen({user}){
   const[escalas,setEscalas]=useState([]);const[companies,setCompanies]=useState([]);const[teams,setTeams]=useState([]);
   const[loading,setLoading]=useState(true);const[modalEscala,setModalEscala]=useState(false);
   const[modalCal,setModalCal]=useState(null);const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
-  const[form,setForm]=useState({id:null,companyId:"",teamId:"",dataInicio:"",dataFim:""});
+  const[form,setForm]=useState({id:null,companyId:"",teamIds:[],dataInicio:"",dataFim:""});
+  const[teamOpen,setTeamOpen]=useState(false);
   const[filters,setFilters]=useState({companyId:"",teamId:"",dataFrom:"",dataTo:""});
   const isMob=useIsMobile();
   const p=user.permissions?.s5;
@@ -710,10 +712,11 @@ function ControleHorasScreen({user}){
       .then(([e,c,t])=>{setEscalas(e);setCompanies(c);setTeams(t);})
       .catch(e=>alert(e.message)).finally(()=>setLoading(false));
   },[]);
-  const openAdd=()=>{setForm({id:null,companyId:"",teamId:"",dataInicio:"",dataFim:""});setModalEscala(true);};
-  const openEdit=e=>{setForm({...e});setModalEscala(true);};
+  const openAdd=()=>{setForm({id:null,companyId:"",teamIds:[],dataInicio:"",dataFim:""});setTeamOpen(false);setModalEscala(true);};
+  const openEdit=e=>{setForm({...e,teamIds:e.teamIds||[]});setTeamOpen(false);setModalEscala(true);};
+  const toggleFormTeam=id=>setForm(f=>({...f,teamIds:f.teamIds.includes(id)?f.teamIds.filter(x=>x!==id):[...f.teamIds,id]}));
   const saveEscala=async()=>{
-    if(!form.companyId||!form.teamId||!form.dataInicio||!form.dataFim)return alert("Todos os campos são obrigatórios.");
+    if(!form.companyId||!form.teamIds.length||!form.dataInicio||!form.dataFim)return alert("Todos os campos são obrigatórios.");
     setSaving(true);
     try{
       if(form.id){const u=await api.put(`/escalas/${form.id}`,form);setEscalas(es=>es.map(e=>e.id===u.id?u:e));setModalEscala(false);}
@@ -726,7 +729,7 @@ function ControleHorasScreen({user}){
   const toISO5=d=>{if(!d||d.length<10)return"";const[dd,mm,yy]=d.split("/");return`${yy}-${mm}-${dd}`;};
   const filteredEscalas=escalas.filter(e=>{
     if(filters.companyId&&e.companyId!==filters.companyId)return false;
-    if(filters.teamId&&e.teamId!==filters.teamId)return false;
+    if(filters.teamId&&!e.teamIds?.includes(filters.teamId))return false;
     if(filters.dataFrom&&toISO5(e.dataFim)<toISO5(filters.dataFrom))return false;
     if(filters.dataTo&&toISO5(e.dataInicio)>toISO5(filters.dataTo))return false;
     return true;
@@ -753,7 +756,7 @@ function ControleHorasScreen({user}){
             <MobileCardList items={filteredEscalas}
               columns={[
                 {key:"companyName",label:"Empresa", render:e=><strong>{e.companyName||"—"}</strong>},
-                {key:"teamName",   label:"Equipe",  render:e=>e.teamName||"—"},
+                {key:"teamNamesStr",label:"Equipe",  render:e=>e.teamNamesStr||"—"},
                 {key:"periodo",    label:"Período", render:e=>`${e.dataInicio} até ${e.dataFim}`},
               ]}
               actions={e=>(
@@ -771,7 +774,7 @@ function ControleHorasScreen({user}){
             </tr></thead><tbody>{filteredEscalas.map(e=>(
               <tr key={e.id} onMouseOver={ev=>ev.currentTarget.style.background=C.bg} onMouseOut={ev=>ev.currentTarget.style.background=C.white}>
                 <td style={S.td}><strong>{e.companyName||"—"}</strong></td>
-                <td style={S.td}>{e.teamName||"—"}</td>
+                <td style={S.td}>{e.teamNamesStr||"—"}</td>
                 <td style={S.td}>{e.dataInicio} até {e.dataFim}</td>
                 <td style={S.td}>
                   <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",marginRight:4}} onClick={()=>setModalCal(e)}>📅 Calendário</button>
@@ -785,7 +788,20 @@ function ControleHorasScreen({user}){
       {modalEscala&&(
         <Modal title={form.id?"Editar Escala":"Nova Escala"} onClose={()=>setModalEscala(false)}>
           <SelectField label="Empresa" value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))} required/>
-          <SelectField label="Equipe"  value={form.teamId}    onChange={v=>setForm(f=>({...f,teamId:v}))}    options={teams.map(t=>({value:t.id,label:t.name}))} required/>
+          {/* Multi-select equipes — lista inline com scroll */}
+          <div style={{marginBottom:12}}>
+            <label style={S.label}>Equipe(s) <span style={{color:C.danger}}>*</span></label>
+            <div style={{border:`1px solid ${C.border}`,borderRadius:6,maxHeight:160,overflowY:"auto"}}>
+              {teams.map(t=>(
+                <label key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 12px",cursor:"pointer",
+                  borderBottom:`1px solid ${C.bg}`,background:form.teamIds.includes(t.id)?"#EFF6FF":C.white}}>
+                  <input type="checkbox" checked={form.teamIds.includes(t.id)} onChange={()=>toggleFormTeam(t.id)} style={{accentColor:C.primary}}/>
+                  <span style={{fontSize:13}}>{t.name}</span>
+                </label>
+              ))}
+              {teams.length===0&&<div style={{padding:"10px 12px",fontSize:12,color:C.textLight}}>Sem equipes cadastradas</div>}
+            </div>
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
             <MaskedInput label="Período Inicial" mask={MASK_DATE} value={form.dataInicio} onChange={v=>setForm(f=>({...f,dataInicio:v}))} placeholder="01/01/2025" required/>
             <MaskedInput label="Período Final"   mask={MASK_DATE} value={form.dataFim}    onChange={v=>setForm(f=>({...f,dataFim:v}))}    placeholder="31/01/2025" required/>
@@ -832,11 +848,10 @@ function CalendarioModal({escala,user,onClose}){
   },{});
 
   useEffect(()=>{
-    Promise.all([api.get(`/escalas/${escala.id}/turnos`),api.get(`/teams/${escala.teamId}/users`)])
+    Promise.all([api.get(`/escalas/${escala.id}/turnos`),api.get(`/escalas/${escala.id}/usuarios`)])
       .then(([t,u])=>{
         const map={};t.forEach(r=>{map[`${r.turnoDate}_${r.turno}`]=r;});
         setTurnos(map);
-        // Filtrar por empresa da escala (endpoint agora retorna companyId)
         setTeamUsers(u.filter(usr=>!escala.companyId||usr.companyId===escala.companyId));
       }).catch(e=>alert(e.message)).finally(()=>setLoading(false));
   },[]);
@@ -889,7 +904,7 @@ function CalendarioModal({escala,user,onClose}){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
           <div>
             <div style={S.modalTitle}>📅 Escala de Sobreaviso</div>
-            <div style={{fontSize:13,color:C.textLight,marginTop:-14}}>{escala.companyName} · {escala.teamName} · {escala.dataInicio} a {escala.dataFim}</div>
+            <div style={{fontSize:13,color:C.textLight,marginTop:-14}}>{escala.companyName} · {escala.teamNamesStr||"—"} · {escala.dataInicio} a {escala.dataFim}</div>
           </div>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:C.textLight}}>✕</button>
         </div>
@@ -4323,7 +4338,7 @@ function RelatorioEscalaScreen({user}){
     const days=buildCalendar(escala,turnos);
     const doc=new jsPDF({orientation:"landscape"});
     doc.setFontSize(14);
-    doc.text(`Escala de Sobreaviso — ${escala.companyName} / ${escala.teamName}`,14,16);
+    doc.text(`Escala de Sobreaviso — ${escala.companyName} / ${escala.teamNamesStr||escala.teamName||""}`,14,16);
     doc.setFontSize(10);
     doc.text(`Período: ${escala.dataInicio} a ${escala.dataFim}`,14,23);
     const rows=days.map(d=>{
@@ -4337,7 +4352,7 @@ function RelatorioEscalaScreen({user}){
       body:rows,startY:30,styles:{fontSize:9},
       headStyles:{fillColor:[240,165,0],textColor:255,fontStyle:"bold"},
     });
-    doc.save(`Relatorio_Escala_${escala.companyName}_${escala.teamName}.pdf`);
+    doc.save(`Relatorio_Escala_${escala.companyName}_${escala.teamNamesStr||escala.teamName||""}.pdf`);
   };
 
   const turnoLabel=(t,turnoKey)=>{
@@ -4361,7 +4376,7 @@ function RelatorioEscalaScreen({user}){
             <label style={S.label}>Escala de Sobreaviso *</label>
             <select value={escalaSel} onChange={e=>setEscalaSel(e.target.value)} style={S.select}>
               <option value="">Selecione uma escala...</option>
-              {escalas.map(e=><option key={e.id} value={e.id}>{e.companyName} / {e.teamName} ({e.dataInicio} – {e.dataFim})</option>)}
+              {escalas.map(e=><option key={e.id} value={e.id}>{e.companyName} / {e.teamNamesStr||"—"} ({e.dataInicio} – {e.dataFim})</option>)}
             </select>
           </div>
           <button style={S.btnAdd} onClick={buscar} disabled={loading}>{loading?"Carregando...":"🔍 Gerar"}</button>
@@ -4379,7 +4394,7 @@ function RelatorioEscalaScreen({user}){
             {/* Cabeçalho */}
             <div style={{...S.cardHeader,flexWrap:"wrap",gap:8}}>
               <div>
-                <div style={S.cardTitle}>📋 {escala.companyName} — {escala.teamName}</div>
+                <div style={S.cardTitle}>📋 {escala.companyName} — {escala.teamNamesStr||"—"}</div>
                 <div style={{fontSize:12,color:C.textLight,marginTop:4}}>{escala.dataInicio} a {escala.dataFim} · {days.length} dias · {preenchidos}/{total} turnos preenchidos</div>
               </div>
               <button style={{...S.btnCancel,display:"flex",alignItems:"center",gap:6}} onClick={exportPDF}>📄 Exportar PDF</button>
@@ -5368,6 +5383,10 @@ function FeriasScreen({user}){
   const[delId,setDelId]=useState(null);
   const[err,setErr]=useState("");
   const[equipeModal,setEquipeModal]=useState(null);
+  const[filtCompany,setFiltCompany]=useState("");
+  const[filtTeams,setFiltTeams]=useState([]);
+  const[filtTeamOpen,setFiltTeamOpen]=useState(false);
+  const[filtAno,setFiltAno]=useState("");
 
   const load=()=>{
     setLoading(true);
@@ -5378,6 +5397,14 @@ function FeriasScreen({user}){
   useEffect(()=>{load();},[]);
 
   const blankForm=()=>({companyId:"",teamId:"",ano:new Date().getFullYear()});
+  const toggleFiltTeam=id=>setFiltTeams(ts=>ts.includes(id)?ts.filter(x=>x!==id):[...ts,id]);
+
+  const filteredItems=items.filter(it=>{
+    if(filtCompany&&it.companyId!==filtCompany)return false;
+    if(filtTeams.length&&!filtTeams.includes(it.teamId))return false;
+    if(filtAno&&String(it.ano)!==String(filtAno))return false;
+    return true;
+  });
 
   const save=async()=>{
     if(!modal.ano){setErr("Ano é obrigatório.");return;}
@@ -5393,23 +5420,72 @@ function FeriasScreen({user}){
   };
   const p=user.permissions?.s30;
 
+  const teamsLabel=filtTeams.length===0?"Todas"
+    :filtTeams.length===1?(teams.find(t=>t.id===filtTeams[0])?.name||"1 equipe")
+    :`${filtTeams.length} equipes`;
+
   return(
     <div>
+      {/* Filtros */}
+      <div style={{...S.card,marginBottom:16}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 120px auto",gap:12,alignItems:"flex-end"}}>
+          <div>
+            <label style={S.label}>Empresa</label>
+            <select value={filtCompany} onChange={e=>setFiltCompany(e.target.value)} style={S.select}>
+              <option value="">Todas</option>
+              {companies.filter(c=>c.active).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div style={{position:"relative"}}>
+            <label style={S.label}>Equipe</label>
+            <button type="button" onClick={()=>setFiltTeamOpen(o=>!o)}
+              style={{...S.select,textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",background:C.white,width:"100%"}}>
+              <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{teamsLabel}</span>
+              <span style={{marginLeft:6,fontSize:10}}>{filtTeamOpen?"▲":"▼"}</span>
+            </button>
+            {filtTeamOpen&&(
+              <div style={{position:"absolute",zIndex:200,top:"100%",left:0,right:0,background:C.white,
+                border:`1px solid ${C.border}`,borderRadius:6,boxShadow:"0 4px 12px rgba(0,0,0,.12)",
+                maxHeight:220,overflowY:"auto",padding:"6px 0"}}>
+                {teams.map(t=>(
+                  <label key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 12px",cursor:"pointer",
+                    background:filtTeams.includes(t.id)?"#EFF6FF":C.white}}>
+                    <input type="checkbox" checked={filtTeams.includes(t.id)} onChange={()=>toggleFiltTeam(t.id)}/>
+                    <span style={{fontSize:13}}>{t.name}</span>
+                  </label>
+                ))}
+                {teams.length===0&&<div style={{padding:"8px 12px",fontSize:12,color:C.textLight}}>Sem equipes</div>}
+              </div>
+            )}
+          </div>
+          <div>
+            <label style={S.label}>Ano</label>
+            <input type="number" value={filtAno} onChange={e=>setFiltAno(e.target.value)}
+              style={S.input} min="2000" max="2100" placeholder="Todos"/>
+          </div>
+          <button style={{...S.btnCancel,height:36,alignSelf:"flex-end"}}
+            onClick={()=>{setFiltCompany("");setFiltTeams([]);setFiltAno("");setFiltTeamOpen(false);}}>
+            Limpar
+          </button>
+        </div>
+      </div>
+
       <div style={S.card}>
         <div style={S.cardHeader}>
           <span style={S.cardTitle}>🏖️ Férias</span>
           {p?.insert&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal(blankForm());}}>+ Novo</button>}
         </div>
-        {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏖️</span>Nenhum registro de férias cadastrado</div>:(
+        {loading?<Spinner/>:filteredItems.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏖️</span>Nenhum registro encontrado</div>:(
           <div style={{overflowX:"auto"}}>
             <table style={S.table}><thead><tr>
-              {["Empresa","Equipe","Ano","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+              {["Empresa","Equipe","Ano","Funcionários","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
             </tr></thead>
-            <tbody>{items.map(item=>(
+            <tbody>{filteredItems.map(item=>(
               <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                 <td style={S.td}>{item.companyName||"—"}</td>
                 <td style={S.td}>{item.teamName||"—"}</td>
                 <td style={{...S.td,fontWeight:600}}>{item.ano}</td>
+                <td style={S.td}><span style={{...S.badge,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}}>{item.totalFuncionarios??0} pessoa{(item.totalFuncionarios??0)!==1?"s":""}</span></td>
                 <td style={S.td}>
                   {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}>✏️ Editar</button>}
                   {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>🗑️ Excluir</button>}
