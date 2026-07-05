@@ -5319,9 +5319,12 @@ function FeriasEquipeModal({ferias,user,onClose}){
     setLoading(true);
     Promise.all([
       api.get(`/ferias/${ferias.id}/equipe`),
-      api.get("/funcionarios"),
-    ]).then(([eq,fn])=>{setItems(eq);setFuncionarios(fn);})
-      .catch(()=>{}).finally(()=>setLoading(false));
+      ferias.teamId ? api.get(`/teams/${ferias.teamId}/itens`) : Promise.resolve([]),
+    ]).then(([eq,itens])=>{
+      setItems(eq);
+      // itens de equipe retornam {funcionarioId, funcionarioNome, cargo, centroCusto}
+      setFuncionarios(itens.map(i=>({id:i.funcionarioId,nome:i.funcionarioNome})));
+    }).catch(()=>{}).finally(()=>setLoading(false));
   };
   useEffect(()=>{load();},[]);
 
@@ -5380,7 +5383,7 @@ function FeriasEquipeModal({ferias,user,onClose}){
         <Modal title={form.id?"Editar Funcionário":"Novo Funcionário"} onClose={()=>setForm(null)}>
           <SelectField label="Funcionário *" value={form.funcionarioId||""}
             onChange={v=>setForm(f=>({...f,funcionarioId:v}))}
-            options={funcionarios.filter(fn=>fn.situacao!=="Inativo").map(fn=>({value:fn.id,label:fn.nome}))}/>
+            options={funcionarios.map(fn=>({value:fn.id,label:fn.nome}))}/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
             <MaskedInput label="Data Limite"  value={form.dataLimite||""} onChange={v=>setForm(f=>({...f,dataLimite:v}))}  mask={MASK_DATE} placeholder="DD/MM/AAAA"/>
             <MaskedInput label="Dt Inic Fer"  value={form.dtInicFer||""}  onChange={v=>setForm(f=>({...f,dtInicFer:v}))}   mask={MASK_DATE} placeholder="DD/MM/AAAA"/>
