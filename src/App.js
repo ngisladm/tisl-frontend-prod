@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+﻿import { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -486,29 +486,83 @@ function EquipesScreen({user}){
   const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
-  const[form,setForm]=useState({id:null,name:"",active:true});
-  const[itensModal,setItensModal]=useState(null); // equipe selecionada
+  const[form,setForm]=useState({id:null,name:"",active:true,parentId:""});
+  const[itensModal,setItensModal]=useState(null);
+  const[expanded,setExpanded]=useState(new Set());
   const p=user.permissions?.s4;
 
-  useEffect(()=>{
-    if(!p?.view)return;
+  const reload=()=>{
+    setLoading(true);
     api.get("/teams").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));
-  },[]);
+  };
+  useEffect(()=>{if(!p?.view)return;reload();},[]);
 
-  const openAdd=()=>{setForm({id:null,name:"",active:true});setModal(true);};
-  const openEdit=i=>{setForm({...i});setModal(true);};
+  const openAdd=()=>{setForm({id:null,name:"",active:true,parentId:""});setModal(true);};
+  const openEdit=i=>{setForm({...i,parentId:i.parentId||""});setModal(true);};
   const save=async()=>{
     if(!form.name.trim())return alert("Nome é obrigatório.");
     setSaving(true);
     try{
-      if(form.id){const u=await api.put(`/teams/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
-      else{const c=await api.post("/teams",form);setItems(is=>[...is,c]);}
-      setModal(false);
+      const body={...form,parentId:form.parentId||null};
+      if(form.id) await api.put(`/teams/${form.id}`,body);
+      else        await api.post("/teams",body);
+      setModal(false);reload();
     }catch(e){alert(e.message);}finally{setSaving(false);}
   };
   const del=async()=>{
-    try{await api.delete(`/teams/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}
+    try{await api.delete(`/teams/${delId}`);setDelId(null);reload();}
     catch(e){alert(e.message);}
+  };
+  const toggle=id=>setExpanded(ex=>{const s=new Set(ex);s.has(id)?s.delete(id):s.add(id);return s;});
+  const expandAll=()=>setExpanded(new Set(items.map(i=>i.id)));
+  const collapseAll=()=>setExpanded(new Set());
+
+  // Montar árvore a partir da lista plana
+  const buildTree=list=>{
+    const map={};
+    list.forEach(t=>{map[t.id]={...t,children:[]};});
+    const roots=[];
+    list.forEach(t=>{
+      if(t.parentId&&map[t.parentId]) map[t.parentId].children.push(map[t.id]);
+      else roots.push(map[t.id]);
+    });
+    const sort=nodes=>{nodes.sort((a,b)=>a.name.localeCompare(b.name,"pt"));nodes.forEach(n=>sort(n.children));};
+    sort(roots);
+    return roots;
+  };
+  const tree=buildTree(items);
+
+  // Renderiza nó da árvore (recursivo)
+  const renderNode=(node,depth)=>{
+    const hasChildren=node.children.length>0;
+    const isExp=expanded.has(node.id);
+    const indent=12+depth*24;
+    return(
+      <Fragment key={node.id}>
+        <tr onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+          <td style={{...S.td,paddingLeft:indent}}>
+            <span style={{display:"inline-flex",alignItems:"center",gap:6}}>
+              {hasChildren
+                ?<button onClick={()=>toggle(node.id)}
+                    style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:C.primary,padding:"0 2px",lineHeight:1,minWidth:18}}>
+                    {isExp?"▼":"▶"}
+                  </button>
+                :<span style={{display:"inline-block",width:18}}/>
+              }
+              <span style={{fontWeight:depth===0?700:600}}>{node.name}</span>
+            </span>
+          </td>
+          <td style={S.td}><span style={{...S.badge,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}}>{node.membros??0} pessoa{(node.membros??0)!==1?"s":""}</span></td>
+          <td style={S.td}><span style={{...S.badge,...(node.active?S.badgeActive:S.badgeInactive)}}>{node.active?"Ativo":"Inativo"}</span></td>
+          <td style={S.td}>
+            <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}} onClick={()=>setItensModal(node)}>👷 Itens Equipe</button>
+            {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(node)}>✏️ Editar</button>}
+            {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(node.id)}>🗑️ Excluir</button>}
+          </td>
+        </tr>
+        {isExp&&node.children.map(child=>renderNode(child,depth+1))}
+      </Fragment>
+    );
   };
 
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
@@ -518,7 +572,15 @@ function EquipesScreen({user}){
     <div style={S.card}>
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>👷 Equipes</span>
-        {p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Nova Equipe</button>}
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {items.length>0&&(
+            <>
+              <button style={{...S.btnCancel,fontSize:12,padding:"4px 10px"}} onClick={expandAll}>Expandir tudo</button>
+              <button style={{...S.btnCancel,fontSize:12,padding:"4px 10px"}} onClick={collapseAll}>Recolher tudo</button>
+            </>
+          )}
+          {p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Nova Equipe</button>}
+        </div>
       </div>
       {items.length===0
         ?<div style={S.emptyState}><span style={S.emptyIcon}>👷</span>Nenhuma equipe cadastrada.</div>
@@ -526,25 +588,18 @@ function EquipesScreen({user}){
           <table style={S.table}><thead><tr>
             {["Nome","Membros","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
-          <tbody>{items.map(item=>(
-            <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
-              <td style={{...S.td,fontWeight:600}}>{item.name}</td>
-              <td style={S.td}><span style={{...S.badge,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}}>{item.membros??0} pessoa{(item.membros??0)!==1?"s":""}</span></td>
-              <td style={S.td}><span style={{...S.badge,...(item.active?S.badgeActive:S.badgeInactive)}}>{item.active?"Ativo":"Inativo"}</span></td>
-              <td style={S.td}>
-                <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}}
-                  onClick={()=>setItensModal(item)}>👷 Itens Equipe</button>
-                {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(item)}>✏️ Editar</button>}
-                {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>🗑️ Excluir</button>}
-              </td>
-            </tr>
-          ))}</tbody></table>
+          <tbody>{tree.map(node=>renderNode(node,0))}</tbody></table>
         )
       }
 
       {modal&&(
         <Modal title={form.id?"Editar Equipe":"Nova Equipe"} onClose={()=>setModal(false)}>
           <Input label="Nome" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
+          <SelectField label="Subordinação (equipe superior)"
+            value={form.parentId||""}
+            onChange={v=>setForm(f=>({...f,parentId:v}))}
+            options={items.filter(t=>t.id!==form.id).map(t=>({value:t.id,label:t.name}))}
+            placeholder="Nenhuma (nó raiz)"/>
           <div style={S.formRow}><label style={S.label}>STATUS</label>
             <div style={{display:"flex",gap:16}}>
               {[{v:true,l:"Ativo"},{v:false,l:"Inativo"}].map(o=>(
@@ -556,7 +611,7 @@ function EquipesScreen({user}){
           </div>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
             <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
-            <button style={{...S.btnSave,opacity:saving?.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
           </div>
         </Modal>
       )}
@@ -5768,6 +5823,143 @@ function RelatorioFeriasScreen({user}){
   );
 }
 
+// ── RELATÓRIO COMPOSIÇÃO DE EQUIPE ────────────────────────────
+function RelatorioComposicaoScreen({user}){
+  const p=user.permissions?.s32;
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[expanded,setExpanded]=useState(new Set());
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    api.get("/teams/relatorio-composicao")
+      .then(setItems)
+      .catch(e=>alert(e.message))
+      .finally(()=>setLoading(false));
+  },[]);
+
+  const toggle=id=>setExpanded(ex=>{const s=new Set(ex);s.has(id)?s.delete(id):s.add(id);return s;});
+  const expandAll=()=>setExpanded(new Set(items.map(i=>i.id)));
+  const collapseAll=()=>setExpanded(new Set());
+
+  const buildTree=list=>{
+    const map={};
+    list.forEach(t=>{map[t.id]={...t,children:[]};});
+    const roots=[];
+    list.forEach(t=>{
+      if(t.parentId&&map[t.parentId])map[t.parentId].children.push(map[t.id]);
+      else roots.push(map[t.id]);
+    });
+    const sort=nodes=>{nodes.sort((a,b)=>a.name.localeCompare(b.name,"pt"));nodes.forEach(n=>sort(n.children));};
+    sort(roots);
+    return roots;
+  };
+
+  function totalMembros(node){
+    return node.membros.length+node.children.reduce((s,c)=>s+totalMembros(c),0);
+  }
+
+  const tree=buildTree(items);
+
+  const exportPDF=()=>{
+    const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    doc.setFontSize(16);doc.setFont(undefined,"bold");
+    doc.text("Composição de Equipe",14,16);
+    doc.setFontSize(9);doc.setFont(undefined,"normal");
+    doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}`,14,23);
+    const bodyRows=[];
+    const flattenBody=(nodes,depth)=>{
+      nodes.forEach(node=>{
+        const tot=totalMembros(node);
+        const pfx=" ".repeat(depth*3);
+        const fill=depth===0?[224,235,255]:depth===1?[240,245,255]:[248,250,255];
+        bodyRows.push([{content:`${pfx}${node.name}  (${tot} func.)`,colSpan:3,styles:{fontStyle:"bold",fillColor:fill,textColor:[30,60,120]}}]);
+        node.membros.forEach(m=>{
+          const mpfx=" ".repeat((depth+1)*3);
+          bodyRows.push([{content:`${mpfx}${m.funcionarioNome}`,styles:{textColor:[50,50,50]}},m.cargo||"—",m.centroCusto||"—"]);
+        });
+        flattenBody(node.children,depth+1);
+      });
+    };
+    flattenBody(tree,0);
+    autoTable(doc,{
+      head:[["Equipe / Funcionário","Cargo","Centro de Custo"]],
+      body:bodyRows,
+      startY:28,
+      styles:{fontSize:8,cellPadding:2},
+      headStyles:{fillColor:[37,99,235],textColor:255,fontStyle:"bold"},
+      columnStyles:{0:{cellWidth:95},1:{cellWidth:55},2:{cellWidth:35}},
+      margin:{left:14,right:14},
+    });
+    doc.save("Composicao_Equipe.pdf");
+  };
+
+  const renderNode=(node,depth)=>{
+    const isExp=expanded.has(node.id);
+    const hasChildren=node.children.length>0;
+    const hasMembros=node.membros.length>0;
+    const tot=totalMembros(node);
+    const indent=12+depth*24;
+    const bg=depth===0?"#EFF4FF":depth===1?"#F7F9FF":C.white;
+    const borderColor=depth===0?C.primary:depth===1?"#6B8EE8":"#A0B4D8";
+    return(
+      <Fragment key={node.id}>
+        <tr style={{background:bg,borderBottom:`1px solid ${C.border}`}}>
+          <td colSpan={3} style={{...S.td,paddingLeft:indent,paddingTop:8,paddingBottom:8,borderLeft:`3px solid ${borderColor}`}}>
+            <span style={{display:"inline-flex",alignItems:"center",gap:8}}>
+              {(hasChildren||hasMembros)
+                ?<button onClick={()=>toggle(node.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:C.primary,padding:"0 2px",lineHeight:1,minWidth:18,fontWeight:"bold"}}>{isExp?"▼":"▶"}</button>
+                :<span style={{display:"inline-block",width:18}}/>
+              }
+              <span style={{fontWeight:depth===0?700:600,fontSize:depth===0?14:13,color:depth===0?C.primary:"#334"}}>{node.name}</span>
+              <span style={{...S.badge,background:"#E8F0FE",color:"#1A56DB",border:"1px solid #C7D9FA",fontSize:11,marginLeft:4}}>
+                {tot} {tot!==1?"funcionários":"funcionário"}
+              </span>
+            </span>
+          </td>
+        </tr>
+        {isExp&&node.membros.map((m,i)=>(
+          <tr key={i} style={{background:"#FAFBFF",borderBottom:`1px solid ${C.border}`}}>
+            <td style={{...S.td,paddingLeft:32+indent,fontSize:12,color:"#444"}}>{m.funcionarioNome}</td>
+            <td style={{...S.td,fontSize:12,color:"#555"}}>{m.cargo||"—"}</td>
+            <td style={{...S.td,fontSize:12,color:"#555"}}>{m.centroCusto||"—"}</td>
+          </tr>
+        ))}
+        {isExp&&node.children.map(child=>renderNode(child,depth+1))}
+      </Fragment>
+    );
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão para visualizar este relatório.</div>;
+  if(loading)return<Spinner/>;
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>👥 Composição de Equipe</span>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <button style={{...S.btnCancel,fontSize:12,padding:"5px 12px"}} onClick={expandAll}>▼ Expandir tudo</button>
+          <button style={{...S.btnCancel,fontSize:12,padding:"5px 12px"}} onClick={collapseAll}>▶ Recolher tudo</button>
+          <button style={S.btnAdd} onClick={exportPDF}>⬇ PDF</button>
+        </div>
+      </div>
+      {items.length===0
+        ?<div style={S.emptyState}><span style={S.emptyIcon}>👥</span>Nenhuma equipe cadastrada.</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={S.table}>
+            <thead><tr>
+              <th style={{...S.th,width:"55%"}}>Equipe / Funcionário</th>
+              <th style={S.th}>Cargo</th>
+              <th style={S.th}>Centro de Custo</th>
+            </tr></thead>
+            <tbody>{tree.map(node=>renderNode(node,0))}</tbody>
+          </table>
+        </div>
+      }
+    </div>
+  );
+}
+
 // ── SIDEBAR ───────────────────────────────────────────────────
 const navConfig=[
   {id:"cadastros",label:"Cadastros",icon:"📁",children:[
@@ -5806,6 +5998,7 @@ const navConfig=[
     {id:"s26",label:"Resumo de Ativos",             icon:"📦"},
     {id:"s27",label:"Inventário de Ativos",         icon:"🗂️"},
     {id:"s31",label:"Relatório de Férias",             icon:"🏖️"},
+    {id:"s32",label:"Composição de Equipe",            icon:"👥"},
   ]},
 ];
 function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
@@ -5890,6 +6083,8 @@ const screenTitles={
   s26:"Relatórios › Resumo de Ativos",
   s27:"Relatórios › Inventário de Ativos",
   s29:"Movimentações › Histórico de Movimentações de Ativos",
+  s31:"Relatórios › Relatório de Férias",
+  s32:"Relatórios › Composição de Equipe",
   profile:"Meu Perfil",
 };
 
@@ -5946,6 +6141,7 @@ export default function App(){
     s29:<HistoricoMovimentacoesScreen user={user}/>,
     s30:<FeriasScreen user={user}/>,
     s31:<RelatorioFeriasScreen user={user}/>,
+    s32:<RelatorioComposicaoScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
