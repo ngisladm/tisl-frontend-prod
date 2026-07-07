@@ -5909,6 +5909,458 @@ function RelatorioFeriasScreen({user}){
   );
 }
 
+// ── CONFIGURAÇÃO DE INVENTÁRIO (s33) ──────────────────────────
+function ConfiguracaoInventarioScreen({user}){
+  const p=user.permissions?.s33;
+  const[tab,setTab]=useState("redes");
+  // Redes
+  const[redes,setRedes]=useState([]);
+  const[redesLoading,setRedesLoading]=useState(true);
+  const[redesForm,setRedesForm]=useState(null);
+  // Domínio
+  const[dom,setDom]=useState({domain:"",username:"",password:""});
+  const[domSaving,setDomSaving]=useState(false);
+  // Tenants
+  const[tenants,setTenants]=useState([]);
+  const[tenantsLoading,setTenantsLoading]=useState(true);
+  const[tenantForm,setTenantForm]=useState(null);
+  const[delTenant,setDelTenant]=useState(null);
+  const[delRede,setDelRede]=useState(null);
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    api.get("/inventory-config/networks").then(setRedes).catch(()=>{}).finally(()=>setRedesLoading(false));
+    api.get("/inventory-config/domain").then(d=>{if(d)setDom({domain:d.domain||"",username:d.username||"",password:""});}).catch(()=>{});
+    api.get("/inventory-config/tenants").then(setTenants).catch(()=>{}).finally(()=>setTenantsLoading(false));
+  },[]);
+
+  const saveRede=async()=>{
+    if(!redesForm.name?.trim()||!redesForm.ipRange?.trim())return alert("Nome e Faixa de IP são obrigatórios.");
+    try{
+      if(redesForm.id){const u=await api.put(`/inventory-config/networks/${redesForm.id}`,redesForm);setRedes(rs=>rs.map(r=>r.id===u.id?u:r));}
+      else{const c=await api.post("/inventory-config/networks",redesForm);setRedes(rs=>[...rs,c]);}
+      setRedesForm(null);
+    }catch(e){alert(e.message);}
+  };
+  const delRede2=async()=>{
+    try{await api.delete(`/inventory-config/networks/${delRede}`);setRedes(rs=>rs.filter(r=>r.id!==delRede));setDelRede(null);}
+    catch(e){alert(e.message);}
+  };
+
+  const saveDom=async()=>{
+    setDomSaving(true);
+    try{await api.put("/inventory-config/domain",dom);alert("Configuração de domínio salva.");}
+    catch(e){alert(e.message);}finally{setDomSaving(false);}
+  };
+
+  const saveTenant=async()=>{
+    if(!tenantForm.name?.trim()||!tenantForm.tenantId?.trim()||!tenantForm.clientId?.trim())
+      return alert("Nome, Tenant ID e Client ID são obrigatórios.");
+    if(!tenantForm.id&&!tenantForm.clientSecret?.trim())return alert("Client Secret é obrigatório.");
+    try{
+      if(tenantForm.id){const u=await api.put(`/inventory-config/tenants/${tenantForm.id}`,tenantForm);setTenants(ts=>ts.map(t=>t.id===u.id?u:t));}
+      else{const c=await api.post("/inventory-config/tenants",tenantForm);setTenants(ts=>[...ts,c]);}
+      setTenantForm(null);
+    }catch(e){alert(e.message);}
+  };
+  const delTenant2=async()=>{
+    try{await api.delete(`/inventory-config/tenants/${delTenant}`);setTenants(ts=>ts.filter(t=>t.id!==delTenant));setDelTenant(null);}
+    catch(e){alert(e.message);}
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+
+  const tabs=[["redes","🌐 Faixas de Rede"],["dominio","🔐 Domínio (WMI)"],["tenants","☁️ Tenants M365"]];
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>🔧 Configuração de Inventário</span></div>
+      <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,marginBottom:20}}>
+        {tabs.map(([id,label])=>(
+          <button key={id} onClick={()=>setTab(id)} style={{padding:"8px 20px",border:"none",cursor:"pointer",
+            background:tab===id?C.white:C.bg,fontWeight:tab===id?700:400,fontSize:13,
+            borderBottom:tab===id?`2px solid ${C.primary}`:"2px solid transparent",
+            color:tab===id?C.primary:C.text}}>{label}</button>
+        ))}
+      </div>
+
+      {/* ── Tab Redes ── */}
+      {tab==="redes"&&(
+        <div>
+          {p?.insert&&<div style={{marginBottom:12,display:"flex",justifyContent:"flex-end"}}>
+            <button style={S.btnAdd} onClick={()=>setRedesForm({name:"",ipRange:"",active:true})}>+ Nova Faixa</button>
+          </div>}
+          {redesLoading?<Spinner/>:redes.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🌐</span>Nenhuma faixa configurada.</div>:(
+            <table style={S.table}><thead><tr>
+              {["Filial/Nome","Faixa de IP","Ativo","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            </tr></thead>
+            <tbody>{redes.map(r=>(
+              <tr key={r.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={{...S.td,fontWeight:600}}>{r.name}</td>
+                <td style={S.td}><code style={{fontSize:12}}>{r.ipRange}</code></td>
+                <td style={S.td}><span style={{...S.badge,background:r.active?"#E8F5E9":"#FFEBEE",color:r.active?"#2E7D32":"#C62828"}}>{r.active?"Ativo":"Inativo"}</span></td>
+                <td style={S.td}>
+                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>setRedesForm({...r})}>✏️ Editar</button>}
+                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelRede(r.id)}>🗑️</button>}
+                </td>
+              </tr>
+            ))}</tbody></table>
+          )}
+          {redesForm&&(
+            <Modal title={redesForm.id?"Editar Faixa":"Nova Faixa"} onClose={()=>setRedesForm(null)}>
+              <Input label="Nome/Filial *" value={redesForm.name} onChange={v=>setRedesForm(f=>({...f,name:v}))}/>
+              <Input label="Faixa de IP (CIDR) *" value={redesForm.ipRange} onChange={v=>setRedesForm(f=>({...f,ipRange:v}))} placeholder="ex: 192.168.1.0/24"/>
+              <SelectField label="Status" value={String(redesForm.active)} onChange={v=>setRedesForm(f=>({...f,active:v==="true"}))}
+                options={[{value:"true",label:"Ativo"},{value:"false",label:"Inativo"}]}/>
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+                <button style={S.btnCancel} onClick={()=>setRedesForm(null)}>Cancelar</button>
+                <button style={S.btnSave} onClick={saveRede}>Salvar</button>
+              </div>
+            </Modal>
+          )}
+          {delRede&&<ConfirmModal msg="Excluir esta faixa de rede?" onConfirm={delRede2} onCancel={()=>setDelRede(null)}/>}
+        </div>
+      )}
+
+      {/* ── Tab Domínio ── */}
+      {tab==="dominio"&&(
+        <div style={{maxWidth:480}}>
+          <p style={{color:C.textLight,fontSize:13,marginBottom:16}}>
+            Credencial usada para consultas WMI nas máquinas Windows durante o Inventário de Software.
+            A senha é armazenada criptografada.
+          </p>
+          <Input label="Domínio" value={dom.domain} onChange={v=>setDom(d=>({...d,domain:v}))} placeholder="EMPRESA"/>
+          <Input label="Usuário" value={dom.username} onChange={v=>setDom(d=>({...d,username:v}))} placeholder="SVC_INVENTARIO"/>
+          <div style={S.formRow}>
+            <label style={S.label}>Senha</label>
+            <input type="password" value={dom.password} onChange={e=>setDom(d=>({...d,password:e.target.value}))}
+              style={S.input} placeholder="Deixe em branco para não alterar"/>
+          </div>
+          <div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
+            <button style={{...S.btnSave,opacity:domSaving?0.7:1}} onClick={saveDom} disabled={domSaving}>
+              {domSaving?"Salvando...":"Salvar Configuração"}
+            </button>
+          </div>
+          <div style={{marginTop:20,padding:12,background:"#FFF8E1",border:"1px solid #FFE082",borderRadius:8,fontSize:12,color:"#6D4C00"}}>
+            <strong>Pré-requisitos WMI:</strong><br/>
+            • Porta <strong>135/TCP</strong> liberada entre o servidor e as máquinas<br/>
+            • Portas dinâmicas <strong>49152–65535/TCP</strong> liberadas<br/>
+            • Usuário com permissão de leitura WMI (configurável via GPO)<br/>
+            • Pacote <code>wmi-client</code> instalado no container Docker da API
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab Tenants M365 ── */}
+      {tab==="tenants"&&(
+        <div>
+          {p?.insert&&<div style={{marginBottom:12,display:"flex",justifyContent:"flex-end"}}>
+            <button style={S.btnAdd} onClick={()=>setTenantForm({name:"",tenantId:"",clientId:"",clientSecret:"",active:true})}>+ Novo Tenant</button>
+          </div>}
+          <div style={{marginBottom:16,padding:12,background:"#E3F2FD",border:"1px solid #90CAF9",borderRadius:8,fontSize:12,color:"#0D47A1"}}>
+            <strong>Como obter as credenciais:</strong> portal.azure.com → Azure Active Directory → App registrations → selecione ou crie o app →
+            Permissões necessárias: <code>User.Read.All</code>, <code>Directory.Read.All</code>, <code>Organization.Read.All</code> (tipo Application).
+          </div>
+          {tenantsLoading?<Spinner/>:tenants.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>☁️</span>Nenhum tenant configurado.</div>:(
+            <table style={S.table}><thead><tr>
+              {["Nome","Tenant ID","Client ID","Ativo","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            </tr></thead>
+            <tbody>{tenants.map(t=>(
+              <tr key={t.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={{...S.td,fontWeight:600}}>{t.name}</td>
+                <td style={{...S.td,fontSize:11}}><code>{t.tenantId}</code></td>
+                <td style={{...S.td,fontSize:11}}><code>{t.clientId}</code></td>
+                <td style={S.td}><span style={{...S.badge,background:t.active?"#E8F5E9":"#FFEBEE",color:t.active?"#2E7D32":"#C62828"}}>{t.active?"Ativo":"Inativo"}</span></td>
+                <td style={S.td}>
+                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>setTenantForm({...t,clientSecret:""})}>✏️ Editar</button>}
+                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelTenant(t.id)}>🗑️</button>}
+                </td>
+              </tr>
+            ))}</tbody></table>
+          )}
+          {tenantForm&&(
+            <Modal title={tenantForm.id?"Editar Tenant":"Novo Tenant M365"} onClose={()=>setTenantForm(null)}>
+              <Input label="Nome/Empresa *" value={tenantForm.name||""} onChange={v=>setTenantForm(f=>({...f,name:v}))} placeholder="ex: Matriz"/>
+              <Input label="Tenant ID *" value={tenantForm.tenantId||""} onChange={v=>setTenantForm(f=>({...f,tenantId:v}))} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+              <Input label="Client ID *" value={tenantForm.clientId||""} onChange={v=>setTenantForm(f=>({...f,clientId:v}))} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+              <div style={S.formRow}>
+                <label style={S.label}>Client Secret {tenantForm.id?"(deixe em branco para não alterar)":"*"}</label>
+                <input type="password" value={tenantForm.clientSecret||""} onChange={e=>setTenantForm(f=>({...f,clientSecret:e.target.value}))} style={S.input}/>
+              </div>
+              <SelectField label="Status" value={String(tenantForm.active)} onChange={v=>setTenantForm(f=>({...f,active:v==="true"}))}
+                options={[{value:"true",label:"Ativo"},{value:"false",label:"Inativo"}]}/>
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+                <button style={S.btnCancel} onClick={()=>setTenantForm(null)}>Cancelar</button>
+                <button style={S.btnSave} onClick={saveTenant}>Salvar</button>
+              </div>
+            </Modal>
+          )}
+          {delTenant&&<ConfirmModal msg="Excluir este tenant M365?" onConfirm={delTenant2} onCancel={()=>setDelTenant(null)}/>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── INVENTÁRIO DE REDE (s34) ───────────────────────────────────
+function InventarioRedeScreen({user}){
+  const p=user.permissions?.s34;
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[form,setForm]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[detail,setDetail]=useState(null); // {collection, tab, devices, m365}
+  const[detailLoading,setDetailLoading]=useState(false);
+  const pollRef=useRef(null);
+
+  const TIPOS=["Inventário de Ativos","Inventário de Software"];
+
+  const load=()=>{
+    api.get("/inventory/collections").then(setItems).catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{if(!p?.view)return;load();},[]);
+
+  // Polling automático para coletas em andamento
+  useEffect(()=>{
+    const hasRunning=items.some(i=>i.status==="Executando");
+    clearInterval(pollRef.current);
+    if(hasRunning){
+      pollRef.current=setInterval(()=>{
+        api.get("/inventory/collections").then(updated=>{
+          setItems(updated);
+          if(detail){
+            const col=updated.find(c=>c.id===detail.collection.id);
+            if(col)setDetail(d=>({...d,collection:col}));
+          }
+        }).catch(()=>{});
+      },5000);
+    }
+    return()=>clearInterval(pollRef.current);
+  },[items]);
+
+  const save=async()=>{
+    if(!form.data||!form.tipo)return alert("Data e Tipo são obrigatórios.");
+    try{
+      const c=await api.post("/inventory/collections",form);
+      setItems(is=>[c,...is]);setForm(null);
+    }catch(e){alert(e.message);}
+  };
+
+  const del=async()=>{
+    try{await api.delete(`/inventory/collections/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}
+    catch(e){alert(e.message);}
+  };
+
+  const startScan=async(col)=>{
+    if(!window.confirm(`Iniciar scan de "${col.tipo}"?\nIsso pode levar vários minutos.`))return;
+    try{
+      await api.post(`/inventory/collections/${col.id}/scan`,{});
+      setItems(is=>is.map(i=>i.id===col.id?{...i,status:"Executando"}:i));
+    }catch(e){alert(e.message);}
+  };
+
+  const openDetail=async(col)=>{
+    setDetail({collection:col,tab:"devices",devices:[],m365:{licenses:[],users:[]}});
+    setDetailLoading(true);
+    try{
+      if(col.tipo==="Inventário de Software"){
+        const[devs,m365]=await Promise.all([
+          api.get(`/inventory/collections/${col.id}/devices`),
+          api.get(`/inventory/collections/${col.id}/m365`),
+        ]);
+        setDetail({collection:col,tab:"devices",devices:devs,m365});
+      } else {
+        const devs=await api.get(`/inventory/collections/${col.id}/devices`);
+        setDetail({collection:col,tab:"devices",devices:devs,m365:{licenses:[],users:[]}});
+      }
+    }catch(e){alert(e.message);}finally{setDetailLoading(false);}
+  };
+
+  const[swModal,setSwModal]=useState(null); // {deviceId, hostname}
+  const[swItems,setSwItems]=useState([]);
+  const[swLoading,setSwLoading]=useState(false);
+  const openSw=async(colId,dev)=>{
+    setSwModal(dev);setSwLoading(true);setSwItems([]);
+    try{const r=await api.get(`/inventory/collections/${colId}/devices/${dev.id}/software`);setSwItems(r);}
+    catch(e){alert(e.message);}finally{setSwLoading(false);}
+  };
+
+  const statusBadge=s=>{
+    const cfg={Pendente:{bg:"#F5F5F5",color:"#757575"},Executando:{bg:"#E3F2FD",color:"#1565C0"},
+      Concluído:{bg:"#E8F5E9",color:"#2E7D32"},Erro:{bg:"#FFEBEE",color:"#C62828"}};
+    const c=cfg[s]||cfg.Pendente;
+    return<span style={{...S.badge,background:c.bg,color:c.color,fontWeight:600}}>{s==="Executando"?"⏳ Executando...":s}</span>;
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>🔍 Inventário de Rede</span>
+        {p?.insert&&<button style={S.btnAdd} onClick={()=>setForm({data:"",tipo:TIPOS[0]})}>+ Nova Coleta</button>}
+      </div>
+
+      {items.length===0
+        ?<div style={S.emptyState}><span style={S.emptyIcon}>🔍</span>Nenhuma coleta registrada.</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Data","Tipo","Status","Dispositivos","Licenças M365","Início","Fim","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{items.map(it=>(
+            <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={{...S.td,fontWeight:600}}>{it.data}</td>
+              <td style={S.td}>{it.tipo}</td>
+              <td style={S.td}>{statusBadge(it.status)}{it.errorMsg&&<span title={it.errorMsg} style={{marginLeft:4,cursor:"help",color:"#C62828"}}>⚠️</span>}</td>
+              <td style={{...S.td,textAlign:"center"}}>{it.totalDevices>0?<span style={S.badge}>{it.totalDevices}</span>:"—"}</td>
+              <td style={{...S.td,textAlign:"center"}}>{it.totalLicenses>0?<span style={S.badge}>{it.totalLicenses}</span>:"—"}</td>
+              <td style={{...S.td,fontSize:11}}>{it.startedAt||"—"}</td>
+              <td style={{...S.td,fontSize:11}}>{it.finishedAt||"—"}</td>
+              <td style={S.td}>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {it.status!=="Executando"&&
+                    <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"1px solid #A5D6A7"}}
+                      onClick={()=>startScan(it)}>📡 Escanear</button>}
+                  {it.status==="Concluído"&&
+                    <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #90CAF9"}}
+                      onClick={()=>openDetail(it)}>👁 Ver Dados</button>}
+                  {p?.delete&&it.status!=="Executando"&&
+                    <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>}
+                </div>
+              </td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      }
+
+      {/* Modal nova coleta */}
+      {form&&(
+        <Modal title="Nova Coleta" onClose={()=>setForm(null)}>
+          <MaskedInput label="Data *" mask={MASK_DATE} value={form.data} onChange={v=>setForm(f=>({...f,data:v}))} placeholder="DD/MM/AAAA"/>
+          <SelectField label="Tipo de Inventário *" value={form.tipo} onChange={v=>setForm(f=>({...f,tipo:v}))}
+            options={TIPOS.map(t=>({value:t,label:t}))}/>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+            <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+
+      {delId&&<ConfirmModal msg="Excluir esta coleta e todos os dados vinculados?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+
+      {/* Modal de detalhes */}
+      {detail&&(
+        <Modal title={`${detail.collection.tipo} — ${detail.collection.data}`} onClose={()=>setDetail(null)} extraWide>
+          <div style={{display:"flex",gap:0,borderBottom:`1px solid ${C.border}`,marginBottom:16}}>
+            {[["devices","💻 Dispositivos"],
+              ...(detail.collection.tipo==="Inventário de Software"?[["m365","☁️ Microsoft 365"]]:[])]
+              .map(([id,label])=>(
+              <button key={id} onClick={()=>setDetail(d=>({...d,tab:id}))} style={{
+                padding:"7px 18px",border:"none",cursor:"pointer",fontSize:13,
+                background:detail.tab===id?C.white:C.bg,
+                borderBottom:detail.tab===id?`2px solid ${C.primary}`:"2px solid transparent",
+                fontWeight:detail.tab===id?700:400,color:detail.tab===id?C.primary:C.text
+              }}>{label}</button>
+            ))}
+          </div>
+
+          {detailLoading?<Spinner/>:detail.tab==="devices"?(
+            detail.devices.length===0
+              ?<div style={S.emptyState}><span style={S.emptyIcon}>💻</span>Nenhum dispositivo encontrado.</div>
+              :<div style={{overflowX:"auto"}}>
+                <table style={S.table}><thead><tr>
+                  {["IP","MAC","Hostname","OS","Fabricante","CPU","RAM","Disco","Softwares",""].map(h=><th key={h} style={S.th}>{h}</th>)}
+                </tr></thead>
+                <tbody>{detail.devices.map(d=>(
+                  <tr key={d.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                    <td style={{...S.td,fontWeight:600,fontSize:12}}>{d.ip}</td>
+                    <td style={{...S.td,fontSize:11}}>{d.mac||"—"}</td>
+                    <td style={{...S.td,fontSize:12}}>{d.hostname||"—"}</td>
+                    <td style={{...S.td,fontSize:11}}>{d.os||"—"}</td>
+                    <td style={{...S.td,fontSize:11}}>{d.manufacturer||"—"}</td>
+                    <td style={{...S.td,fontSize:11}}>{d.cpu||"—"}</td>
+                    <td style={{...S.td,fontSize:11,textAlign:"center"}}>{d.ramGb!=null?`${d.ramGb} GB`:"—"}</td>
+                    <td style={{...S.td,fontSize:11,textAlign:"center"}}>{d.diskGb!=null?`${d.diskGb} GB`:"—"}</td>
+                    <td style={{...S.td,textAlign:"center"}}>
+                      {d.softwareCount>0
+                        ?<span style={{...S.badge,cursor:"pointer"}} onClick={()=>openSw(detail.collection.id,d)}>{d.softwareCount}</span>
+                        :"—"}
+                    </td>
+                    <td style={S.td}>
+                      {d.softwareCount>0&&
+                        <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #90CAF9",fontSize:11}}
+                          onClick={()=>openSw(detail.collection.id,d)}>📋 Softwares</button>}
+                    </td>
+                  </tr>
+                ))}</tbody></table>
+              </div>
+          ):detail.tab==="m365"&&(
+            <div>
+              <h4 style={{marginBottom:12,color:C.primary}}>Licenças por Tenant</h4>
+              {detail.m365.licenses.length===0
+                ?<p style={{color:C.textLight,fontSize:13}}>Nenhuma licença coletada.</p>
+                :<table style={S.table}><thead><tr>
+                  {["Tenant","Produto","Total","Usadas","Disponíveis"].map(h=><th key={h} style={S.th}>{h}</th>)}
+                </tr></thead>
+                <tbody>{detail.m365.licenses.map(l=>(
+                  <tr key={l.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                    <td style={S.td}>{l.tenantName}</td>
+                    <td style={{...S.td,fontWeight:600}}>{l.skuName}</td>
+                    <td style={{...S.td,textAlign:"center"}}>{l.totalUnits}</td>
+                    <td style={{...S.td,textAlign:"center"}}>{l.usedUnits}</td>
+                    <td style={{...S.td,textAlign:"center"}}>
+                      <span style={{...S.badge,background:l.availableUnits>0?"#E8F5E9":"#FFEBEE",color:l.availableUnits>0?"#2E7D32":"#C62828"}}>
+                        {l.availableUnits}
+                      </span>
+                    </td>
+                  </tr>
+                ))}</tbody></table>
+              }
+              <h4 style={{margin:"20px 0 12px",color:C.primary}}>Usuários Licenciados</h4>
+              {detail.m365.users.length===0
+                ?<p style={{color:C.textLight,fontSize:13}}>Nenhum usuário coletado.</p>
+                :<table style={S.table}><thead><tr>
+                  {["Tenant","Nome","E-mail"].map(h=><th key={h} style={S.th}>{h}</th>)}
+                </tr></thead>
+                <tbody>{detail.m365.users.map(u=>(
+                  <tr key={u.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                    <td style={S.td}>{u.tenantName}</td>
+                    <td style={{...S.td,fontWeight:600}}>{u.displayName}</td>
+                    <td style={S.td}>{u.email||"—"}</td>
+                  </tr>
+                ))}</tbody></table>
+              }
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* Modal softwares do dispositivo */}
+      {swModal&&(
+        <Modal title={`Softwares — ${swModal.hostname||swModal.ip}`} onClose={()=>setSwModal(null)} extraWide>
+          {swLoading?<Spinner/>:swItems.length===0
+            ?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum software encontrado.</div>
+            :<div style={{overflowX:"auto"}}>
+              <table style={S.table}><thead><tr>
+                {["Software","Versão","Fabricante","Data Instalação"].map(h=><th key={h} style={S.th}>{h}</th>)}
+              </tr></thead>
+              <tbody>{swItems.map(s=>(
+                <tr key={s.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                  <td style={{...S.td,fontWeight:600}}>{s.name}</td>
+                  <td style={S.td}>{s.version||"—"}</td>
+                  <td style={S.td}>{s.manufacturer||"—"}</td>
+                  <td style={S.td}>{s.installDate||"—"}</td>
+                </tr>
+              ))}</tbody></table>
+            </div>
+          }
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ── RELATÓRIO COMPOSIÇÃO DE EQUIPE ────────────────────────────
 function RelatorioComposicaoScreen({user}){
   const p=user.permissions?.s32;
@@ -6063,6 +6515,7 @@ const navConfig=[
     {id:"s22",label:"Funcionários",    icon:"👤"},
     {id:"s23",label:"Modelos de Contrato",icon:"📋"},
     {id:"s28",label:"Configuração de E-mail",icon:"📧"},
+    {id:"s33",label:"Configuração de Inventário",icon:"🔧"},
   ]},
   {id:"movimentacoes",label:"Movimentações",icon:"🔄",children:[
     {id:"s5", label:"Sobreaviso/Extra",         icon:"⏱️"},
@@ -6073,6 +6526,7 @@ const navConfig=[
     {id:"s21",label:"Controle de Ativos",  icon:"🖥️"},
     {id:"s29",label:"Histórico de Movimentações",icon:"📜"},
     {id:"s30",label:"Férias",                   icon:"🏖️"},
+    {id:"s34",label:"Inventário de Rede",        icon:"🔍"},
   ]},
   {id:"relatorios",label:"Relatórios",icon:"📊",children:[
     {id:"s6", label:"Relatório de Horas",           icon:"📋"},
@@ -6171,6 +6625,8 @@ const screenTitles={
   s29:"Movimentações › Histórico de Movimentações de Ativos",
   s31:"Relatórios › Relatório de Férias",
   s32:"Relatórios › Composição de Equipe",
+  s33:"Cadastros › Configuração de Inventário",
+  s34:"Movimentações › Inventário de Rede",
   profile:"Meu Perfil",
 };
 
@@ -6228,6 +6684,8 @@ export default function App(){
     s30:<FeriasScreen user={user}/>,
     s31:<RelatorioFeriasScreen user={user}/>,
     s32:<RelatorioComposicaoScreen user={user}/>,
+    s33:<ConfiguracaoInventarioScreen user={user}/>,
+    s34:<InventarioRedeScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
