@@ -1907,18 +1907,66 @@ function RelatorioKmScreen({user}){
 
 // ── FORNECEDORES (s12) ────────────────────────────────────────
 function FornecedoresScreen({user}){
-  const[items,setItems]=useState([]);const[loading,setLoading]=useState(true);
-  const[modal,setModal]=useState(false);const[delId,setDelId]=useState(null);
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(false);
+  const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
-  const emptyForm={id:null,name:"",razaoSocial:"",cnpj:"",inscEstadual:"",inscMunicipal:"",logradouro:"",numero:"",bairro:"",cep:"",cidade:"",estado:"",contactName:"",contactPhone:"",contactEmail:"",observacao:""};
+  // Autocomplete "Fornecedor Base"
+  const[baseQuery,setBaseQuery]=useState("");
+  const[baseResults,setBaseResults]=useState([]);
+  const[baseLoading,setBaseLoading]=useState(false);
+  const[baseOpen,setBaseOpen]=useState(false);
+  const baseTimer=useRef(null);
+
+  const emptyForm={id:null,name:"",razaoSocial:"",tipo:"PJ",cnpj:"",inscEstadual:"",inscMunicipal:"",logradouro:"",numero:"",bairro:"",cep:"",cidade:"",estado:"",pais:"",contactName:"",contactPhone:"",contactEmail:"",observacao:""};
   const[form,setForm]=useState(emptyForm);
   const p=user.permissions?.s12;
+
   useEffect(()=>{if(!p?.view)return;api.get("/suppliers").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));},[]);
-  const openAdd=()=>{setForm(emptyForm);setModal(true);};
-  const openEdit=i=>{setForm({...emptyForm,...i});setModal(true);};
+
+  const openAdd=()=>{setForm(emptyForm);setBaseQuery("");setBaseResults([]);setBaseOpen(false);setModal(true);};
+  const openEdit=i=>{setForm({...emptyForm,...i});setBaseQuery("");setBaseResults([]);setBaseOpen(false);setModal(true);};
+
+  const onBaseInput=v=>{
+    setBaseQuery(v);setBaseOpen(true);
+    clearTimeout(baseTimer.current);
+    if(v.trim().length<2){setBaseResults([]);return;}
+    baseTimer.current=setTimeout(()=>{
+      setBaseLoading(true);
+      api.get(`/suppliers/busca-base?q=${encodeURIComponent(v.trim())}`)
+        .then(r=>setBaseResults(r))
+        .catch(()=>setBaseResults([]))
+        .finally(()=>setBaseLoading(false));
+    },400);
+  };
+
+  const selectBase=r=>{
+    setForm(f=>({...f,
+      razaoSocial:r.RazaoSocial||"",
+      name:r.NomeFantasia||"",
+      tipo:r.Tipo||"PJ",
+      cnpj:r.CPF_CNPJ||"",
+      inscEstadual:r.RG_CGF||"",
+      logradouro:r.Endereco||"",
+      bairro:r.Bairro||"",
+      cep:r.CEP||"",
+      cidade:r.Municipio||"",
+      estado:r.Estado||"",
+      pais:r.Pais||"",
+      contactPhone:r.Telefone||"",
+      contactEmail:r.Email||"",
+    }));
+    setBaseQuery((r.RazaoSocial||"")+(r.CPF_CNPJ?` — ${r.CPF_CNPJ}`:""));
+    setBaseOpen(false);setBaseResults([]);
+  };
+
+  const cnpjMask=form.tipo==="PF"?"999.999.999-99":MASK_CNPJ;
+  const cnpjPlaceholder=form.tipo==="PF"?"000.000.000-00":"00.000.000/0000-00";
+
   const save=async()=>{
     if(!form.name.trim())return alert("Nome Fantasia é obrigatório.");
-    if(form.cnpj?.replace(/\D/g,"").length===14&&!validarCNPJ(form.cnpj))return alert("CNPJ inválido.");
+    if(form.tipo==="PJ"&&form.cnpj?.replace(/\D/g,"").length===14&&!validarCNPJ(form.cnpj))return alert("CNPJ inválido.");
     setSaving(true);
     try{
       if(form.id){const u=await api.put(`/suppliers/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
@@ -1927,6 +1975,7 @@ function FornecedoresScreen({user}){
     }catch(e){alert(e.message);}finally{setSaving(false);}
   };
   const del=async()=>{try{await api.delete(`/suppliers/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
   return(
@@ -1935,12 +1984,13 @@ function FornecedoresScreen({user}){
       {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏭</span>Nenhum fornecedor.</div>:(
         <div style={{overflowX:"auto"}}>
         <table style={S.table}><thead><tr>
-          {["Razão Social","Fantasia","CNPJ","Contato","Fone","E-mail","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          {["Razão Social","Fantasia","Tipo","CNPJ/CPF","Contato","Fone","E-mail","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
         <tbody>{items.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}>{it.razaoSocial||"—"}</td>
             <td style={S.td}><strong>{it.name}</strong></td>
+            <td style={S.td}>{it.tipo||"—"}</td>
             <td style={S.td}>{it.cnpj||"—"}</td>
             <td style={S.td}>{it.contactName||"—"}</td>
             <td style={S.td}>{it.contactPhone||"—"}</td>
@@ -1955,10 +2005,42 @@ function FornecedoresScreen({user}){
       )}
       {modal&&(
         <Modal title={form.id?"Editar Fornecedor":"Novo Fornecedor"} onClose={()=>setModal(false)}>
+          {/* Fornecedor Base — somente no modo Novo */}
+          {!form.id&&(
+            <div style={{...S.formRow,position:"relative",marginBottom:16}}>
+              <label style={S.label}>Fornecedor Base</label>
+              <input value={baseQuery} onChange={e=>onBaseInput(e.target.value)}
+                style={S.input} placeholder="Digite razão social ou CNPJ/CPF para buscar e preencher..."/>
+              {baseLoading&&<span style={{position:"absolute",right:10,top:34,fontSize:11,color:C.textLight}}>Buscando...</span>}
+              {baseOpen&&baseResults.length>0&&(
+                <div style={{position:"absolute",top:"100%",left:0,right:0,background:C.white,
+                  border:`1px solid ${C.border}`,borderRadius:6,boxShadow:"0 4px 16px rgba(0,0,0,0.13)",
+                  zIndex:999,maxHeight:220,overflowY:"auto"}}>
+                  {baseResults.map((r,i)=>(
+                    <div key={i} onClick={()=>selectBase(r)}
+                      style={{padding:"8px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,fontSize:13}}
+                      onMouseOver={e=>e.currentTarget.style.background=C.bg}
+                      onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                      <div style={{fontWeight:600}}>{r.RazaoSocial}</div>
+                      <div style={{fontSize:11,color:C.textLight}}>{r.CPF_CNPJ}{r.Tipo?` · ${r.Tipo}`:""}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {baseOpen&&!baseLoading&&baseQuery.trim().length>=2&&baseResults.length===0&&(
+                <div style={{position:"absolute",top:"100%",left:0,right:0,background:C.white,
+                  border:`1px solid ${C.border}`,borderRadius:6,padding:"10px 14px",fontSize:13,
+                  color:C.textLight,zIndex:999}}>Nenhum resultado encontrado.</div>
+              )}
+            </div>
+          )}
           <Input label="Razão Social" value={form.razaoSocial||""} onChange={v=>setForm(f=>({...f,razaoSocial:v}))}/>
           <Input label="Fantasia" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} required/>
-          <MaskedInput label="CNPJ" mask={MASK_CNPJ} value={form.cnpj||""} onChange={v=>setForm(f=>({...f,cnpj:v}))} placeholder="00.000.000/0000-00"/>
-          <Input label="Insc. Estadual" value={form.inscEstadual||""} onChange={v=>setForm(f=>({...f,inscEstadual:v}))}/>
+          <SelectField label="Tipo" value={form.tipo||"PJ"} onChange={v=>setForm(f=>({...f,tipo:v,cnpj:""}))}
+            options={[{value:"PJ",label:"PJ - Pessoa Jurídica"},{value:"PF",label:"PF - Pessoa Física"}]}/>
+          <MaskedInput label="CNPJ/CPF" mask={cnpjMask} value={form.cnpj||""}
+            onChange={v=>setForm(f=>({...f,cnpj:v}))} placeholder={cnpjPlaceholder}/>
+          <Input label="RG/CGF" value={form.inscEstadual||""} onChange={v=>setForm(f=>({...f,inscEstadual:v}))}/>
           <Input label="Insc. Municipal" value={form.inscMunicipal||""} onChange={v=>setForm(f=>({...f,inscMunicipal:v}))}/>
           <Input label="Logradouro" value={form.logradouro||""} onChange={v=>setForm(f=>({...f,logradouro:v}))}/>
           <div style={{display:"flex",gap:10}}>
@@ -1969,6 +2051,7 @@ function FornecedoresScreen({user}){
             <div style={{flex:1}}><MaskedInput label="CEP" mask={MASK_CEP} value={form.cep||""} onChange={v=>setForm(f=>({...f,cep:v}))} placeholder="00.000-000"/></div>
             <div style={{flex:2}}><Input label="Cidade" value={form.cidade||""} onChange={v=>setForm(f=>({...f,cidade:v}))}/></div>
             <div style={{flex:1}}><Input label="Estado" value={form.estado||""} onChange={v=>setForm(f=>({...f,estado:v}))}/></div>
+            <div style={{flex:1}}><Input label="País" value={form.pais||""} onChange={v=>setForm(f=>({...f,pais:v}))}/></div>
           </div>
           <Input label="Nome do Contato" value={form.contactName||""} onChange={v=>setForm(f=>({...f,contactName:v}))}/>
           <MaskedInput label="Fone do Contato" mask={MASK_PHONE} value={form.contactPhone||""} onChange={v=>setForm(f=>({...f,contactPhone:v}))} placeholder="(11) 99999-9999"/>
