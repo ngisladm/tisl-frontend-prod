@@ -5909,6 +5909,453 @@ function RelatorioFeriasScreen({user}){
   );
 }
 
+// ── CONTROLE DE FOLGAS (s35) ──────────────────────────────────
+function FolgasScreen({user}){
+  const p=user.permissions?.s35;
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[empresas,setEmpresas]=useState([]);
+  const[equipes,setEquipes]=useState([]);
+  const[funcs,setFuncs]=useState([]);
+  const[filters,setFilters]=useState({empresa:"",equipe:"",funcionario:"",data:"",compensado:""});
+  const[form,setForm]=useState(null);
+  const[delId,setDelId]=useState(null);
+
+  const load=async(f=filters)=>{
+    setLoading(true);
+    const q=new URLSearchParams(Object.fromEntries(Object.entries(f).filter(([,v])=>v))).toString();
+    api.get(`/folgas${q?"?"+q:""}`).then(setItems).catch(()=>{}).finally(()=>setLoading(false));
+  };
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/companies"),api.get("/teams")]).then(([e,eq])=>{setEmpresas(e);setEquipes(eq);});
+    load();
+  },[]);
+
+  useEffect(()=>{
+    if(!form?.equipeId){setFuncs([]);return;}
+    api.get(`/teams/${form.equipeId}/itens`).then(its=>setFuncs(its.map(i=>({id:i.funcionarioId||i.id,nome:i.funcionarioNome||i.nome})))).catch(()=>setFuncs([]));
+  },[form?.equipeId]);
+
+  const calcTotal=(hi,hf)=>{
+    if(!hi||!hf)return"";
+    const[hhi,mmi]=hi.split(":").map(Number);
+    const[hhf,mmf]=hf.split(":").map(Number);
+    const diff=(hhf*60+mmf)-(hhi*60+mmi);
+    if(diff<=0)return"";
+    return`${String(Math.floor(diff/60)).padStart(2,"0")}:${String(diff%60).padStart(2,"0")}`;
+  };
+
+  const openForm=(item=null)=>{
+    if(item){
+      const[d,m,y]=(item.data||"").split("/");
+      setForm({...item,data:y&&m&&d?`${y}-${m}-${d}`:"",equipeId:item.equipeId,funcionarioId:item.funcionarioId,empresaId:item.empresaId});
+    } else {
+      setForm({empresaId:"",equipeId:"",funcionarioId:"",data:"",horaInicio:"",horaFim:"",totalHoras:"",compensado:"Não",observacao:""});
+    }
+  };
+
+  const save=async()=>{
+    if(!form.empresaId||!form.equipeId||!form.funcionarioId||!form.data||!form.horaInicio||!form.horaFim)
+      return alert("Preencha todos os campos obrigatórios.");
+    const[y,m,d]=(form.data||"").split("-");
+    const payload={...form,data:y&&m&&d?`${y}-${m}-${d}`:form.data,totalHoras:calcTotal(form.horaInicio,form.horaFim)};
+    try{
+      if(form.id)await api.put(`/folgas/${form.id}`,payload);
+      else await api.post("/folgas",payload);
+      setForm(null);load();
+    }catch(e){alert(e.message);}
+  };
+
+  const del=async()=>{
+    try{await api.delete(`/folgas/${delId}`);setDelId(null);load();}catch(e){alert(e.message);}
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>🏖️ Controle de Folgas</span>
+        {p?.insert&&<button style={S.btnAdd} onClick={()=>openForm()}>+ Nova Folga</button>}
+      </div>
+      {/* Filtros */}
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16,padding:12,background:C.bg,borderRadius:8}}>
+        <select style={{...S.input,width:160}} value={filters.empresa} onChange={e=>setFilters(f=>({...f,empresa:e.target.value}))}>
+          <option value="">Empresa</option>
+          {empresas.map(e=><option key={e.id} value={e.id}>{e.nome}</option>)}
+        </select>
+        <select style={{...S.input,width:160}} value={filters.equipe} onChange={e=>setFilters(f=>({...f,equipe:e.target.value}))}>
+          <option value="">Equipe</option>
+          {equipes.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+        </select>
+        <select style={{...S.input,width:160}} value={filters.funcionario} onChange={e=>setFilters(f=>({...f,funcionario:e.target.value}))}>
+          <option value="">Funcionário</option>
+          {items.map(i=>i.funcionarioId).filter((v,i,a)=>a.indexOf(v)===i).map(id=>{
+            const it=items.find(i=>i.funcionarioId===id);
+            return<option key={id} value={id}>{it?.funcionarioNome}</option>;
+          })}
+        </select>
+        <input type="date" style={{...S.input,width:150}} value={filters.data} onChange={e=>setFilters(f=>({...f,data:e.target.value}))} title="Data"/>
+        <select style={{...S.input,width:130}} value={filters.compensado} onChange={e=>setFilters(f=>({...f,compensado:e.target.value}))}>
+          <option value="">Compensado</option>
+          <option>Sim</option><option>Não</option>
+        </select>
+        <button style={S.btnSave} onClick={()=>load()}>🔍 Filtrar</button>
+        <button style={S.btnCancel} onClick={()=>{setFilters({empresa:"",equipe:"",funcionario:"",data:"",compensado:""});load({empresa:"",equipe:"",funcionario:"",data:"",compensado:""});}}>✕ Limpar</button>
+      </div>
+      {loading?<Spinner/>:items.length===0
+        ?<div style={S.emptyState}><span style={S.emptyIcon}>🏖️</span>Nenhuma folga registrada.</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Empresa","Equipe","Funcionário","Data","Início","Fim","Total","Compensado","Observação","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{items.map(it=>(
+            <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={S.td}>{it.empresaNome}</td>
+              <td style={S.td}>{it.equipeNome}</td>
+              <td style={{...S.td,fontWeight:600}}>{it.funcionarioNome}</td>
+              <td style={S.td}>{it.data}</td>
+              <td style={S.td}>{it.horaInicio}</td>
+              <td style={S.td}>{it.horaFim}</td>
+              <td style={{...S.td,textAlign:"center",fontWeight:600}}>{it.totalHoras||"—"}</td>
+              <td style={S.td}><span style={{...S.badge,background:it.compensado==="Sim"?"#E8F5E9":"#FFEBEE",color:it.compensado==="Sim"?"#2E7D32":"#C62828"}}>{it.compensado}</span></td>
+              <td style={{...S.td,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={it.observacao}>{it.observacao||"—"}</td>
+              <td style={S.td}>
+                {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openForm(it)}>✏️</button>}
+                {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>}
+              </td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      }
+      {form&&(
+        <Modal title={form.id?"Editar Folga":"Nova Folga"} onClose={()=>setForm(null)}>
+          <SelectField label="Empresa *" value={form.empresaId} onChange={v=>setForm(f=>({...f,empresaId:v}))} options={empresas.map(e=>({value:e.id,label:e.nome}))}/>
+          <SelectField label="Equipe *" value={form.equipeId} onChange={v=>setForm(f=>({...f,equipeId:v,funcionarioId:""}))} options={equipes.map(e=>({value:e.id,label:e.name}))}/>
+          <SelectField label="Funcionário *" value={form.funcionarioId} onChange={v=>setForm(f=>({...f,funcionarioId:v}))} options={funcs.map(f=>({value:f.id,label:f.nome}))}/>
+          <div style={S.formRow}><label style={S.label}>Data *</label><input type="date" style={S.input} value={form.data} onChange={e=>setForm(f=>({...f,data:e.target.value}))}/></div>
+          <div style={{display:"flex",gap:12}}>
+            <div style={{flex:1,...S.formRow}}><label style={S.label}>Hora Início *</label><input type="time" style={S.input} value={form.horaInicio} onChange={e=>setForm(f=>({...f,horaInicio:e.target.value,totalHoras:calcTotal(e.target.value,f.horaFim)}))}/></div>
+            <div style={{flex:1,...S.formRow}}><label style={S.label}>Hora Fim *</label><input type="time" style={S.input} value={form.horaFim} onChange={e=>setForm(f=>({...f,horaFim:e.target.value,totalHoras:calcTotal(f.horaInicio,e.target.value)}))}/></div>
+            <div style={{flex:1,...S.formRow}}><label style={S.label}>Total Horas</label><input style={{...S.input,background:C.bg,color:C.primary,fontWeight:700}} value={form.totalHoras||""} readOnly/></div>
+          </div>
+          <SelectField label="Compensado" value={form.compensado} onChange={v=>setForm(f=>({...f,compensado:v}))} options={[{value:"Não",label:"Não"},{value:"Sim",label:"Sim"}]}/>
+          <div style={S.formRow}><label style={S.label}>Observação</label><textarea style={{...S.input,minHeight:80,resize:"vertical"}} value={form.observacao||""} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))}/></div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+            <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Excluir esta folga?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── RELATÓRIO CONTROLE DE FOLGAS (s36) ────────────────────────
+function RelatorioFolgasScreen({user}){
+  const p=user.permissions?.s36;
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const[empresas,setEmpresas]=useState([]);
+  const[equipes,setEquipes]=useState([]);
+  const[filters,setFilters]=useState({empresa:"",equipe:"",funcionario:"",data:"",compensado:""});
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/companies"),api.get("/teams")]).then(([e,eq])=>{setEmpresas(e);setEquipes(eq);});
+  },[]);
+
+  const load=async()=>{
+    setLoading(true);
+    const q=new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([,v])=>v))).toString();
+    api.get(`/folgas/relatorio${q?"?"+q:""}`).then(setItems).catch(()=>{}).finally(()=>setLoading(false));
+  };
+
+  const grouped=items.reduce((acc,it)=>{
+    const key=`${it.funcionarioNome}||${it.equipeNome}`;
+    if(!acc[key])acc[key]={funcionarioNome:it.funcionarioNome,equipeNome:it.equipeNome,rows:[]};
+    acc[key].rows.push(it);
+    return acc;
+  },{});
+
+  const exportPDF=()=>{
+    const doc=new jsPDF();
+    doc.setFontSize(14);
+    doc.text("Relatório - Controle de Folgas",14,15);
+    let y=25;
+    for(const g of Object.values(grouped)){
+      doc.setFontSize(11);doc.setFont(undefined,"bold");
+      doc.text(`${g.funcionarioNome} — ${g.equipeNome}`,14,y);y+=6;
+      autoTable(doc,{
+        startY:y,
+        head:[["Data","Início","Fim","Total","Compensado","Observação"]],
+        body:g.rows.map(r=>[r.data,r.horaInicio,r.horaFim,r.totalHoras||"",r.compensado,r.observacao||""]),
+        styles:{fontSize:9},margin:{left:14,right:14},
+      });
+      y=doc.lastAutoTable.finalY+8;
+    }
+    doc.save("relatorio-folgas.pdf");
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📋 Relatório — Controle de Folgas</span></div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16,padding:12,background:C.bg,borderRadius:8}}>
+        <select style={{...S.input,width:160}} value={filters.empresa} onChange={e=>setFilters(f=>({...f,empresa:e.target.value}))}>
+          <option value="">Empresa</option>
+          {empresas.map(e=><option key={e.id} value={e.id}>{e.nome}</option>)}
+        </select>
+        <select style={{...S.input,width:160}} value={filters.equipe} onChange={e=>setFilters(f=>({...f,equipe:e.target.value}))}>
+          <option value="">Equipe</option>
+          {equipes.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+        </select>
+        <input type="date" style={{...S.input,width:150}} value={filters.data} onChange={e=>setFilters(f=>({...f,data:e.target.value}))}/>
+        <select style={{...S.input,width:130}} value={filters.compensado} onChange={e=>setFilters(f=>({...f,compensado:e.target.value}))}>
+          <option value="">Compensado</option>
+          <option>Sim</option><option>Não</option>
+        </select>
+        <button style={S.btnSave} onClick={load}>🔍 Gerar</button>
+        {items.length>0&&<button style={{...S.btnCancel,background:"#C62828",color:"#fff",border:"none"}} onClick={exportPDF}>📄 PDF</button>}
+      </div>
+      {loading?<Spinner/>:Object.keys(grouped).length===0
+        ?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Use os filtros e clique em Gerar.</div>
+        :<div>{Object.values(grouped).map(g=>(
+          <div key={g.funcionarioNome+g.equipeNome} style={{marginBottom:24}}>
+            <div style={{fontWeight:700,fontSize:14,color:C.primary,marginBottom:8,padding:"6px 0",borderBottom:`2px solid ${C.primary}`}}>
+              👤 {g.funcionarioNome} — {g.equipeNome}
+            </div>
+            <table style={S.table}><thead><tr>
+              {["Data","Início","Fim","Total","Compensado","Observação"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            </tr></thead>
+            <tbody>{g.rows.map((r,i)=>(
+              <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={S.td}>{r.data}</td>
+                <td style={S.td}>{r.horaInicio}</td>
+                <td style={S.td}>{r.horaFim}</td>
+                <td style={{...S.td,fontWeight:700}}>{r.totalHoras||"—"}</td>
+                <td style={S.td}><span style={{...S.badge,background:r.compensado==="Sim"?"#E8F5E9":"#FFEBEE",color:r.compensado==="Sim"?"#2E7D32":"#C62828"}}>{r.compensado}</span></td>
+                <td style={S.td}>{r.observacao||"—"}</td>
+              </tr>
+            ))}</tbody></table>
+          </div>
+        ))}</div>
+      }
+    </div>
+  );
+}
+
+// ── POLÍTICAS DE TI (s37) ─────────────────────────────────────
+function PoliticasScreen({user}){
+  const p=user.permissions?.s37;
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[empresas,setEmpresas]=useState([]);
+  const[filters,setFilters]=useState({empresa:"",nome:"",data:"",status:""});
+  const[form,setForm]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[emailModal,setEmailModal]=useState(null);
+  const[emailForm,setEmailForm]=useState({emails:"",assunto:"",descricao:"",anexoIds:[]});
+  const[emailSending,setEmailSending]=useState(false);
+  const fileInputRef=useRef(null);
+
+  const load=async(f=filters)=>{
+    setLoading(true);
+    const q=new URLSearchParams(Object.fromEntries(Object.entries(f).filter(([,v])=>v))).toString();
+    api.get(`/politicas${q?"?"+q:""}`).then(setItems).catch(()=>{}).finally(()=>setLoading(false));
+  };
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    api.get("/companies").then(setEmpresas).catch(()=>{});
+    load();
+  },[]);
+
+  const openForm=(item=null)=>{
+    if(item){
+      const[d,m,y]=(item.data||"").split("/");
+      setForm({...item,data:y&&m&&d?`${y}-${m}-${d}`:"",_anexos:item.anexos||[]});
+    } else {
+      setForm({empresaId:"",nomePolitica:"",data:"",status:"Ativo",observacao:"",_anexos:[]});
+    }
+  };
+
+  const save=async()=>{
+    if(!form.empresaId||!form.nomePolitica?.trim()||!form.data)return alert("Empresa, Nome e Data são obrigatórios.");
+    try{
+      let id=form.id;
+      if(id)await api.put(`/politicas/${id}`,form);
+      else{const r=await api.post("/politicas",form);id=r.id;}
+      // Upload de novos arquivos
+      if(form._newFiles?.length){
+        const fd=new FormData();
+        for(const f of form._newFiles)fd.append("files",f);
+        const r=await fetch(`${API_URL}/politicas/${id}/anexos`,{method:"POST",headers:{Authorization:`Bearer ${localStorage.getItem("token")}`},body:fd});
+        if(!r.ok)throw new Error("Erro ao salvar anexos.");
+      }
+      setForm(null);load();
+    }catch(e){alert(e.message);}
+  };
+
+  const delAnexo=async(politicaId,anexoId)=>{
+    try{
+      await api.delete(`/politicas/anexos/${anexoId}`);
+      setForm(f=>({...f,_anexos:f._anexos.filter(a=>a.id!==anexoId)}));
+      load();
+    }catch(e){alert(e.message);}
+  };
+
+  const del=async()=>{
+    try{await api.delete(`/politicas/${delId}`);setDelId(null);load();}catch(e){alert(e.message);}
+  };
+
+  const openEmail=(item)=>{
+    setEmailModal(item);
+    setEmailForm({
+      emails:"",
+      assunto:`Política de TI - ${item.nomePolitica}`,
+      descricao:`Bom dia!\n\nSegue Política de TI para leitura e ciência.\n\nAtenciosamente,\nEquipe de TI`,
+      anexoIds:(item.anexos||[]).map(a=>a.id),
+    });
+  };
+
+  const sendEmail=async()=>{
+    if(!emailForm.emails.trim())return alert("Informe pelo menos um e-mail.");
+    setEmailSending(true);
+    try{
+      const emails=emailForm.emails.split(/[,;\n]/).map(e=>e.trim()).filter(Boolean);
+      await api.post(`/politicas/${emailModal.id}/enviar`,{...emailForm,emails});
+      alert("E-mail enviado com sucesso!");
+      setEmailModal(null);
+    }catch(e){alert(e.message);}finally{setEmailSending(false);}
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>📜 Políticas de TI</span>
+        {p?.insert&&<button style={S.btnAdd} onClick={()=>openForm()}>+ Nova Política</button>}
+      </div>
+      {/* Filtros */}
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16,padding:12,background:C.bg,borderRadius:8}}>
+        <select style={{...S.input,width:160}} value={filters.empresa} onChange={e=>setFilters(f=>({...f,empresa:e.target.value}))}>
+          <option value="">Empresa</option>
+          {empresas.map(e=><option key={e.id} value={e.id}>{e.nome}</option>)}
+        </select>
+        <input style={{...S.input,width:200}} placeholder="Nome da Política" value={filters.nome} onChange={e=>setFilters(f=>({...f,nome:e.target.value}))}/>
+        <input type="date" style={{...S.input,width:150}} value={filters.data} onChange={e=>setFilters(f=>({...f,data:e.target.value}))}/>
+        <select style={{...S.input,width:130}} value={filters.status} onChange={e=>setFilters(f=>({...f,status:e.target.value}))}>
+          <option value="">Status</option>
+          <option>Ativo</option><option>Inativo</option>
+        </select>
+        <button style={S.btnSave} onClick={()=>load()}>🔍 Filtrar</button>
+        <button style={S.btnCancel} onClick={()=>{const f={empresa:"",nome:"",data:"",status:""};setFilters(f);load(f);}}>✕ Limpar</button>
+      </div>
+      {loading?<Spinner/>:items.length===0
+        ?<div style={S.emptyState}><span style={S.emptyIcon}>📜</span>Nenhuma política registrada.</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Empresa","Nome","Data","Status","Anexos","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{items.map(it=>(
+            <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={S.td}>{it.empresaNome}</td>
+              <td style={{...S.td,fontWeight:600}}>{it.nomePolitica}</td>
+              <td style={S.td}>{it.data}</td>
+              <td style={S.td}><span style={{...S.badge,background:it.status==="Ativo"?"#E8F5E9":"#FFEBEE",color:it.status==="Ativo"?"#2E7D32":"#C62828"}}>{it.status}</span></td>
+              <td style={S.td}>{(it.anexos||[]).length>0?<span style={S.badge}>{it.anexos.length}</span>:"—"}</td>
+              <td style={S.td}>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #90CAF9"}} onClick={()=>openEmail(it)}>✉️ Enviar</button>
+                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openForm(it)}>✏️</button>}
+                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>}
+                </div>
+              </td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      }
+
+      {/* Modal form */}
+      {form&&(
+        <Modal title={form.id?"Editar Política":"Nova Política"} onClose={()=>setForm(null)} wide>
+          <SelectField label="Empresa *" value={form.empresaId} onChange={v=>setForm(f=>({...f,empresaId:v}))} options={empresas.map(e=>({value:e.id,label:e.nome}))}/>
+          <Input label="Nome da Política *" value={form.nomePolitica||""} onChange={v=>setForm(f=>({...f,nomePolitica:v}))}/>
+          <div style={S.formRow}><label style={S.label}>Data *</label><input type="date" style={S.input} value={form.data} onChange={e=>setForm(f=>({...f,data:e.target.value}))}/></div>
+          <SelectField label="Status" value={form.status} onChange={v=>setForm(f=>({...f,status:v}))} options={[{value:"Ativo",label:"Ativo"},{value:"Inativo",label:"Inativo"}]}/>
+          <div style={S.formRow}><label style={S.label}>Observação</label><textarea style={{...S.input,minHeight:80,resize:"vertical"}} value={form.observacao||""} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))}/></div>
+          {/* Anexos existentes */}
+          {(form._anexos||[]).length>0&&(
+            <div style={{marginBottom:12}}>
+              <label style={S.label}>Anexos</label>
+              {form._anexos.map(a=>(
+                <div key={a.id} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0"}}>
+                  <span style={{fontSize:12}}>📎 {a.nomeOriginal}</span>
+                  <button style={{...S.actionBtn,...S.btnDel,padding:"2px 6px"}} onClick={()=>delAnexo(form.id,a.id)}>🗑️</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Novos anexos */}
+          <div style={{marginBottom:12}}>
+            <label style={S.label}>Adicionar Arquivos</label>
+            <input ref={fileInputRef} type="file" multiple style={{display:"none"}} onChange={e=>setForm(f=>({...f,_newFiles:[...(f._newFiles||[]),...Array.from(e.target.files)]}))}/>
+            <button style={{...S.btnCancel,marginRight:8}} onClick={()=>fileInputRef.current?.click()}>📎 Selecionar Arquivos</button>
+            {(form._newFiles||[]).map((f,i)=>(
+              <div key={i} style={{fontSize:12,color:C.textLight}}>📎 {f.name}</div>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+            <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal enviar e-mail */}
+      {emailModal&&(
+        <Modal title={`✉️ Enviar — ${emailModal.nomePolitica}`} onClose={()=>setEmailModal(null)} wide>
+          <div style={S.formRow}>
+            <label style={S.label}>E-mails (separados por vírgula ou Enter) *</label>
+            <textarea style={{...S.input,minHeight:60,resize:"vertical"}} value={emailForm.emails} onChange={e=>setEmailForm(f=>({...f,emails:e.target.value}))} placeholder="email1@empresa.com, email2@empresa.com"/>
+          </div>
+          <Input label="Assunto *" value={emailForm.assunto} onChange={v=>setEmailForm(f=>({...f,assunto:v}))}/>
+          <div style={S.formRow}>
+            <label style={S.label}>Descrição</label>
+            <textarea style={{...S.input,minHeight:100,resize:"vertical"}} value={emailForm.descricao} onChange={e=>setEmailForm(f=>({...f,descricao:e.target.value}))}/>
+          </div>
+          {(emailModal.anexos||[]).length>0&&(
+            <div style={{marginBottom:12}}>
+              <label style={S.label}>Selecionar Anexos para Envio</label>
+              {emailModal.anexos.map(a=>(
+                <label key={a.id} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",cursor:"pointer",fontSize:13}}>
+                  <input type="checkbox" checked={emailForm.anexoIds.includes(a.id)}
+                    onChange={e=>setEmailForm(f=>({...f,anexoIds:e.target.checked?[...f.anexoIds,a.id]:f.anexoIds.filter(x=>x!==a.id)}))}/>
+                  📎 {a.nomeOriginal}
+                </label>
+              ))}
+            </div>
+          )}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+            <button style={S.btnCancel} onClick={()=>setEmailModal(null)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:emailSending?0.7:1}} onClick={sendEmail} disabled={emailSending}>
+              {emailSending?"Enviando...":"✉️ Enviar"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {delId&&<ConfirmModal msg="Excluir esta política e todos os anexos?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
 // ── CONFIGURAÇÃO DE INVENTÁRIO (s33) ──────────────────────────
 function ConfiguracaoInventarioScreen({user}){
   const p=user.permissions?.s33;
@@ -6527,6 +6974,8 @@ const navConfig=[
     {id:"s29",label:"Histórico de Movimentações",icon:"📜"},
     {id:"s30",label:"Férias",                   icon:"🏖️"},
     {id:"s34",label:"Inventário de Rede",        icon:"🔍"},
+    {id:"s35",label:"Controle de Folgas",        icon:"🏖️"},
+    {id:"s37",label:"Políticas de TI",           icon:"📜"},
   ]},
   {id:"relatorios",label:"Relatórios",icon:"📊",children:[
     {id:"s6", label:"Relatório de Horas",           icon:"📋"},
@@ -6539,6 +6988,7 @@ const navConfig=[
     {id:"s27",label:"Inventário de Ativos",         icon:"🗂️"},
     {id:"s31",label:"Relatório de Férias",             icon:"🏖️"},
     {id:"s32",label:"Composição de Equipe",            icon:"👥"},
+    {id:"s36",label:"Controle de Folgas",              icon:"🏖️"},
   ]},
 ];
 function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
@@ -6627,6 +7077,9 @@ const screenTitles={
   s32:"Relatórios › Composição de Equipe",
   s33:"Cadastros › Configuração de Inventário",
   s34:"Movimentações › Inventário de Rede",
+  s35:"Movimentações › Controle de Folgas",
+  s36:"Relatórios › Controle de Folgas",
+  s37:"Movimentações › Políticas de TI",
   profile:"Meu Perfil",
 };
 
@@ -6685,6 +7138,9 @@ export default function App(){
     s31:<RelatorioFeriasScreen user={user}/>,
     s32:<RelatorioComposicaoScreen user={user}/>,
     s33:<ConfiguracaoInventarioScreen user={user}/>,
+    s35:<FolgasScreen user={user}/>,
+    s36:<RelatorioFolgasScreen user={user}/>,
+    s37:<PoliticasScreen user={user}/>,
     s34:<InventarioRedeScreen user={user}/>,
   };
 
