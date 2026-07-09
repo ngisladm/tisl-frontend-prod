@@ -6179,8 +6179,8 @@ function PoliticasScreen({user}){
 
   const openForm=(item=null)=>{
     if(item){
-      const[d,m,y]=(item.data||"").split("/");
-      setForm({...item,data:y&&m&&d?`${y}-${m}-${d}`:"",_anexos:item.anexos||[]});
+      // data vem do banco como YYYY-MM-DD (formato do input date)
+      setForm({...item,_anexos:item.anexos||[]});
     } else {
       setForm({empresaId:"",nomePolitica:"",data:"",status:"Ativo",observacao:"",_anexos:[]});
     }
