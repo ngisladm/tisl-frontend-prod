@@ -6212,6 +6212,18 @@ function PoliticasScreen({user}){
     }catch(e){alert(e.message);}
   };
 
+  const downloadAnexo=async(a)=>{
+    try{
+      const _sess=JSON.parse(localStorage.getItem("sl_session")||"{}");
+      const resp=await fetch(`${API_URL}/politicas/download/${a.filename}`,{headers:{Authorization:`Bearer ${api.token||_sess.token||""}`}});
+      if(!resp.ok)throw new Error("Erro ao baixar arquivo.");
+      const blob=await resp.blob();
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement("a");link.href=url;link.download=a.nomeOriginal;link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),5000);
+    }catch(e){alert(e.message);}
+  };
+
   const del=async()=>{
     try{await api.delete(`/politicas/${delId}`);setDelId(null);load();}catch(e){alert(e.message);}
   };
@@ -6300,6 +6312,7 @@ function PoliticasScreen({user}){
               {form._anexos.map(a=>(
                 <div key={a.id} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0"}}>
                   <span style={{fontSize:12}}>📎 {a.nomeOriginal}</span>
+                  <button style={{...S.actionBtn,...S.btnEdit,padding:"2px 8px"}} onClick={()=>downloadAnexo(a)}>⬇️ Baixar</button>
                   <button style={{...S.actionBtn,...S.btnDel,padding:"2px 6px"}} onClick={()=>delAnexo(form.id,a.id)}>🗑️</button>
                 </div>
               ))}
@@ -6563,6 +6576,11 @@ function InventarioRedeScreen({user}){
   const[detailLoading,setDetailLoading]=useState(false);
   const pollRef=useRef(null);
 
+  // Filtros aba Dispositivos
+  const[devFilters,setDevFilters]=useState({ip:"",mac:"",hostname:"",os:"",cpu:"",ram:""});
+  // Filtros aba M365
+  const[m365Filters,setM365Filters]=useState({tenant:"",produtos:[]});
+
   const TIPOS=["Inventário de Ativos","Inventário de Software"];
 
   const load=()=>{
@@ -6642,6 +6660,111 @@ function InventarioRedeScreen({user}){
     return<span style={{...S.badge,background:c.bg,color:c.color,fontWeight:600}}>{s==="Executando"?"⏳ Executando...":s}</span>;
   };
 
+  // Filtragem de dispositivos
+  const filteredDevices=(detail?.devices||[]).filter(d=>{
+    const f=devFilters;
+    if(f.ip&&!d.ip?.toLowerCase().includes(f.ip.toLowerCase()))return false;
+    if(f.mac&&!d.mac?.toLowerCase().includes(f.mac.toLowerCase()))return false;
+    if(f.hostname&&!d.hostname?.toLowerCase().includes(f.hostname.toLowerCase()))return false;
+    if(f.os&&!d.os?.toLowerCase().includes(f.os.toLowerCase()))return false;
+    if(f.cpu&&!d.cpu?.toLowerCase().includes(f.cpu.toLowerCase()))return false;
+    if(f.ram&&d.ramGb!=null&&!String(d.ramGb).includes(f.ram))return false;
+    return true;
+  });
+
+  // Filtragem M365 — licenças
+  const allTenants=[...new Set((detail?.m365?.licenses||[]).map(l=>l.tenantName))];
+  const allProdutos=[...new Set((detail?.m365?.licenses||[]).map(l=>l.skuName))].sort();
+  const filteredLicenses=(detail?.m365?.licenses||[]).filter(l=>{
+    if(m365Filters.tenant&&l.tenantName!==m365Filters.tenant)return false;
+    if(m365Filters.produtos.length>0&&!m365Filters.produtos.includes(l.skuName))return false;
+    return true;
+  });
+  const filteredUsers=(detail?.m365?.users||[]).filter(u=>{
+    if(m365Filters.tenant&&u.tenantName!==m365Filters.tenant)return false;
+    return true;
+  });
+
+  // Toggle produto no multiselect
+  const toggleProduto=prod=>{
+    setM365Filters(f=>{
+      const arr=f.produtos.includes(prod)?f.produtos.filter(x=>x!==prod):[...f.produtos,prod];
+      return{...f,produtos:arr};
+    });
+  };
+
+  // Export Excel — Dispositivos
+  const exportDevicesExcel=()=>{
+    const rows=filteredDevices.map(d=>({
+      IP:d.ip||"",MAC:d.mac||"",Hostname:d.hostname||"",OS:d.os||"",
+      Fabricante:d.manufacturer||"",CPU:d.cpu||"",
+      "RAM (GB)":d.ramGb!=null?d.ramGb:"","Disco (GB)":d.diskGb!=null?d.diskGb:"",
+      Softwares:d.softwareCount||0
+    }));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Dispositivos");
+    XLSX.writeFile(wb,`Inventario_Dispositivos_${detail.collection.data}.xlsx`);
+  };
+
+  // Export PDF — Dispositivos
+  const exportDevicesPDF=()=>{
+    const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
+    doc.setFontSize(14);doc.setFont(undefined,"bold");
+    doc.text(`Inventário de Dispositivos — ${detail.collection.data}`,14,14);
+    doc.setFontSize(8);doc.setFont(undefined,"normal");
+    doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}`,14,20);
+    autoTable(doc,{
+      head:[["IP","MAC","Hostname","OS","Fabricante","CPU","RAM","Disco","Softwares"]],
+      body:filteredDevices.map(d=>[d.ip||"",d.mac||"",d.hostname||"",d.os||"",d.manufacturer||"",d.cpu||"",
+        d.ramGb!=null?`${d.ramGb} GB`:"",d.diskGb!=null?`${d.diskGb} GB`:"",d.softwareCount||0]),
+      startY:24,styles:{fontSize:7,cellPadding:2},
+      headStyles:{fillColor:[37,99,235],textColor:255,fontStyle:"bold"},
+      margin:{left:10,right:10},
+    });
+    doc.save(`Inventario_Dispositivos_${detail.collection.data}.pdf`);
+  };
+
+  // Export Excel — M365
+  const exportM365Excel=()=>{
+    const wbData=[];
+    filteredLicenses.forEach(l=>wbData.push({
+      Tenant:l.tenantName,Produto:l.skuName,Total:l.totalUnits,Usadas:l.usedUnits,Disponíveis:l.availableUnits
+    }));
+    const ws1=XLSX.utils.json_to_sheet(wbData);
+    const ws2=XLSX.utils.json_to_sheet(filteredUsers.map(u=>({Tenant:u.tenantName,Nome:u.displayName,"E-mail":u.email||""})));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws1,"Licenças");
+    XLSX.utils.book_append_sheet(wb,ws2,"Usuários");
+    XLSX.writeFile(wb,`Inventario_M365_${detail.collection.data}.xlsx`);
+  };
+
+  // Export PDF — M365
+  const exportM365PDF=()=>{
+    const doc=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
+    doc.setFontSize(14);doc.setFont(undefined,"bold");
+    doc.text(`Microsoft 365 — ${detail.collection.data}`,14,14);
+    doc.setFontSize(8);doc.setFont(undefined,"normal");
+    doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}`,14,20);
+    autoTable(doc,{
+      head:[["Tenant","Produto","Total","Usadas","Disponíveis"]],
+      body:filteredLicenses.map(l=>[l.tenantName,l.skuName,l.totalUnits,l.usedUnits,l.availableUnits]),
+      startY:24,styles:{fontSize:8,cellPadding:2},
+      headStyles:{fillColor:[37,99,235],textColor:255,fontStyle:"bold"},
+      margin:{left:10,right:10},
+    });
+    const finalY=doc.lastAutoTable.finalY+10;
+    doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("Usuários Licenciados",14,finalY);
+    autoTable(doc,{
+      head:[["Tenant","Nome","E-mail"]],
+      body:filteredUsers.map(u=>[u.tenantName,u.displayName,u.email||""]),
+      startY:finalY+4,styles:{fontSize:8,cellPadding:2},
+      headStyles:{fillColor:[37,99,235],textColor:255,fontStyle:"bold"},
+      margin:{left:10,right:10},
+    });
+    doc.save(`Inventario_M365_${detail.collection.data}.pdf`);
+  };
+
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
 
@@ -6701,7 +6824,7 @@ function InventarioRedeScreen({user}){
 
       {/* Modal de detalhes */}
       {detail&&(
-        <Modal title={`${detail.collection.tipo} — ${detail.collection.data}`} onClose={()=>setDetail(null)} extraWide>
+        <Modal title={`${detail.collection.tipo} — ${detail.collection.data}`} onClose={()=>{setDetail(null);setDevFilters({ip:"",mac:"",hostname:"",os:"",cpu:"",ram:""});setM365Filters({tenant:"",produtos:[]});}} extraWide>
           <div style={{display:"flex",gap:0,borderBottom:`1px solid ${C.border}`,marginBottom:16}}>
             {[["devices","💻 Dispositivos"],
               ...(detail.collection.tipo==="Inventário de Software"?[["m365","☁️ Microsoft 365"]]:[])]
@@ -6716,44 +6839,96 @@ function InventarioRedeScreen({user}){
           </div>
 
           {detailLoading?<Spinner/>:detail.tab==="devices"?(
-            detail.devices.length===0
-              ?<div style={S.emptyState}><span style={S.emptyIcon}>💻</span>Nenhum dispositivo encontrado.</div>
-              :<div style={{overflowX:"auto"}}>
-                <table style={S.table}><thead><tr>
-                  {["IP","MAC","Hostname","OS","Fabricante","CPU","RAM","Disco","Softwares",""].map(h=><th key={h} style={S.th}>{h}</th>)}
-                </tr></thead>
-                <tbody>{detail.devices.map(d=>(
-                  <tr key={d.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
-                    <td style={{...S.td,fontWeight:600,fontSize:12}}>{d.ip}</td>
-                    <td style={{...S.td,fontSize:11}}>{d.mac||"—"}</td>
-                    <td style={{...S.td,fontSize:12}}>{d.hostname||"—"}</td>
-                    <td style={{...S.td,fontSize:11}}>{d.os||"—"}</td>
-                    <td style={{...S.td,fontSize:11}}>{d.manufacturer||"—"}</td>
-                    <td style={{...S.td,fontSize:11}}>{d.cpu||"—"}</td>
-                    <td style={{...S.td,fontSize:11,textAlign:"center"}}>{d.ramGb!=null?`${d.ramGb} GB`:"—"}</td>
-                    <td style={{...S.td,fontSize:11,textAlign:"center"}}>{d.diskGb!=null?`${d.diskGb} GB`:"—"}</td>
-                    <td style={{...S.td,textAlign:"center"}}>
-                      {d.softwareCount>0
-                        ?<span style={{...S.badge,cursor:"pointer"}} onClick={()=>openSw(detail.collection.id,d)}>{d.softwareCount}</span>
-                        :"—"}
-                    </td>
-                    <td style={S.td}>
-                      {d.softwareCount>0&&
-                        <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #90CAF9",fontSize:11}}
-                          onClick={()=>openSw(detail.collection.id,d)}>📋 Softwares</button>}
-                    </td>
-                  </tr>
-                ))}</tbody></table>
+            <div>
+              {/* Filtros Dispositivos */}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,padding:10,background:C.bg,borderRadius:8}}>
+                {[["ip","IP"],["mac","MAC"],["hostname","Hostname"],["os","OS"],["cpu","CPU"],["ram","RAM (GB)"]].map(([k,label])=>(
+                  <input key={k} style={{...S.input,width:130}} placeholder={label}
+                    value={devFilters[k]} onChange={e=>setDevFilters(f=>({...f,[k]:e.target.value}))}/>
+                ))}
+                <button style={S.btnCancel} onClick={()=>setDevFilters({ip:"",mac:"",hostname:"",os:"",cpu:"",ram:""})}>✕ Limpar</button>
+                <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+                  <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"1px solid #A5D6A7"}} onClick={exportDevicesExcel}>📥 Excel</button>
+                  <button style={{...S.actionBtn,background:"#FFEBEE",color:"#C62828",border:"1px solid #EF9A9A"}} onClick={exportDevicesPDF}>📄 PDF</button>
+                </div>
               </div>
+              {filteredDevices.length===0
+                ?<div style={S.emptyState}><span style={S.emptyIcon}>💻</span>Nenhum dispositivo encontrado.</div>
+                :<div style={{overflowX:"auto"}}>
+                  <div style={{fontSize:12,color:C.textLight,marginBottom:6}}>{filteredDevices.length} dispositivo(s)</div>
+                  <table style={S.table}><thead><tr>
+                    {["IP","MAC","Hostname","OS","Fabricante","CPU","RAM","Disco","Softwares",""].map(h=><th key={h} style={S.th}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>{filteredDevices.map(d=>(
+                    <tr key={d.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                      <td style={{...S.td,fontWeight:600,fontSize:12}}>{d.ip}</td>
+                      <td style={{...S.td,fontSize:11}}>{d.mac||"—"}</td>
+                      <td style={{...S.td,fontSize:12}}>{d.hostname||"—"}</td>
+                      <td style={{...S.td,fontSize:11}}>{d.os||"—"}</td>
+                      <td style={{...S.td,fontSize:11}}>{d.manufacturer||"—"}</td>
+                      <td style={{...S.td,fontSize:11}}>{d.cpu||"—"}</td>
+                      <td style={{...S.td,fontSize:11,textAlign:"center"}}>{d.ramGb!=null?`${d.ramGb} GB`:"—"}</td>
+                      <td style={{...S.td,fontSize:11,textAlign:"center"}}>{d.diskGb!=null?`${d.diskGb} GB`:"—"}</td>
+                      <td style={{...S.td,textAlign:"center"}}>
+                        {d.softwareCount>0
+                          ?<span style={{...S.badge,cursor:"pointer"}} onClick={()=>openSw(detail.collection.id,d)}>{d.softwareCount}</span>
+                          :"—"}
+                      </td>
+                      <td style={S.td}>
+                        {d.softwareCount>0&&
+                          <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #90CAF9",fontSize:11}}
+                            onClick={()=>openSw(detail.collection.id,d)}>📋 Softwares</button>}
+                      </td>
+                    </tr>
+                  ))}</tbody></table>
+                </div>
+              }
+            </div>
           ):detail.tab==="m365"&&(
             <div>
-              <h4 style={{marginBottom:12,color:C.primary}}>Licenças por Tenant</h4>
-              {detail.m365.licenses.length===0
+              {/* Filtros M365 */}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-start",marginBottom:12,padding:10,background:C.bg,borderRadius:8}}>
+                <select style={{...S.input,width:180}} value={m365Filters.tenant} onChange={e=>setM365Filters(f=>({...f,tenant:e.target.value}))}>
+                  <option value="">Todos os Tenants</option>
+                  {allTenants.map(t=><option key={t} value={t}>{t}</option>)}
+                </select>
+                {/* Multiselect Produto */}
+                <div style={{position:"relative"}}>
+                  <div style={{...S.input,width:220,cursor:"pointer",userSelect:"none",display:"flex",justifyContent:"space-between",alignItems:"center"}}
+                    onClick={e=>{e.currentTarget.nextSibling.style.display=e.currentTarget.nextSibling.style.display==="block"?"none":"block";}}>
+                    <span style={{fontSize:12,color:m365Filters.produtos.length?C.text:C.textLight}}>
+                      {m365Filters.produtos.length===0?"Todos os Produtos":m365Filters.produtos.length===1?m365Filters.produtos[0]:`${m365Filters.produtos.length} produtos`}
+                    </span>
+                    <span style={{fontSize:10}}>▼</span>
+                  </div>
+                  <div style={{display:"none",position:"absolute",top:"100%",left:0,zIndex:999,background:C.white,border:`1px solid ${C.border}`,borderRadius:6,boxShadow:"0 4px 12px rgba(0,0,0,0.12)",minWidth:220,maxHeight:200,overflowY:"auto",padding:6}}>
+                    <label style={{display:"flex",alignItems:"center",gap:6,padding:"4px 6px",cursor:"pointer",fontSize:12,borderBottom:`1px solid ${C.border}`,marginBottom:4}}>
+                      <input type="checkbox" checked={m365Filters.produtos.length===0} onChange={()=>setM365Filters(f=>({...f,produtos:[]}))}/>
+                      <span style={{fontWeight:600}}>Todos</span>
+                    </label>
+                    {allProdutos.map(prod=>(
+                      <label key={prod} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 6px",cursor:"pointer",fontSize:12}}>
+                        <input type="checkbox" checked={m365Filters.produtos.includes(prod)} onChange={()=>toggleProduto(prod)}/>
+                        {prod}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <button style={S.btnCancel} onClick={()=>setM365Filters({tenant:"",produtos:[]})}>✕ Limpar</button>
+                <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+                  <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"1px solid #A5D6A7"}} onClick={exportM365Excel}>📥 Excel</button>
+                  <button style={{...S.actionBtn,background:"#FFEBEE",color:"#C62828",border:"1px solid #EF9A9A"}} onClick={exportM365PDF}>📄 PDF</button>
+                </div>
+              </div>
+
+              <h4 style={{marginBottom:8,color:C.primary}}>Licenças por Tenant</h4>
+              {filteredLicenses.length===0
                 ?<p style={{color:C.textLight,fontSize:13}}>Nenhuma licença coletada.</p>
-                :<table style={S.table}><thead><tr>
+                :<><div style={{fontSize:12,color:C.textLight,marginBottom:6}}>{filteredLicenses.length} licença(s)</div>
+                <table style={S.table}><thead><tr>
                   {["Tenant","Produto","Total","Usadas","Disponíveis"].map(h=><th key={h} style={S.th}>{h}</th>)}
                 </tr></thead>
-                <tbody>{detail.m365.licenses.map(l=>(
+                <tbody>{filteredLicenses.map(l=>(
                   <tr key={l.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                     <td style={S.td}>{l.tenantName}</td>
                     <td style={{...S.td,fontWeight:600}}>{l.skuName}</td>
@@ -6765,21 +6940,22 @@ function InventarioRedeScreen({user}){
                       </span>
                     </td>
                   </tr>
-                ))}</tbody></table>
+                ))}</tbody></table></>
               }
-              <h4 style={{margin:"20px 0 12px",color:C.primary}}>Usuários Licenciados</h4>
-              {detail.m365.users.length===0
+              <h4 style={{margin:"20px 0 8px",color:C.primary}}>Usuários Licenciados</h4>
+              {filteredUsers.length===0
                 ?<p style={{color:C.textLight,fontSize:13}}>Nenhum usuário coletado.</p>
-                :<table style={S.table}><thead><tr>
+                :<><div style={{fontSize:12,color:C.textLight,marginBottom:6}}>{filteredUsers.length} usuário(s)</div>
+                <table style={S.table}><thead><tr>
                   {["Tenant","Nome","E-mail"].map(h=><th key={h} style={S.th}>{h}</th>)}
                 </tr></thead>
-                <tbody>{detail.m365.users.map(u=>(
+                <tbody>{filteredUsers.map(u=>(
                   <tr key={u.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                     <td style={S.td}>{u.tenantName}</td>
                     <td style={{...S.td,fontWeight:600}}>{u.displayName}</td>
                     <td style={S.td}>{u.email||"—"}</td>
                   </tr>
-                ))}</tbody></table>
+                ))}</tbody></table></>
               }
             </div>
           )}
