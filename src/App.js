@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo, Fragment } from "react";
+import { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -5984,7 +5984,7 @@ function FolgasScreen({user}){
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16,padding:12,background:C.bg,borderRadius:8}}>
         <select style={{...S.input,width:160}} value={filters.empresa} onChange={e=>setFilters(f=>({...f,empresa:e.target.value}))}>
           <option value="">Empresa</option>
-          {empresas.map(e=><option key={e.id} value={e.id}>{e.nome}</option>)}
+          {empresas.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
         <select style={{...S.input,width:160}} value={filters.equipe} onChange={e=>setFilters(f=>({...f,equipe:e.target.value}))}>
           <option value="">Equipe</option>
@@ -6032,7 +6032,7 @@ function FolgasScreen({user}){
       }
       {form&&(
         <Modal title={form.id?"Editar Folga":"Nova Folga"} onClose={()=>setForm(null)}>
-          <SelectField label="Empresa *" value={form.empresaId} onChange={v=>setForm(f=>({...f,empresaId:v}))} options={empresas.map(e=>({value:e.id,label:e.nome}))}/>
+          <SelectField label="Empresa *" value={form.empresaId} onChange={v=>setForm(f=>({...f,empresaId:v}))} options={empresas.map(e=>({value:e.id,label:e.name}))}/>
           <SelectField label="Equipe *" value={form.equipeId} onChange={v=>setForm(f=>({...f,equipeId:v,funcionarioId:""}))} options={equipes.map(e=>({value:e.id,label:e.name}))}/>
           <SelectField label="Funcionário *" value={form.funcionarioId} onChange={v=>setForm(f=>({...f,funcionarioId:v}))} options={funcs.map(f=>({value:f.id,label:f.nome}))}/>
           <div style={S.formRow}><label style={S.label}>Data *</label><input type="date" style={S.input} value={form.data} onChange={e=>setForm(f=>({...f,data:e.target.value}))}/></div>
@@ -6108,7 +6108,7 @@ function RelatorioFolgasScreen({user}){
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16,padding:12,background:C.bg,borderRadius:8}}>
         <select style={{...S.input,width:160}} value={filters.empresa} onChange={e=>setFilters(f=>({...f,empresa:e.target.value}))}>
           <option value="">Empresa</option>
-          {empresas.map(e=><option key={e.id} value={e.id}>{e.nome}</option>)}
+          {empresas.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
         <select style={{...S.input,width:160}} value={filters.equipe} onChange={e=>setFilters(f=>({...f,equipe:e.target.value}))}>
           <option value="">Equipe</option>
@@ -6246,7 +6246,7 @@ function PoliticasScreen({user}){
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16,padding:12,background:C.bg,borderRadius:8}}>
         <select style={{...S.input,width:160}} value={filters.empresa} onChange={e=>setFilters(f=>({...f,empresa:e.target.value}))}>
           <option value="">Empresa</option>
-          {empresas.map(e=><option key={e.id} value={e.id}>{e.nome}</option>)}
+          {empresas.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
         <input style={{...S.input,width:200}} placeholder="Nome da Política" value={filters.nome} onChange={e=>setFilters(f=>({...f,nome:e.target.value}))}/>
         <input type="date" style={{...S.input,width:150}} value={filters.data} onChange={e=>setFilters(f=>({...f,data:e.target.value}))}/>
@@ -6285,7 +6285,7 @@ function PoliticasScreen({user}){
       {/* Modal form */}
       {form&&(
         <Modal title={form.id?"Editar Política":"Nova Política"} onClose={()=>setForm(null)} wide>
-          <SelectField label="Empresa *" value={form.empresaId} onChange={v=>setForm(f=>({...f,empresaId:v}))} options={empresas.map(e=>({value:e.id,label:e.nome}))}/>
+          <SelectField label="Empresa *" value={form.empresaId} onChange={v=>setForm(f=>({...f,empresaId:v}))} options={empresas.map(e=>({value:e.id,label:e.name}))}/>
           <Input label="Nome da Política *" value={form.nomePolitica||""} onChange={v=>setForm(f=>({...f,nomePolitica:v}))}/>
           <div style={S.formRow}><label style={S.label}>Data *</label><input type="date" style={S.input} value={form.data} onChange={e=>setForm(f=>({...f,data:e.target.value}))}/></div>
           <SelectField label="Status" value={form.status} onChange={v=>setForm(f=>({...f,status:v}))} options={[{value:"Ativo",label:"Ativo"},{value:"Inativo",label:"Inativo"}]}/>
