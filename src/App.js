@@ -5909,6 +5909,8 @@ function RelatorioFeriasScreen({user}){
   );
 }
 
+const fmtDate=d=>{if(!d)return"—";const[y,m,dd]=(d||"").split("-");return y&&m&&dd?`${dd}/${m}/${y}`:d;};
+
 // ── CONTROLE DE FOLGAS (s35) ──────────────────────────────────
 function FolgasScreen({user}){
   const p=user.permissions?.s35;
@@ -6016,7 +6018,7 @@ function FolgasScreen({user}){
               <td style={S.td}>{it.empresaNome}</td>
               <td style={S.td}>{it.equipeNome}</td>
               <td style={{...S.td,fontWeight:600}}>{it.funcionarioNome}</td>
-              <td style={S.td}>{it.data}</td>
+              <td style={S.td}>{fmtDate(it.data)}</td>
               <td style={S.td}>{it.horaInicio}</td>
               <td style={S.td}>{it.horaFim}</td>
               <td style={{...S.td,textAlign:"center",fontWeight:600}}>{it.totalHoras||"—"}</td>
@@ -6134,7 +6136,7 @@ function RelatorioFolgasScreen({user}){
             </tr></thead>
             <tbody>{g.rows.map((r,i)=>(
               <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
-                <td style={S.td}>{r.data}</td>
+                <td style={S.td}>{fmtDate(r.data)}</td>
                 <td style={S.td}>{r.horaInicio}</td>
                 <td style={S.td}>{r.horaFim}</td>
                 <td style={{...S.td,fontWeight:700}}>{r.totalHoras||"—"}</td>
@@ -6194,7 +6196,8 @@ function PoliticasScreen({user}){
       if(form._newFiles?.length){
         const fd=new FormData();
         for(const f of form._newFiles)fd.append("files",f);
-        const r=await fetch(`${API_URL}/politicas/${id}/anexos`,{method:"POST",headers:{Authorization:`Bearer ${localStorage.getItem("token")}`},body:fd});
+        const _sess=JSON.parse(localStorage.getItem("sl_session")||"{}");
+        const r=await fetch(`${API_URL}/politicas/${id}/anexos`,{method:"POST",headers:{Authorization:`Bearer ${api.token||_sess.token||""}`},body:fd});
         if(!r.ok)throw new Error("Erro ao salvar anexos.");
       }
       setForm(null);load();
@@ -6267,7 +6270,7 @@ function PoliticasScreen({user}){
             <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={S.td}>{it.empresaNome}</td>
               <td style={{...S.td,fontWeight:600}}>{it.nomePolitica}</td>
-              <td style={S.td}>{it.data}</td>
+              <td style={S.td}>{fmtDate(it.data)}</td>
               <td style={S.td}><span style={{...S.badge,background:it.status==="Ativo"?"#E8F5E9":"#FFEBEE",color:it.status==="Ativo"?"#2E7D32":"#C62828"}}>{it.status}</span></td>
               <td style={S.td}>{(it.anexos||[]).length>0?<span style={S.badge}>{it.anexos.length}</span>:"—"}</td>
               <td style={S.td}>
