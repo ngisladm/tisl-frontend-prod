@@ -2091,6 +2091,7 @@ function ContratosScreen({user}){
   const[anexos,setAnexos]=useState([]);
   const[newFiles,setNewFiles]=useState([]);
   const[savingAnexos,setSavingAnexos]=useState(false);
+  const contratoFileRef=useRef(null);
   const p=user.permissions?.s13;
 
   useEffect(()=>{
@@ -2265,10 +2266,8 @@ function ContratosScreen({user}){
                 <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setNewFiles(prev=>prev.filter((_,j)=>j!==i))}>🗑️</button>
               </div>
             ))}
-            <label style={{...S.btnCancel,display:"inline-block",cursor:"pointer",marginTop:4}}>
-              📎 Selecionar Arquivos
-              <input type="file" multiple style={{display:"none"}} onChange={e=>{setNewFiles(prev=>[...prev,...Array.from(e.target.files)]);e.target.value="";}}/>
-            </label>
+            <input ref={contratoFileRef} type="file" multiple style={{display:"none"}} onChange={e=>{setNewFiles(prev=>[...prev,...Array.from(e.target.files)]);e.target.value="";}}/>
+            <button style={{...S.btnCancel,marginTop:4}} onClick={()=>contratoFileRef.current?.click()}>📎 Selecionar Arquivos</button>
           </div>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
             <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
