@@ -3667,6 +3667,7 @@ function ControleAtivosScreen({user}){
   const[filterCA,setFilterCA]=useState({empresa:"",funcionario:"",cpf:"",operadora:"",numeroLinha:"",dataAquisicao:"",numeroSerie:"",numeroDocumento:"",patrimonio:"",imeiSlot1:""});
   const[movModal,setMovModal]=useState(null); // {item, controleId}
   const[cargaModal,setCargaModal]=useState(null);
+  const[sendingEmail,setSendingEmail]=useState(false);
   const isMobile=useIsMobile();
 
   const load=()=>{
@@ -3735,7 +3736,53 @@ function ControleAtivosScreen({user}){
   };
 
   // Anexos
-  const openAnexos=(controleId,item)=>setAnexosModal({controleId,itemId:item.id,attachments:item.attachments||[]});
+  const openAnexos=async(controleId,item)=>{
+    setAnexosModal({controleId,itemId:item.id,anexos:[],loadingAnexos:true,newFiles:[]});
+    try{
+      const r=await api.get(`/controle-ativos/${controleId}/itens/${item.id}/file-anexos`);
+      setAnexosModal(m=>m?{...m,anexos:r,loadingAnexos:false}:null);
+    }catch(e){setAnexosModal(m=>m?{...m,loadingAnexos:false}:null);}
+  };
+
+  const downloadAnexoCA=async(a)=>{
+    try{
+      const _sess=JSON.parse(localStorage.getItem("sl_session")||"{}");
+      const resp=await fetch(`${API_URL}/controle-ativos/download/${a.filename}`,{headers:{Authorization:`Bearer ${api.token||_sess.token||""}`}});
+      if(!resp.ok)throw new Error("Erro ao baixar arquivo.");
+      const blob=await resp.blob();
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement("a");link.href=url;link.download=a.nomeOriginal;link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),5000);
+    }catch(e){alert(e.message);}
+  };
+
+  const delAnexoCA=async(anexoId)=>{
+    try{
+      await api.delete(`/controle-ativos/file-anexos/${anexoId}`);
+      setAnexosModal(m=>m?{...m,anexos:m.anexos.filter(a=>a.id!==anexoId)}:null);
+      reloadItens();
+    }catch(e){alert(e.message);}
+  };
+
+  const[savingAnexos,setSavingAnexos]=useState(false);
+  const saveAnexos=async()=>{
+    if(!anexosModal.newFiles?.length){setAnexosModal(null);return;}
+    if(savingAnexos)return;
+    setSavingAnexos(true);
+    try{
+      const fd=new FormData();
+      for(const f of anexosModal.newFiles)fd.append("files",f);
+      const _sess=JSON.parse(localStorage.getItem("sl_session")||"{}");
+      const resp=await fetch(`${API_URL}/controle-ativos/${anexosModal.controleId}/itens/${anexosModal.itemId}/file-anexos`,{
+        method:"POST",headers:{Authorization:`Bearer ${api.token||_sess.token||""}`},body:fd
+      });
+      if(!resp.ok)throw new Error("Erro ao salvar anexos.");
+      const novos=await resp.json();
+      setAnexosModal(m=>m?{...m,anexos:[...m.anexos,...novos],newFiles:[]}:null);
+      reloadItens();
+    }catch(e){alert(e.message);}
+    finally{setSavingAnexos(false);}
+  };
 
   const imprimirContrato=async(item)=>{
     const modelo=modelos.find(m=>m.tipoAtivoId===item.tipoAtivoId&&m.empresaId===item.companyId);
@@ -3827,11 +3874,13 @@ function ControleAtivosScreen({user}){
   };
 
   const enviarContrato=async(item)=>{
+    if(sendingEmail)return;
     const funcItem=funcionarios.find(f=>f.id===itensModal.controle.funcionarioId);
     if(!funcItem?.email?.trim()){
       alert("O funcionário "+(funcItem?.nome||itensModal.controle.nomeFuncionario||"")+" não possui e-mail cadastrado. Cadastre o e-mail na tela de Funcionários.");
       return;
     }
+    setSendingEmail(true);
     const modelo=modelos.find(m=>m.tipoAtivoId===item.tipoAtivoId&&m.empresaId===item.companyId);
     if(!modelo){alert("Nenhum modelo de contrato cadastrado para o Tipo de Ativo \""+(item.tipoAtivoName||"—")+"\" e a Empresa \""+(item.companyName||"—")+"\".");return;}
     let conteudo="";
@@ -3901,24 +3950,9 @@ function ControleAtivosScreen({user}){
       await api.post("/email/enviar-contrato",{toEmail:funcItem.email,pdfBase64,funcionarioNome:funcItem.nome||itensModal.controle.nomeFuncionario});
       alert("E-mail enviado com sucesso para "+funcItem.email+"!");
     }catch(e){alert("Erro ao enviar e-mail: "+e.message);}
-    finally{document.body.removeChild(el);}
+    finally{document.body.removeChild(el);setSendingEmail(false);}
   };
 
-  const handleAnexoAdd=e=>{
-    const file=e.target.files[0];if(!file)return;
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      setAnexosModal(m=>({...m,attachments:[...m.attachments,{name:file.name,type:file.type,size:file.size,data:ev.target.result}]}));
-    };
-    reader.readAsDataURL(file);
-  };
-  const removeAnexo=idx=>setAnexosModal(m=>({...m,attachments:m.attachments.filter((_,i)=>i!==idx)}));
-  const saveAnexos=async()=>{
-    try{
-      await api.put(`/controle-ativos/${anexosModal.controleId}/itens/${anexosModal.itemId}/anexos`,{attachments:anexosModal.attachments});
-      setAnexosModal(null);reloadItens();
-    }catch(e){alert(e.message);}
-  };
 
   const canI=act=>user.permissions?.s21?.[act];
   const MASK_CPF="999.999.999-99";
@@ -4096,7 +4130,7 @@ function ControleAtivosScreen({user}){
                         📎{item.attachments?.length?` (${item.attachments.length})`:""}
                       </button>
                       {item.tipoAtivoId&&<button style={{...S.actionBtn,background:"#E8F5E9",color:"#1B5E20",fontWeight:600}} onClick={()=>imprimirContrato(item)}>🖨️ Contrato</button>}
-                      {item.tipoAtivoId&&<button style={{...S.actionBtn,background:"#E3F2FD",color:"#0D47A1",fontWeight:600}} onClick={()=>enviarContrato(item)}>📧 Enviar</button>}
+                      {item.tipoAtivoId&&<button style={{...S.actionBtn,background:"#E3F2FD",color:"#0D47A1",fontWeight:600,opacity:sendingEmail?0.7:1}} disabled={sendingEmail} onClick={()=>enviarContrato(item)}>{sendingEmail?"Enviando...":"📧 Enviar"}</button>}
                     </td>
                   </tr>
                 );
@@ -4225,29 +4259,37 @@ function ControleAtivosScreen({user}){
 
       {/* Anexos modal */}
       {anexosModal&&(
-        <Modal title="Anexos" onClose={()=>setAnexosModal(null)} wide>
-          <div style={{marginBottom:16}}>
-            <label style={{...S.btnAdd,display:"inline-block",cursor:"pointer",fontSize:12,padding:"7px 14px"}}>
-              📎 Adicionar anexo
-              <input type="file" onChange={handleAnexoAdd} style={{display:"none"}}/>
-            </label>
-          </div>
-          {anexosModal.attachments.length===0?<div style={{color:C.textLight,fontSize:13,marginBottom:16}}>Nenhum anexo.</div>:(
-            <div style={{marginBottom:16}}>
-              {anexosModal.attachments.map((a,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",border:`1px solid ${C.border}`,borderRadius:6,marginBottom:6}}>
-                  <div>
-                    <a href={a.data} download={a.name} style={{color:C.primary,fontWeight:600,fontSize:13}}>{a.name}</a>
-                    <span style={{fontSize:11,color:C.textLight,marginLeft:8}}>{a.size?(a.size/1024).toFixed(1)+" KB":""}</span>
+        <Modal title="Anexos do Item" onClose={()=>setAnexosModal(null)} wide>
+          {/* Anexos salvos */}
+          {anexosModal.loadingAnexos?<Spinner/>:anexosModal.anexos.length===0&&(anexosModal.newFiles||[]).length===0
+            ?<div style={{color:C.textLight,fontSize:13,marginBottom:12}}>Nenhum anexo.</div>
+            :<div style={{marginBottom:12}}>
+              {anexosModal.anexos.map(a=>(
+                <div key={a.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",border:`1px solid ${C.border}`,borderRadius:6,marginBottom:6}}>
+                  <span style={{fontSize:13,color:C.primary,fontWeight:600}}>📎 {a.nomeOriginal}</span>
+                  <div style={{display:"flex",gap:6}}>
+                    <button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>downloadAnexoCA(a)}>⬇️ Baixar</button>
+                    {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>delAnexoCA(a.id)}>🗑️</button>}
                   </div>
-                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>removeAnexo(i)}>Remover</button>}
+                </div>
+              ))}
+              {(anexosModal.newFiles||[]).map((f,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",border:`1px dashed ${C.border}`,borderRadius:6,marginBottom:6}}>
+                  <span style={{fontSize:12,color:C.textLight}}>📎 {f.name} <span style={{fontSize:11}}>({(f.size/1024).toFixed(1)} KB)</span></span>
+                  <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setAnexosModal(m=>({...m,newFiles:m.newFiles.filter((_,j)=>j!==i)}))}>🗑️</button>
                 </div>
               ))}
             </div>
-          )}
+          }
+          {/* Adicionar arquivos */}
+          <label style={{...S.btnCancel,display:"inline-block",cursor:"pointer",marginBottom:16}}>
+            📎 Selecionar Arquivos
+            <input type="file" multiple style={{display:"none"}} onChange={e=>setAnexosModal(m=>({...m,newFiles:[...(m.newFiles||[]),...Array.from(e.target.files)]}))}/>
+          </label>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-            <button style={S.btnCancel} onClick={()=>setAnexosModal(null)}>Cancelar</button>
-            <button style={S.btnSave} onClick={saveAnexos}>Salvar Anexos</button>
+            <button style={S.btnCancel} onClick={()=>setAnexosModal(null)} disabled={savingAnexos}>Fechar</button>
+            {(anexosModal.newFiles||[]).length>0&&
+              <button style={{...S.btnSave,opacity:savingAnexos?0.7:1}} onClick={saveAnexos} disabled={savingAnexos}>{savingAnexos?"Salvando...":"💾 Salvar Anexos"}</button>}
           </div>
         </Modal>
       )}
