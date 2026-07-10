@@ -2079,7 +2079,7 @@ function ContratosScreen({user}){
   const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
   const[filters,setFilters]=useState({companyId:"",supplierId:"",contractNumber:"",dataFrom:"",dataTo:"",frequencia:"",status:""});
-  const emptyForm={id:null,companyId:"",supplierId:"",contractNumber:"",dataInicio:"",dataFim:"",valor:"",valorAtual:"",observacao:"",attachments:[],frequencia:""};
+  const emptyForm={id:null,companyId:"",supplierId:"",contractNumber:"",dataInicio:"",dataFim:"",valor:"",valorAtual:"",observacao:"",frequencia:"",_newFiles:[]};
   const getStatus=dataFim=>{
     if(!dataFim)return"Ativo";
     const[d,m,y]=dataFim.split("/");
@@ -2089,7 +2089,6 @@ function ContratosScreen({user}){
   };
   const[form,setForm]=useState(emptyForm);
   const[anexos,setAnexos]=useState([]);
-  const[newFiles,setNewFiles]=useState([]);
   const[savingAnexos,setSavingAnexos]=useState(false);
   const contratoFileRef=useRef(null);
   const p=user.permissions?.s13;
@@ -2101,10 +2100,10 @@ function ContratosScreen({user}){
       .catch(e=>alert(e.message)).finally(()=>setLoading(false));
   },[]);
 
-  const openAdd=()=>{setForm(emptyForm);setAnexos([]);setNewFiles([]);setModal(true);};
+  const openAdd=()=>{setForm(emptyForm);setAnexos([]);setModal(true);};
   const openEdit=async it=>{
-    setForm({...it,valor:it.valor?String(it.valor):"",valorAtual:it.valorAtual?String(it.valorAtual):"",frequencia:it.frequencia||""});
-    setNewFiles([]);setModal(true);
+    setForm({...it,valor:it.valor?String(it.valor):"",valorAtual:it.valorAtual?String(it.valorAtual):"",frequencia:it.frequencia||"",_newFiles:[]});
+    setModal(true);
     try{const r=await api.get(`/contracts/${it.id}/anexos`);setAnexos(r);}catch{setAnexos([]);}
   };
 
@@ -2127,18 +2126,17 @@ function ContratosScreen({user}){
     }catch(e){alert(e.message);}
   };
 
-  const uploadAnexos=async(contractId)=>{
-    if(!newFiles.length)return;
+  const uploadAnexos=async(contractId,files)=>{
+    if(!files||!files.length)return;
     setSavingAnexos(true);
     try{
       const fd=new FormData();
-      for(const f of newFiles)fd.append("files",f);
+      for(const f of files)fd.append("files",f);
       const _sess=JSON.parse(localStorage.getItem("sl_session")||"{}");
       const resp=await fetch(`${API_URL}/contracts/${contractId}/anexos`,{method:"POST",headers:{Authorization:`Bearer ${api.token||_sess.token||""}`},body:fd});
       if(!resp.ok)throw new Error("Erro ao salvar anexos.");
       const novos=await resp.json();
       setAnexos(prev=>[...prev,...novos]);
-      setNewFiles([]);
     }catch(e){alert(e.message);}
     finally{setSavingAnexos(false);}
   };
@@ -2150,7 +2148,7 @@ function ContratosScreen({user}){
       let saved;
       if(form.id){saved=await api.put(`/contracts/${form.id}`,form);setItems(is=>is.map(i=>i.id===saved.id?saved:i));}
       else{saved=await api.post("/contracts",form);setItems(is=>[...is,saved]);}
-      await uploadAnexos(saved.id);
+      await uploadAnexos(saved.id,form._newFiles||[]);
       setModal(false);
     }catch(e){alert(e.message);}finally{setSaving(false);}
   };
@@ -2260,13 +2258,13 @@ function ContratosScreen({user}){
                 </div>
               </div>
             ))}
-            {newFiles.map((f,i)=>(
+            {(form._newFiles||[]).map((f,i)=>(
               <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",border:`1px dashed ${C.border}`,borderRadius:6,marginBottom:6}}>
                 <span style={{fontSize:12,color:C.textLight}}>📎 {f.name}</span>
-                <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setNewFiles(prev=>prev.filter((_,j)=>j!==i))}>🗑️</button>
+                <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setForm(f=>({...f,_newFiles:f._newFiles.filter((_,j)=>j!==i)}))}>🗑️</button>
               </div>
             ))}
-            <input ref={contratoFileRef} type="file" multiple style={{display:"none"}} onChange={e=>{setNewFiles(prev=>[...prev,...Array.from(e.target.files)]);e.target.value="";}}/>
+            <input ref={contratoFileRef} type="file" multiple style={{display:"none"}} onChange={e=>{const files=Array.from(e.target.files);if(files.length)setForm(f=>({...f,_newFiles:[...(f._newFiles||[]),...files]}));e.target.value="";}}/>
             <button style={{...S.btnCancel,marginTop:4}} onClick={()=>contratoFileRef.current?.click()}>📎 Selecionar Arquivos</button>
           </div>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
