@@ -2204,8 +2204,8 @@ function ContratosScreen({user}){
             <td style={{...S.td,textAlign:"right"}}>{fmtMoney(it.valor)}</td>
             <td style={{...S.td,textAlign:"right"}}>{fmtMoney(it.valorAtual)}</td>
             <td style={S.td}>
-              {(it.attachments||[]).length>0&&(
-                <span style={{...S.badge,...S.badgeActive}}>{(it.attachments||[]).length} arquivo(s)</span>
+              {(it.anexosCount||0)>0&&(
+                <span style={{...S.badge,...S.badgeActive}}>{it.anexosCount} arquivo(s)</span>
               )}
             </td>
             <td style={S.td}>
