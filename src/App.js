@@ -6162,6 +6162,7 @@ function PoliticasScreen({user}){
   const[delId,setDelId]=useState(null);
   const[emailModal,setEmailModal]=useState(null);
   const[emailForm,setEmailForm]=useState({emails:"",assunto:"",descricao:"",anexoIds:[]});
+  const[saving,setSaving]=useState(false);
   const[emailSending,setEmailSending]=useState(false);
   const fileInputRef=useRef(null);
 
@@ -6188,6 +6189,8 @@ function PoliticasScreen({user}){
 
   const save=async()=>{
     if(!form.empresaId||!form.nomePolitica?.trim()||!form.data)return alert("Empresa, Nome e Data são obrigatórios.");
+    if(saving)return;
+    setSaving(true);
     try{
       let id=form.id;
       if(id)await api.put(`/politicas/${id}`,form);
@@ -6202,6 +6205,7 @@ function PoliticasScreen({user}){
       }
       setForm(null);load();
     }catch(e){alert(e.message);}
+    finally{setSaving(false);}
   };
 
   const delAnexo=async(politicaId,anexoId)=>{
@@ -6328,8 +6332,8 @@ function PoliticasScreen({user}){
             ))}
           </div>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
-            <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
-            <button style={S.btnSave} onClick={save}>Salvar</button>
+            <button style={S.btnCancel} onClick={()=>setForm(null)} disabled={saving}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
           </div>
         </Modal>
       )}
