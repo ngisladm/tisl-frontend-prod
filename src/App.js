@@ -2088,6 +2088,9 @@ function ContratosScreen({user}){
     return fim<=hoje?"Inativo":"Ativo";
   };
   const[form,setForm]=useState(emptyForm);
+  const[anexos,setAnexos]=useState([]);
+  const[newFiles,setNewFiles]=useState([]);
+  const[savingAnexos,setSavingAnexos]=useState(false);
   const p=user.permissions?.s13;
 
   useEffect(()=>{
@@ -2097,39 +2100,61 @@ function ContratosScreen({user}){
       .catch(e=>alert(e.message)).finally(()=>setLoading(false));
   },[]);
 
-  const openAdd=()=>{setForm(emptyForm);setModal(true);};
-  const openEdit=it=>{setForm({...it,valor:it.valor?String(it.valor):"",valorAtual:it.valorAtual?String(it.valorAtual):"",attachments:it.attachments||[],frequencia:it.frequencia||""});setModal(true);};
-
-  const handleFile=e=>{
-    const files=Array.from(e.target.files);
-    files.forEach(file=>{
-      const reader=new FileReader();
-      reader.onload=ev=>{
-        setForm(f=>({...f,attachments:[...f.attachments,{name:file.name,type:file.type,size:file.size,data:ev.target.result}]}));
-      };
-      reader.readAsDataURL(file);
-    });
-    e.target.value="";
+  const openAdd=()=>{setForm(emptyForm);setAnexos([]);setNewFiles([]);setModal(true);};
+  const openEdit=async it=>{
+    setForm({...it,valor:it.valor?String(it.valor):"",valorAtual:it.valorAtual?String(it.valorAtual):"",frequencia:it.frequencia||""});
+    setNewFiles([]);setModal(true);
+    try{const r=await api.get(`/contracts/${it.id}/anexos`);setAnexos(r);}catch{setAnexos([]);}
   };
 
-  const removeAttachment=idx=>{setForm(f=>({...f,attachments:f.attachments.filter((_,i)=>i!==idx)}));};
+  const downloadAnexoContrato=async(a)=>{
+    try{
+      const _sess=JSON.parse(localStorage.getItem("sl_session")||"{}");
+      const resp=await fetch(`${API_URL}/contracts/download/${a.filename}`,{headers:{Authorization:`Bearer ${api.token||_sess.token||""}`}});
+      if(!resp.ok)throw new Error("Erro ao baixar arquivo.");
+      const blob=await resp.blob();
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement("a");link.href=url;link.download=a.nomeOriginal;link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),5000);
+    }catch(e){alert(e.message);}
+  };
 
-  const downloadFile=(att)=>{
-    const a=document.createElement("a");a.href=att.data;a.download=att.name;a.click();
+  const delAnexoContrato=async(anexoId)=>{
+    try{
+      await api.delete(`/contracts/anexos/${anexoId}`);
+      setAnexos(prev=>prev.filter(a=>a.id!==anexoId));
+    }catch(e){alert(e.message);}
+  };
+
+  const uploadAnexos=async(contractId)=>{
+    if(!newFiles.length)return;
+    setSavingAnexos(true);
+    try{
+      const fd=new FormData();
+      for(const f of newFiles)fd.append("files",f);
+      const _sess=JSON.parse(localStorage.getItem("sl_session")||"{}");
+      const resp=await fetch(`${API_URL}/contracts/${contractId}/anexos`,{method:"POST",headers:{Authorization:`Bearer ${api.token||_sess.token||""}`},body:fd});
+      if(!resp.ok)throw new Error("Erro ao salvar anexos.");
+      const novos=await resp.json();
+      setAnexos(prev=>[...prev,...novos]);
+      setNewFiles([]);
+    }catch(e){alert(e.message);}
+    finally{setSavingAnexos(false);}
   };
 
   const save=async()=>{
     if(!form.companyId||!form.supplierId)return alert("Empresa e Fornecedor são obrigatórios.");
     setSaving(true);
     try{
-      if(form.id){const u=await api.put(`/contracts/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
-      else{const c=await api.post("/contracts",form);setItems(is=>[...is,c]);}
+      let saved;
+      if(form.id){saved=await api.put(`/contracts/${form.id}`,form);setItems(is=>is.map(i=>i.id===saved.id?saved:i));}
+      else{saved=await api.post("/contracts",form);setItems(is=>[...is,saved]);}
+      await uploadAnexos(saved.id);
       setModal(false);
     }catch(e){alert(e.message);}finally{setSaving(false);}
   };
   const del=async()=>{try{await api.delete(`/contracts/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
   const fmtMoney=v=>v?Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"}):"—";
-  const fmtSize=b=>{if(b<1024)return`${b}B`;if(b<1048576)return`${(b/1024).toFixed(1)}KB`;return`${(b/1048576).toFixed(1)}MB`;};
 
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
@@ -2225,26 +2250,25 @@ function ContratosScreen({user}){
           {/* Anexos */}
           <div style={S.formRow}>
             <label style={S.label}>Anexos</label>
-            <input type="file" multiple onChange={handleFile} style={{marginBottom:8}}/>
-            {form.attachments&&form.attachments.length>0&&(
-              <div style={{border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden"}}>
-                {form.attachments.map((att,idx)=>(
-                  <div key={idx} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span>📎</span>
-                      <div>
-                        <div style={{fontWeight:600}}>{att.name}</div>
-                        <div style={{fontSize:11,color:C.textLight}}>{fmtSize(att.size||0)}</div>
-                      </div>
-                    </div>
-                    <div style={{display:"flex",gap:6}}>
-                      {att.data&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>downloadFile(att)}>⬇️ Baixar</button>}
-                      <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>removeAttachment(idx)}>🗑️</button>
-                    </div>
-                  </div>
-                ))}
+            {anexos.map(a=>(
+              <div key={a.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",border:`1px solid ${C.border}`,borderRadius:6,marginBottom:6}}>
+                <span style={{fontSize:13,color:C.primary,fontWeight:600}}>📎 {a.nomeOriginal}</span>
+                <div style={{display:"flex",gap:6}}>
+                  <button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>downloadAnexoContrato(a)}>⬇️ Baixar</button>
+                  {p?.edit&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>delAnexoContrato(a.id)}>🗑️</button>}
+                </div>
               </div>
-            )}
+            ))}
+            {newFiles.map((f,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",border:`1px dashed ${C.border}`,borderRadius:6,marginBottom:6}}>
+                <span style={{fontSize:12,color:C.textLight}}>📎 {f.name}</span>
+                <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setNewFiles(prev=>prev.filter((_,j)=>j!==i))}>🗑️</button>
+              </div>
+            ))}
+            <label style={{...S.btnCancel,display:"inline-block",cursor:"pointer",marginTop:4}}>
+              📎 Selecionar Arquivos
+              <input type="file" multiple style={{display:"none"}} onChange={e=>{setNewFiles(prev=>[...prev,...Array.from(e.target.files)]);e.target.value="";}}/>
+            </label>
           </div>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
             <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
@@ -3736,52 +3760,21 @@ function ControleAtivosScreen({user}){
   };
 
   // Anexos
-  const openAnexos=async(controleId,item)=>{
-    setAnexosModal({controleId,itemId:item.id,anexos:[],loadingAnexos:true,newFiles:[]});
-    try{
-      const r=await api.get(`/controle-ativos/${controleId}/itens/${item.id}/file-anexos`);
-      setAnexosModal(m=>m?{...m,anexos:r,loadingAnexos:false}:null);
-    }catch(e){setAnexosModal(m=>m?{...m,loadingAnexos:false}:null);}
+  const openAnexos=(controleId,item)=>setAnexosModal({controleId,itemId:item.id,attachments:item.attachments||[]});
+  const removeAnexo=idx=>setAnexosModal(m=>({...m,attachments:m.attachments.filter((_,i)=>i!==idx)}));
+  const handleAnexoAdd=e=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      setAnexosModal(m=>({...m,attachments:[...m.attachments,{name:file.name,type:file.type,size:file.size,data:ev.target.result}]}));
+    };
+    reader.readAsDataURL(file);
   };
-
-  const downloadAnexoCA=async(a)=>{
-    try{
-      const _sess=JSON.parse(localStorage.getItem("sl_session")||"{}");
-      const resp=await fetch(`${API_URL}/controle-ativos/download/${a.filename}`,{headers:{Authorization:`Bearer ${api.token||_sess.token||""}`}});
-      if(!resp.ok)throw new Error("Erro ao baixar arquivo.");
-      const blob=await resp.blob();
-      const url=URL.createObjectURL(blob);
-      const link=document.createElement("a");link.href=url;link.download=a.nomeOriginal;link.click();
-      setTimeout(()=>URL.revokeObjectURL(url),5000);
-    }catch(e){alert(e.message);}
-  };
-
-  const delAnexoCA=async(anexoId)=>{
-    try{
-      await api.delete(`/controle-ativos/file-anexos/${anexoId}`);
-      setAnexosModal(m=>m?{...m,anexos:m.anexos.filter(a=>a.id!==anexoId)}:null);
-      reloadItens();
-    }catch(e){alert(e.message);}
-  };
-
-  const[savingAnexos,setSavingAnexos]=useState(false);
   const saveAnexos=async()=>{
-    if(!anexosModal.newFiles?.length){setAnexosModal(null);return;}
-    if(savingAnexos)return;
-    setSavingAnexos(true);
     try{
-      const fd=new FormData();
-      for(const f of anexosModal.newFiles)fd.append("files",f);
-      const _sess=JSON.parse(localStorage.getItem("sl_session")||"{}");
-      const resp=await fetch(`${API_URL}/controle-ativos/${anexosModal.controleId}/itens/${anexosModal.itemId}/file-anexos`,{
-        method:"POST",headers:{Authorization:`Bearer ${api.token||_sess.token||""}`},body:fd
-      });
-      if(!resp.ok)throw new Error("Erro ao salvar anexos.");
-      const novos=await resp.json();
-      setAnexosModal(m=>m?{...m,anexos:[...m.anexos,...novos],newFiles:[]}:null);
-      reloadItens();
+      await api.put(`/controle-ativos/${anexosModal.controleId}/itens/${anexosModal.itemId}/anexos`,{attachments:anexosModal.attachments});
+      setAnexosModal(null);reloadItens();
     }catch(e){alert(e.message);}
-    finally{setSavingAnexos(false);}
   };
 
   const imprimirContrato=async(item)=>{
@@ -4259,37 +4252,28 @@ function ControleAtivosScreen({user}){
 
       {/* Anexos modal */}
       {anexosModal&&(
-        <Modal title="Anexos do Item" onClose={()=>setAnexosModal(null)} wide>
-          {/* Anexos salvos */}
-          {anexosModal.loadingAnexos?<Spinner/>:anexosModal.anexos.length===0&&(anexosModal.newFiles||[]).length===0
-            ?<div style={{color:C.textLight,fontSize:13,marginBottom:12}}>Nenhum anexo.</div>
-            :<div style={{marginBottom:12}}>
-              {anexosModal.anexos.map(a=>(
-                <div key={a.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",border:`1px solid ${C.border}`,borderRadius:6,marginBottom:6}}>
-                  <span style={{fontSize:13,color:C.primary,fontWeight:600}}>📎 {a.nomeOriginal}</span>
-                  <div style={{display:"flex",gap:6}}>
-                    <button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>downloadAnexoCA(a)}>⬇️ Baixar</button>
-                    {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>delAnexoCA(a.id)}>🗑️</button>}
+        <Modal title="Anexos" onClose={()=>setAnexosModal(null)} wide>
+          <div style={{marginBottom:16}}>
+            <label style={{...S.btnAdd,display:"inline-block",cursor:"pointer",fontSize:12,padding:"7px 14px"}}>
+              📎 Adicionar anexo
+              <input type="file" onChange={handleAnexoAdd} style={{display:"none"}}/>
+            </label>
+          </div>
+          {anexosModal.attachments.length===0?<div style={{color:C.textLight,fontSize:13,marginBottom:16}}>Nenhum anexo.</div>:(
+            <div style={{marginBottom:16}}>
+              {anexosModal.attachments.map((a,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",border:`1px solid ${C.border}`,borderRadius:6,marginBottom:6}}>
+                  <div>
+                    <a href={a.data} download={a.name} style={{color:C.primary,fontWeight:600,fontSize:13}}>{a.name}</a>
                   </div>
-                </div>
-              ))}
-              {(anexosModal.newFiles||[]).map((f,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",border:`1px dashed ${C.border}`,borderRadius:6,marginBottom:6}}>
-                  <span style={{fontSize:12,color:C.textLight}}>📎 {f.name} <span style={{fontSize:11}}>({(f.size/1024).toFixed(1)} KB)</span></span>
-                  <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setAnexosModal(m=>({...m,newFiles:m.newFiles.filter((_,j)=>j!==i)}))}>🗑️</button>
+                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>removeAnexo(i)}>Remover</button>}
                 </div>
               ))}
             </div>
-          }
-          {/* Adicionar arquivos */}
-          <label style={{...S.btnCancel,display:"inline-block",cursor:"pointer",marginBottom:16}}>
-            📎 Selecionar Arquivos
-            <input type="file" multiple style={{display:"none"}} onChange={e=>setAnexosModal(m=>({...m,newFiles:[...(m.newFiles||[]),...Array.from(e.target.files)]}))}/>
-          </label>
+          )}
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-            <button style={S.btnCancel} onClick={()=>setAnexosModal(null)} disabled={savingAnexos}>Fechar</button>
-            {(anexosModal.newFiles||[]).length>0&&
-              <button style={{...S.btnSave,opacity:savingAnexos?0.7:1}} onClick={saveAnexos} disabled={savingAnexos}>{savingAnexos?"Salvando...":"💾 Salvar Anexos"}</button>}
+            <button style={S.btnCancel} onClick={()=>setAnexosModal(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={saveAnexos}>Salvar Anexos</button>
           </div>
         </Modal>
       )}
