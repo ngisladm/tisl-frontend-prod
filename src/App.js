@@ -54,8 +54,71 @@ const Logo = ({size=36}) => (
     <circle cx="30" cy="17" r="2"   fill="#F0A500" opacity=".5"/>
     <circle cx="30" cy="39" r="2"   fill="#F0A500" opacity=".5"/>
     <circle cx="30" cy="50" r="2"   fill="#F8C300" opacity=".6"/>
-    <text x="38" y="34" fontFamily="'Segoe UI',Arial,sans-serif" fontWeight="900" fontSize="22" fill="#616161" letterSpacing="-1">SL</text>
-    <text x="38" y="48" fontFamily="'Segoe UI',Arial,sans-serif" fontWeight="500" fontSize="9"  fill="#888" letterSpacing="3">GRUPO</text>
+    <text x="38" y="34" fontFamily="'Poppins','Segoe UI',Arial,sans-serif" fontWeight="900" fontSize="22" fill="#616161" letterSpacing="-1">SL</text>
+    <text x="38" y="48" fontFamily="'Poppins','Segoe UI',Arial,sans-serif" fontWeight="500" fontSize="9"  fill="#888" letterSpacing="3">GRUPO</text>
+  </svg>
+);
+
+// ── Icon SVG component (Heroicons MIT) ──────────────────────────
+const _IC={
+  home:"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",
+  folder:"M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z",
+  refresh:"M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
+  chart:"M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+  user:"M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
+  users:"M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z",
+  building:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
+  team:"M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z",
+  car:"M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0zM13 16H9m-5 0H3l2-7h14l2 7h-1m-1 0H9M5 9h14",
+  coin:"M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+  factory:"M19 21H5a2 2 0 01-2-2V8l7-5 7 5v11a2 2 0 01-2 2zM9 21V12h6v9",
+  phone:"M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z",
+  archive:"M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4",
+  package:"M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+  file:"M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+  clipboard:"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2",
+  mail:"M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
+  wrench:"M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z",
+  clock:"M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+  zap:"M13 10V3L4 14h7v7l9-11h-7z",
+  route:"M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7",
+  contracts:"M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+  signal:"M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3",
+  monitor:"M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
+  history:"M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0zM3.05 11A9.003 9.003 0 0112 3",
+  vacation:"M12 3v1m0 16v1M4.22 4.22l.71.71m12.02 12.02l.71.71M1 12h1m18 0h1M12 6a6 6 0 100 12A6 6 0 0012 6z",
+  search:"M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+  trending:"M13 7h8m0 0v8m0-8l-8 8-4-4-6 6",
+  book:"M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253",
+  calendar:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
+  lock:"M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
+  edit:"M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
+  trash:"M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16",
+  download:"M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
+  upload:"M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12",
+  paperclip:"M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13",
+  plus:"M12 4v16m8-8H4",
+  send:"M12 19l9 2-9-18-9 18 9-2zm0 0v-8",
+  chevronDown:"M19 9l-7 7-7-7",
+  chevronRight:"M9 5l7 7-7 7",
+  eye:"M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z",
+  image:"M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z",
+  x:"M6 18L18 6M6 6l12 12",
+  check:"M5 13l4 4L19 7",
+  warning:"M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
+  info:"M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+  globe:"M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9",
+  server:"M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01",
+  bell:"M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9",
+  logout:"M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1",
+  satellite:"M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0",
+  network:"M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v10m0 0h10m-10 0H3m0 0v8a2 2 0 002 2h4m6-10v10m0 0h-4m4 0h2a2 2 0 002-2v-8",
+  policy:"M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
+  folgas:"M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
+};
+const Icon=({name,size=16,color="currentColor",style={}})=>(
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" style={{display:"inline-block",verticalAlign:"middle",flexShrink:0,...style}} aria-hidden>
+    <path d={_IC[name]||_IC.info}/>
   </svg>
 );
 
@@ -69,7 +132,7 @@ const S = {
   select:{width:"100%",padding:"10px 14px",border:`1.5px solid ${C.border}`,borderRadius:6,fontSize:14,outline:"none",boxSizing:"border-box",color:C.text,background:C.white},
   btnPrimary:{width:"100%",padding:"12px",background:C.primary,color:C.white,border:"none",borderRadius:6,fontSize:14,fontWeight:700,cursor:"pointer",marginTop:8},
   errorMsg:{color:C.danger,fontSize:12,textAlign:"center",marginTop:8},
-  layout:{display:"flex",height:"100vh",overflow:"hidden",fontFamily:"'Segoe UI',Arial,sans-serif"},
+  layout:{display:"flex",height:"100vh",overflow:"hidden",fontFamily:"'Poppins','Segoe UI',Arial,sans-serif"},
   sidebar:{width:240,background:C.sidebar,color:C.white,display:"flex",flexDirection:"column",flexShrink:0},
   navSection:{flex:1,overflowY:"auto",padding:"8px 0"},
   navGroupBtn:{width:"100%",background:"none",border:"none",color:"#ddd",padding:"10px 16px",fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"},
@@ -337,8 +400,8 @@ function SimpleListScreen({user,screenId,title,icon,apiPath}){
             ]}
             actions={item=>(
               <>
-                {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit,flex:1,textAlign:"center"}} onClick={()=>openEdit(item)}>✏️ Editar</button>}
-                {p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flex:1,textAlign:"center"}} onClick={()=>setDelId(item.id)}>🗑️ Excluir</button>}
+                {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit,flex:1,textAlign:"center"}} onClick={()=>openEdit(item)}><Icon name="edit" size={13}/> Editar</button>}
+                {p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flex:1,textAlign:"center"}} onClick={()=>setDelId(item.id)}><Icon name="trash" size={13}/> Excluir</button>}
               </>
             )}
           />
@@ -349,8 +412,8 @@ function SimpleListScreen({user,screenId,title,icon,apiPath}){
             <td style={S.td}><strong>{item.name}</strong></td>
             <td style={S.td}><span style={{...S.badge,...(item.active?S.badgeActive:S.badgeInactive)}}>{item.active?"Ativo":"Inativo"}</span></td>
             <td style={S.td}>
-              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(item)}>✏️ Editar</button>}
-              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>🗑️ Excluir</button>}
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(item)}><Icon name="edit" size={13}/> Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}><Icon name="trash" size={13}/> Excluir</button>}
             </td>
           </tr>
         ))}</tbody></table>
@@ -450,8 +513,8 @@ function EquipeItensModal({equipe,user,onClose}){
                       <td style={S.td}>{it.cargo||"—"}</td>
                       <td style={S.td}>{it.centroCusto||"—"}</td>
                       <td style={S.td}>
-                        {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
-                        {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+                        {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+                        {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
                       </td>
                     </tr>
                   ))}</tbody></table>
@@ -556,8 +619,8 @@ function EquipesScreen({user}){
           <td style={S.td}><span style={{...S.badge,...(node.active?S.badgeActive:S.badgeInactive)}}>{node.active?"Ativo":"Inativo"}</span></td>
           <td style={S.td}>
             <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}} onClick={()=>setItensModal(node)}>👷 Itens Equipe</button>
-            {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(node)}>✏️ Editar</button>}
-            {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(node.id)}>🗑️ Excluir</button>}
+            {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(node)}><Icon name="edit" size={13}/> Editar</button>}
+            {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(node.id)}><Icon name="trash" size={13}/> Excluir</button>}
           </td>
         </tr>
         {isExp&&node.children.map(child=>renderNode(child,depth+1))}
@@ -645,7 +708,7 @@ function ProfilesScreen({user}){
           <tr key={pr.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}><strong>{pr.name}</strong></td>
             <td style={S.td}>{screens.filter(s=>pr.permissions?.[s.id]?.view).map(s=><span key={s.id} style={{...S.badge,...S.badgeActive,marginRight:4}}>{s.name}</span>)}</td>
-            <td style={S.td}>{p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(pr)}>✏️ Editar</button>}{p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(pr.id)}>🗑️ Excluir</button>}</td>
+            <td style={S.td}>{p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(pr)}><Icon name="edit" size={13}/> Editar</button>}{p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(pr.id)}><Icon name="trash" size={13}/> Excluir</button>}</td>
           </tr>
         ))}</tbody></table>
       )}
@@ -713,7 +776,7 @@ function UsersScreen({user}){
             <td style={S.td}>{u.companyName||"—"}</td><td style={S.td}>{u.profileName||"—"}</td>
             <td style={S.td}>{u.isMaster?<span style={{...S.badge,background:"#E3F2FD",color:"#1565C0"}}>✔ Master</span>:"—"}</td>
             <td style={S.td}><span style={{...S.badge,...(u.active?S.badgeActive:S.badgeInactive)}}>{u.active?"Ativo":"Inativo"}</span></td>
-            <td style={S.td}>{p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(u)}>✏️ Editar</button>}{p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(u.id)}>🗑️ Excluir</button>}</td>
+            <td style={S.td}>{p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(u)}><Icon name="edit" size={13}/> Editar</button>}{p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(u.id)}><Icon name="trash" size={13}/> Excluir</button>}</td>
           </tr>
         ))}</tbody></table>
       )}
@@ -818,7 +881,7 @@ function ControleHorasScreen({user}){
                 <>
                   <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",flex:1,textAlign:"center"}} onClick={()=>setModalCal(e)}>📅 Calendário</button>
                   {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit,flex:1,textAlign:"center"}} onClick={()=>openEdit(e)}>✏️</button>}
-                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flex:1,textAlign:"center"}} onClick={()=>setDelId(e.id)}>🗑️</button>}
+                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flex:1,textAlign:"center"}} onClick={()=>setDelId(e.id)}><Icon name="trash" size={13}/></button>}
                 </>
               )}
             />
@@ -833,8 +896,8 @@ function ControleHorasScreen({user}){
                 <td style={S.td}>{e.dataInicio} até {e.dataFim}</td>
                 <td style={S.td}>
                   <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",marginRight:4}} onClick={()=>setModalCal(e)}>📅 Calendário</button>
-                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(e)}>✏️ Editar</button>}
-                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(e.id)}>🗑️ Excluir</button>}
+                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(e)}><Icon name="edit" size={13}/> Editar</button>}
+                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(e.id)}><Icon name="trash" size={13}/> Excluir</button>}
                 </td>
               </tr>
             ))}</tbody></table>
@@ -1240,8 +1303,8 @@ function ExtraAvulsoScreen({user}){
               ]}
               actions={it=>(
                 <>
-                  {(user.isMaster||it.createdBy===user.id)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit,flex:1,textAlign:"center"}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
-                  {(user.isMaster||it.createdBy===user.id)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flex:1,textAlign:"center"}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+                  {(user.isMaster||it.createdBy===user.id)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit,flex:1,textAlign:"center"}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+                  {(user.isMaster||it.createdBy===user.id)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flex:1,textAlign:"center"}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
                 </>
               )}
             />
@@ -1261,8 +1324,8 @@ function ExtraAvulsoScreen({user}){
                   <td style={S.td}>{it.horaFim}</td>
                   <td style={S.td}><span style={{fontSize:12,color:C.textLight}}>{it.observacao||"—"}</span></td>
                   <td style={S.td}>
-                    {(user.isMaster||it.createdBy===user.id)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
-                    {(user.isMaster||it.createdBy===user.id)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+                    {(user.isMaster||it.createdBy===user.id)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+                    {(user.isMaster||it.createdBy===user.id)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
                   </td>
                 </tr>
               ))}</tbody>
@@ -1333,7 +1396,7 @@ function RelatorioHorasScreen({user}){
           <SelectField label="Funcionário" value={filters.funcionarioId} onChange={v=>setFilters(f=>({...f,funcionarioId:v}))} options={users.filter(u=>u.funcionarioId).map(u=>({value:u.funcionarioId,label:u.name}))}/>
         </div>
         <div style={{display:"flex",justifyContent:"flex-end"}}>
-          <button style={S.btnSave} onClick={buscar} disabled={loading}>{loading?"Buscando...":"🔍 Gerar Relatório"}</button>
+          <button style={S.btnSave} onClick={buscar} disabled={loading}>{loading?"Buscando...":<><Icon name="search" size={13}/> Pesquisar</>}</button>
         </div>
       </div>
       {/* Resultado */}
@@ -1440,8 +1503,8 @@ function EmpresasScreen({user}){
             <td style={S.td}>{it.cnpj||"—"}</td>
             <td style={S.td}><span style={{...S.badge,...(it.active?S.badgeActive:S.badgeInactive)}}>{it.active?"Ativo":"Inativo"}</span></td>
             <td style={S.td}>
-              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
-              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
               <button style={{...S.actionBtn,background:"#FFF3E0",color:"#E65100"}} onClick={()=>openLogo(it)}>🖼️ Logo</button>
             </td>
           </tr>
@@ -1535,8 +1598,8 @@ function TipoVeiculoScreen({user}){
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}><strong>{it.name}</strong></td>
             <td style={S.td}>
-              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
-              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
             </td>
           </tr>
         ))}</tbody></table>
@@ -1596,8 +1659,8 @@ function ValorKmScreen({user}){
             <td style={S.td}>{it.dataFim}</td>
             <td style={S.td}>{fmtVal(it.valorKm)}</td>
             <td style={S.td}>
-              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
-              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
             </td>
           </tr>
         ))}</tbody></table>
@@ -1730,7 +1793,7 @@ function RegistroKmScreen({user}){
             <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.success}}>{fmtMoney(it.valorTotalKm)}</td>
             <td style={S.td}>
               {canEdit(it)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️</button>}
-              {canEdit(it)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>}
+              {canEdit(it)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>}
             </td>
           </tr>
         ))}</tbody></table>
@@ -1853,7 +1916,7 @@ function RelatorioKmScreen({user}){
           <SelectField label="Tipo Veículo" value={filters.vehicleTypeId} onChange={v=>setFilters(f=>({...f,vehicleTypeId:v}))} options={vehicleTypes.map(vt=>({value:vt.id,label:vt.name}))}/>
         </div>
         <div style={{marginTop:12,display:"flex",gap:10}}>
-          <button style={S.btnAdd} onClick={search}>🔍 Pesquisar</button>
+          <button style={S.btnAdd} onClick={search}><Icon name="search" size={13}/> Pesquisar</button>
           <button style={S.btnCancel} onClick={()=>{setFilters({dateFrom:"",dateTo:"",companyId:"",teamId:"",funcionarioId:"",vehicleTypeId:""});setRows([]);}}>Limpar</button>
         </div>
       </div>
@@ -1996,8 +2059,8 @@ function FornecedoresScreen({user}){
             <td style={S.td}>{it.contactPhone||"—"}</td>
             <td style={S.td}>{it.contactEmail||"—"}</td>
             <td style={S.td}>
-              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
-              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
             </td>
           </tr>
         ))}</tbody></table>
@@ -2209,8 +2272,8 @@ function ContratosScreen({user}){
               )}
             </td>
             <td style={S.td}>
-              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
-              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
             </td>
           </tr>
         );})}</tbody></table>
@@ -2253,19 +2316,19 @@ function ContratosScreen({user}){
               <div key={a.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",border:`1px solid ${C.border}`,borderRadius:6,marginBottom:6}}>
                 <span style={{fontSize:13,color:C.primary,fontWeight:600}}>📎 {a.nomeOriginal}</span>
                 <div style={{display:"flex",gap:6}}>
-                  <button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>downloadAnexoContrato(a)}>⬇️ Baixar</button>
-                  {p?.edit&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>delAnexoContrato(a.id)}>🗑️</button>}
+                  <button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>downloadAnexoContrato(a)}><Icon name="download" size={13}/> Baixar</button>
+                  {p?.edit&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>delAnexoContrato(a.id)}><Icon name="trash" size={13}/></button>}
                 </div>
               </div>
             ))}
             {(form._newFiles||[]).map((f,i)=>(
               <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",border:`1px dashed ${C.border}`,borderRadius:6,marginBottom:6}}>
                 <span style={{fontSize:12,color:C.textLight}}>📎 {f.name}</span>
-                <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setForm(f=>({...f,_newFiles:f._newFiles.filter((_,j)=>j!==i)}))}>🗑️</button>
+                <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setForm(f=>({...f,_newFiles:f._newFiles.filter((_,j)=>j!==i)}))}><Icon name="trash" size={13}/></button>
               </div>
             ))}
             <input ref={contratoFileRef} type="file" multiple style={{display:"none"}} onChange={e=>{const files=Array.from(e.target.files);if(files.length)setForm(f=>({...f,_newFiles:[...(f._newFiles||[]),...files]}));e.target.value="";}}/>
-            <button style={{...S.btnCancel,marginTop:4}} onClick={()=>contratoFileRef.current?.click()}>📎 Selecionar Arquivos</button>
+            <button style={{...S.btnCancel,marginTop:4}} onClick={()=>contratoFileRef.current?.click()}><Icon name="paperclip" size={13}/> Selecionar Arquivos</button>
           </div>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
             <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
@@ -2341,7 +2404,7 @@ function RelatorioContratosScreen({user}){
             options={["Mensal","Trimestral","Semestral","Anual"].map(o=>({value:o,label:o}))}/>
         </div>
         <div style={{marginTop:12,display:"flex",gap:10}}>
-          <button style={S.btnAdd} onClick={search}>🔍 Pesquisar</button>
+          <button style={S.btnAdd} onClick={search}><Icon name="search" size={13}/> Pesquisar</button>
           <button style={S.btnCancel} onClick={()=>{setFilters({companyId:"",supplierId:"",contractNumber:"",dateFrom:"",dateTo:"",status:"",frequencia:""});setRows([]);}}>Limpar</button>
         </div>
       </div>
@@ -2724,8 +2787,8 @@ function LinhasFaturadasScreen({user}){
               <span style={{fontSize:12,color:C.textLight}}>{itensFilt.length}/{itensModal.itens.length} item(ns)</span>
               {itensModal.itens.length>0&&(
                 <div style={{display:"flex",gap:8}}>
-                  <button style={{...S.btnCancel,fontSize:12,padding:"6px 12px"}} onClick={exportItensPDF}>📄 PDF</button>
-                  <button style={{...S.btnAdd,background:"#1D6F42",fontSize:12,padding:"6px 12px"}} onClick={exportItensExcel}>📊 Excel</button>
+                  <button style={{...S.btnCancel,fontSize:12,padding:"6px 12px"}} onClick={exportItensPDF}><Icon name="file" size={13}/> PDF</button>
+                  <button style={{...S.btnAdd,background:"#1D6F42",fontSize:12,padding:"6px 12px"}} onClick={exportItensExcel}><Icon name="chart" size={13}/> Excel</button>
                 </div>
               )}
             </div>
@@ -3145,7 +3208,7 @@ function AtivosScreen({user}){
               <td style={S.td}>{statusBadgeAtivo(item.status)}</td>
               <td style={S.td}>
                 {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}> ✏️</button>}
-                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>🗑️</button>}
+                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}><Icon name="trash" size={13}/></button>}
                 {user.isMaster&&item.status==="Baixado"&&<button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"1px solid #A5D6A7"}} onClick={()=>reverterBaixaAtivo(item.id)}>↩ Reverter Baixa</button>}
               </td>
             </tr>
@@ -3550,8 +3613,8 @@ function ModelosContratoScreen({user}){
             <td style={S.td}>{it.empresaName||"—"}</td>
             <td style={S.td}>
               <button style={{...S.actionBtn,background:"#E8F4FD",color:"#1565C0",fontWeight:600}} onClick={()=>openModelo(it)}>📄 Modelo</button>
-              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️ Editar</button>}
-              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️ Excluir</button>}
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
             </td>
           </tr>
         ))}</tbody></table>
@@ -4114,13 +4177,13 @@ function ControleAtivosScreen({user}){
                         condicao:item.condicao||"",acessorios:item.acessorios||"",statusAtivo:item.statusAtivo||"",
                         ativoNome:item.ativoNome||"",numeroLinha:item.numeroLinha||"",operadoraName:item.operadoraName||"",
                       });}}>✏️</button>}
-                      {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelItemId(item.id)}>🗑️</button>}
+                      {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelItemId(item.id)}><Icon name="trash" size={13}/></button>}
                       <button style={{...S.actionBtn,background:"#FFF3E0",color:"#E65100",fontWeight:600}} onClick={()=>setMovModal({item,controleId:itensModal.controle.id})}>🔄 Mov.</button>
                       <button style={{...S.actionBtn,background:"#F0E6FF",color:"#6C3483"}} onClick={()=>openAnexos(itensModal.controle.id,item)}>
                         📎{item.attachments?.length?` (${item.attachments.length})`:""}
                       </button>
                       {item.tipoAtivoId&&<button style={{...S.actionBtn,background:"#E8F5E9",color:"#1B5E20",fontWeight:600}} onClick={()=>imprimirContrato(item)}>🖨️ Contrato</button>}
-                      {item.tipoAtivoId&&<button style={{...S.actionBtn,background:"#E3F2FD",color:"#0D47A1",fontWeight:600,opacity:sendingEmail?0.7:1}} disabled={sendingEmail} onClick={()=>enviarContrato(item)}>{sendingEmail?"Enviando...":"📧 Enviar"}</button>}
+                      {item.tipoAtivoId&&<button style={{...S.actionBtn,background:"#E3F2FD",color:"#0D47A1",fontWeight:600,opacity:sendingEmail?0.7:1}} disabled={sendingEmail} onClick={()=>enviarContrato(item)}>{sendingEmail?"Enviando...":<><Icon name="send" size={13}/> Enviar</>}</button>}
                     </td>
                   </tr>
                 );
@@ -4540,7 +4603,7 @@ function RelatorioEscalaScreen({user}){
               {escalas.map(e=><option key={e.id} value={e.id}>{e.companyName} / {e.teamNamesStr||"—"} ({e.dataInicio} – {e.dataFim})</option>)}
             </select>
           </div>
-          <button style={S.btnAdd} onClick={buscar} disabled={loading}>{loading?"Carregando...":"🔍 Gerar"}</button>
+          <button style={S.btnAdd} onClick={buscar} disabled={loading}>{loading?"Carregando...":<><Icon name="search" size={13}/> Pesquisar</>}</button>
         </div>
         {err&&<div style={{...S.errorMsg,textAlign:"left",marginTop:10}}>{err}</div>}
       </div>
@@ -5378,7 +5441,7 @@ function PeriodoFeriasModal({feriasId,equipe,user,onClose,onRefresh}){
               </td>
               <td style={S.td}>
                 <button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setForm({...it});}}>✏️</button>
-                <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>
+                <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>
               </td>
             </tr>
           ))}</tbody></table>
@@ -5478,7 +5541,7 @@ function FeriasEquipeModal({ferias,user,onClose}){
               <td style={{...S.td,textAlign:"center"}}>{numBadge(it.saldoDias,true)}</td>
               <td style={S.td}>
                 <button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setForm({...it,totalDias:it.totalDias||30,diasVendidos:it.diasVendidos||0,dtInicFer:it.dtInicFer||"",dtFinalFer:it.dtFinalFer||""});}}>✏️</button>
-                <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>
+                <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>
                 <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB",marginLeft:4}} onClick={()=>setPeriodoModal(it)}>📅 Período Férias</button>
               </td>
             </tr>
@@ -5651,8 +5714,8 @@ function FeriasScreen({user}){
                 <td style={{...S.td,fontWeight:600}}>{item.ano}</td>
                 <td style={S.td}><span style={{...S.badge,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}}>{item.totalFuncionarios??0} pessoa{(item.totalFuncionarios??0)!==1?"s":""}</span></td>
                 <td style={S.td}>
-                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}>✏️ Editar</button>}
-                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>🗑️ Excluir</button>}
+                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}><Icon name="edit" size={13}/> Editar</button>}
+                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}><Icon name="trash" size={13}/> Excluir</button>}
                   <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}} onClick={()=>setEquipeModal(item)}>👁 Detalhe</button>
                 </td>
               </tr>
@@ -5860,7 +5923,7 @@ function RelatorioFeriasScreen({user}){
         </div>
 
         <div style={{display:"flex",justifyContent:"flex-end"}}>
-          <button style={S.btnAdd} onClick={buscar} disabled={loading}>{loading?"Carregando...":"🔍 Gerar"}</button>
+          <button style={S.btnAdd} onClick={buscar} disabled={loading}>{loading?"Carregando...":<><Icon name="search" size={13}/> Pesquisar</>}</button>
         </div>
         {err&&<div style={{...S.errorMsg,textAlign:"left",marginTop:8}}>{err}</div>}
       </div>
@@ -6027,8 +6090,8 @@ function FolgasScreen({user}){
           <option value="">Compensado</option>
           <option>Sim</option><option>Não</option>
         </select>
-        <button style={S.btnSave} onClick={()=>load()}>🔍 Filtrar</button>
-        <button style={S.btnCancel} onClick={()=>{setFilters({empresa:"",equipe:"",funcionario:"",data:"",compensado:""});load({empresa:"",equipe:"",funcionario:"",data:"",compensado:""});}}>✕ Limpar</button>
+        <button style={S.btnSave} onClick={()=>load()}><Icon name="search" size={13}/> Pesquisar</button>
+        <button style={S.btnCancel} onClick={()=>{setFilters({empresa:"",equipe:"",funcionario:"",data:"",compensado:""});load({empresa:"",equipe:"",funcionario:"",data:"",compensado:""});}}><Icon name="x" size={13}/> Limpar</button>
       </div>
       {loading?<Spinner/>:items.length===0
         ?<div style={S.emptyState}><span style={S.emptyIcon}>🏖️</span>Nenhuma folga registrada.</div>
@@ -6049,7 +6112,7 @@ function FolgasScreen({user}){
               <td style={{...S.td,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={it.observacao}>{it.observacao||"—"}</td>
               <td style={S.td}>
                 {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openForm(it)}>✏️</button>}
-                {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>}
+                {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>}
               </td>
             </tr>
           ))}</tbody></table>
@@ -6144,8 +6207,8 @@ function RelatorioFolgasScreen({user}){
           <option value="">Compensado</option>
           <option>Sim</option><option>Não</option>
         </select>
-        <button style={S.btnSave} onClick={load}>🔍 Gerar</button>
-        {items.length>0&&<button style={{...S.btnCancel,background:"#C62828",color:"#fff",border:"none"}} onClick={exportPDF}>📄 PDF</button>}
+        <button style={S.btnSave} onClick={load}><Icon name="search" size={13}/> Pesquisar</button>
+        {items.length>0&&<button style={{...S.btnCancel,background:"#C62828",color:"#fff",border:"none"}} onClick={exportPDF}><Icon name="file" size={13}/> PDF</button>}
       </div>
       {loading?<Spinner/>:Object.keys(grouped).length===0
         ?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Use os filtros e clique em Gerar.</div>
@@ -6296,8 +6359,8 @@ function PoliticasScreen({user}){
           <option value="">Status</option>
           <option>Ativo</option><option>Inativo</option>
         </select>
-        <button style={S.btnSave} onClick={()=>load()}>🔍 Filtrar</button>
-        <button style={S.btnCancel} onClick={()=>{const f={empresa:"",nome:"",data:"",status:""};setFilters(f);load(f);}}>✕ Limpar</button>
+        <button style={S.btnSave} onClick={()=>load()}><Icon name="search" size={13}/> Pesquisar</button>
+        <button style={S.btnCancel} onClick={()=>{const f={empresa:"",nome:"",data:"",status:""};setFilters(f);load(f);}}><Icon name="x" size={13}/> Limpar</button>
       </div>
       {loading?<Spinner/>:items.length===0
         ?<div style={S.emptyState}><span style={S.emptyIcon}>📜</span>Nenhuma política registrada.</div>
@@ -6316,7 +6379,7 @@ function PoliticasScreen({user}){
                 <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
                   <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #90CAF9"}} onClick={()=>openEmail(it)}>✉️ Enviar</button>
                   {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openForm(it)}>✏️</button>}
-                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>}
+                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>}
                 </div>
               </td>
             </tr>
@@ -6339,8 +6402,8 @@ function PoliticasScreen({user}){
               {form._anexos.map(a=>(
                 <div key={a.id} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0"}}>
                   <span style={{fontSize:12}}>📎 {a.nomeOriginal}</span>
-                  <button style={{...S.actionBtn,...S.btnEdit,padding:"2px 8px"}} onClick={()=>downloadAnexo(a)}>⬇️ Baixar</button>
-                  <button style={{...S.actionBtn,...S.btnDel,padding:"2px 6px"}} onClick={()=>delAnexo(form.id,a.id)}>🗑️</button>
+                  <button style={{...S.actionBtn,...S.btnEdit,padding:"2px 8px"}} onClick={()=>downloadAnexo(a)}><Icon name="download" size={13}/> Baixar</button>
+                  <button style={{...S.actionBtn,...S.btnDel,padding:"2px 6px"}} onClick={()=>delAnexo(form.id,a.id)}><Icon name="trash" size={13}/></button>
                 </div>
               ))}
             </div>
@@ -6349,7 +6412,7 @@ function PoliticasScreen({user}){
           <div style={{marginBottom:12}}>
             <label style={S.label}>Adicionar Arquivos</label>
             <input ref={fileInputRef} type="file" multiple style={{display:"none"}} onChange={e=>setForm(f=>({...f,_newFiles:[...(f._newFiles||[]),...Array.from(e.target.files)]}))}/>
-            <button style={{...S.btnCancel,marginRight:8}} onClick={()=>fileInputRef.current?.click()}>📎 Selecionar Arquivos</button>
+            <button style={{...S.btnCancel,marginRight:8}} onClick={()=>fileInputRef.current?.click()}><Icon name="paperclip" size={13}/> Selecionar Arquivos</button>
             {(form._newFiles||[]).map((f,i)=>(
               <div key={i} style={{fontSize:12,color:C.textLight}}>📎 {f.name}</div>
             ))}
@@ -6490,8 +6553,8 @@ function ConfiguracaoInventarioScreen({user}){
                 <td style={S.td}><code style={{fontSize:12}}>{r.ipRange}</code></td>
                 <td style={S.td}><span style={{...S.badge,background:r.active?"#E8F5E9":"#FFEBEE",color:r.active?"#2E7D32":"#C62828"}}>{r.active?"Ativo":"Inativo"}</span></td>
                 <td style={S.td}>
-                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>setRedesForm({...r})}>✏️ Editar</button>}
-                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelRede(r.id)}>🗑️</button>}
+                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>setRedesForm({...r})}><Icon name="edit" size={13}/> Editar</button>}
+                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelRede(r.id)}><Icon name="trash" size={13}/></button>}
                 </td>
               </tr>
             ))}</tbody></table>
@@ -6562,8 +6625,8 @@ function ConfiguracaoInventarioScreen({user}){
                 <td style={{...S.td,fontSize:11}}><code>{t.clientId}</code></td>
                 <td style={S.td}><span style={{...S.badge,background:t.active?"#E8F5E9":"#FFEBEE",color:t.active?"#2E7D32":"#C62828"}}>{t.active?"Ativo":"Inativo"}</span></td>
                 <td style={S.td}>
-                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>setTenantForm({...t,clientSecret:""})}>✏️ Editar</button>}
-                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelTenant(t.id)}>🗑️</button>}
+                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>setTenantForm({...t,clientSecret:""})}><Icon name="edit" size={13}/> Editar</button>}
+                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelTenant(t.id)}><Icon name="trash" size={13}/></button>}
                 </td>
               </tr>
             ))}</tbody></table>
@@ -6826,7 +6889,7 @@ function InventarioRedeScreen({user}){
                     <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #90CAF9"}}
                       onClick={()=>openDetail(it)}>👁 Ver Dados</button>}
                   {p?.delete&&it.status!=="Executando"&&
-                    <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}>🗑️</button>}
+                    <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>}
                 </div>
               </td>
             </tr>
@@ -6873,10 +6936,10 @@ function InventarioRedeScreen({user}){
                   <input key={k} style={{...S.input,width:130}} placeholder={label}
                     value={devFilters[k]} onChange={e=>setDevFilters(f=>({...f,[k]:e.target.value}))}/>
                 ))}
-                <button style={S.btnCancel} onClick={()=>setDevFilters({ip:"",mac:"",hostname:"",os:"",cpu:"",ram:""})}>✕ Limpar</button>
+                <button style={S.btnCancel} onClick={()=>setDevFilters({ip:"",mac:"",hostname:"",os:"",cpu:"",ram:""})}><Icon name="x" size={13}/> Limpar</button>
                 <div style={{marginLeft:"auto",display:"flex",gap:6}}>
                   <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"1px solid #A5D6A7"}} onClick={exportDevicesExcel}>📥 Excel</button>
-                  <button style={{...S.actionBtn,background:"#FFEBEE",color:"#C62828",border:"1px solid #EF9A9A"}} onClick={exportDevicesPDF}>📄 PDF</button>
+                  <button style={{...S.actionBtn,background:"#FFEBEE",color:"#C62828",border:"1px solid #EF9A9A"}} onClick={exportDevicesPDF}><Icon name="file" size={13}/> PDF</button>
                 </div>
               </div>
               {filteredDevices.length===0
@@ -6941,10 +7004,10 @@ function InventarioRedeScreen({user}){
                     ))}
                   </div>
                 </div>
-                <button style={S.btnCancel} onClick={()=>setM365Filters({tenant:"",produtos:[]})}>✕ Limpar</button>
+                <button style={S.btnCancel} onClick={()=>setM365Filters({tenant:"",produtos:[]})}><Icon name="x" size={13}/> Limpar</button>
                 <div style={{marginLeft:"auto",display:"flex",gap:6}}>
                   <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"1px solid #A5D6A7"}} onClick={exportM365Excel}>📥 Excel</button>
-                  <button style={{...S.actionBtn,background:"#FFEBEE",color:"#C62828",border:"1px solid #EF9A9A"}} onClick={exportM365PDF}>📄 PDF</button>
+                  <button style={{...S.actionBtn,background:"#FFEBEE",color:"#C62828",border:"1px solid #EF9A9A"}} onClick={exportM365PDF}><Icon name="file" size={13}/> PDF</button>
                 </div>
               </div>
 
@@ -7153,48 +7216,48 @@ function RelatorioComposicaoScreen({user}){
 
 // ── SIDEBAR ───────────────────────────────────────────────────
 const navConfig=[
-  {id:"cadastros",label:"Cadastros",icon:"📁",children:[
-    {id:"s1",label:"Perfis",          icon:"👤"},
-    {id:"s2",label:"Usuários",        icon:"👥"},
-    {id:"s3",label:"Empresas",        icon:"🏢"},
-    {id:"s4",label:"Equipes",         icon:"👷"},
-    {id:"s8",label:"Tipo de Veículo", icon:"🚗"},
-    {id:"s9",label:"Valor do km",     icon:"💰"},
-    {id:"s12",label:"Fornecedores",   icon:"🏭"},
-    {id:"s16",label:"Operadoras",      icon:"📡"},
-    {id:"s17",label:"Linhas Faturadas",icon:"📱"},
-    {id:"s18",label:"Tipo de Ativo",   icon:"🗂️"},
-    {id:"s20",label:"Ativos",          icon:"📦"},
-    {id:"s22",label:"Funcionários",    icon:"👤"},
-    {id:"s23",label:"Modelos de Contrato",icon:"📋"},
-    {id:"s28",label:"Configuração de E-mail",icon:"📧"},
-    {id:"s33",label:"Configuração de Inventário",icon:"🔧"},
+  {id:"cadastros",label:"Cadastros",icon:"folder",children:[
+    {id:"s1",label:"Perfis",                      icon:"user"},
+    {id:"s2",label:"Usuários",                    icon:"users"},
+    {id:"s3",label:"Empresas",                    icon:"building"},
+    {id:"s4",label:"Equipes",                     icon:"team"},
+    {id:"s8",label:"Tipo de Veículo",             icon:"car"},
+    {id:"s9",label:"Valor do km",                 icon:"coin"},
+    {id:"s12",label:"Fornecedores",               icon:"factory"},
+    {id:"s16",label:"Operadoras",                 icon:"satellite"},
+    {id:"s17",label:"Linhas Faturadas",           icon:"phone"},
+    {id:"s18",label:"Tipo de Ativo",              icon:"archive"},
+    {id:"s20",label:"Ativos",                     icon:"package"},
+    {id:"s22",label:"Funcionários",               icon:"user"},
+    {id:"s23",label:"Modelos de Contrato",        icon:"clipboard"},
+    {id:"s28",label:"Configuração de E-mail",     icon:"mail"},
+    {id:"s33",label:"Configuração de Inventário", icon:"wrench"},
   ]},
-  {id:"movimentacoes",label:"Movimentações",icon:"🔄",children:[
-    {id:"s5", label:"Sobreaviso/Extra",         icon:"⏱️"},
-    {id:"s7", label:"Extra Avulso",             icon:"⚡"},
-    {id:"s10",label:"Registro de Km", icon:"🛣️"},
-    {id:"s13",label:"Contratos",           icon:"📄"},
-    {id:"s19",label:"Linhas Disponíveis",  icon:"📶"},
-    {id:"s21",label:"Controle de Ativos",  icon:"🖥️"},
-    {id:"s29",label:"Histórico de Movimentações",icon:"📜"},
-    {id:"s30",label:"Férias",                   icon:"🏖️"},
-    {id:"s34",label:"Inventário de Rede",        icon:"🔍"},
-    {id:"s35",label:"Controle de Folgas",        icon:"🏖️"},
-    {id:"s37",label:"Políticas de TI",           icon:"📜"},
+  {id:"movimentacoes",label:"Movimentações",icon:"refresh",children:[
+    {id:"s5", label:"Sobreaviso/Extra",           icon:"clock"},
+    {id:"s7", label:"Extra Avulso",               icon:"zap"},
+    {id:"s10",label:"Registro de Km",             icon:"route"},
+    {id:"s13",label:"Contratos",                  icon:"contracts"},
+    {id:"s19",label:"Linhas Disponíveis",         icon:"signal"},
+    {id:"s21",label:"Controle de Ativos",         icon:"monitor"},
+    {id:"s29",label:"Histórico de Movimentações", icon:"history"},
+    {id:"s30",label:"Férias",                     icon:"vacation"},
+    {id:"s34",label:"Inventário de Rede",         icon:"network"},
+    {id:"s35",label:"Controle de Folgas",         icon:"folgas"},
+    {id:"s37",label:"Políticas de TI",            icon:"policy"},
   ]},
-  {id:"relatorios",label:"Relatórios",icon:"📊",children:[
-    {id:"s6", label:"Relatório de Horas",           icon:"📋"},
-    {id:"s11",label:"Controle de Km",               icon:"📊"},
-    {id:"s14",label:"Relatório de Contratos",       icon:"📑"},
-    {id:"s15",label:"Relatório de Escala",          icon:"📅"},
-    {id:"s24",label:"Análise de Linhas",            icon:"📈"},
-    {id:"s25",label:"Resumo de Linhas",             icon:"📋"},
-    {id:"s26",label:"Resumo de Ativos",             icon:"📦"},
-    {id:"s27",label:"Inventário de Ativos",         icon:"🗂️"},
-    {id:"s31",label:"Relatório de Férias",             icon:"🏖️"},
-    {id:"s32",label:"Composição de Equipe",            icon:"👥"},
-    {id:"s36",label:"Controle de Folgas",              icon:"🏖️"},
+  {id:"relatorios",label:"Relatórios",icon:"chart",children:[
+    {id:"s6", label:"Relatório de Horas",         icon:"clock"},
+    {id:"s11",label:"Controle de Km",             icon:"route"},
+    {id:"s14",label:"Relatório de Contratos",     icon:"file"},
+    {id:"s15",label:"Relatório de Escala",        icon:"calendar"},
+    {id:"s24",label:"Análise de Linhas",          icon:"trending"},
+    {id:"s25",label:"Resumo de Linhas",           icon:"signal"},
+    {id:"s26",label:"Resumo de Ativos",           icon:"package"},
+    {id:"s27",label:"Inventário de Ativos",       icon:"archive"},
+    {id:"s31",label:"Relatório de Férias",        icon:"vacation"},
+    {id:"s32",label:"Composição de Equipe",       icon:"users"},
+    {id:"s36",label:"Controle de Folgas",         icon:"calendar"},
   ]},
 ];
 function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
@@ -7222,13 +7285,17 @@ function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
           onClick={()=>handleNav("home")}
           onMouseOver={e=>{if(currentScreen!=="home")e.currentTarget.style.background=C.sidebarHover;}}
           onMouseOut={e=>{if(currentScreen!=="home")e.currentTarget.style.background="none";}}>
-          🏠 Início
+          <Icon name="home" size={15} color={currentScreen==="home"?C.white:"#bbb"}/> Início
         </div>
         {navConfig.map(group=>(
           <div key={group.id}>
             <button style={{...S.navGroupBtn,color:expanded[group.id]?"#eee":"#bbb"}} onClick={()=>toggle(group.id)}>
-              <span style={{display:"flex",alignItems:"center",gap:8}}>{group.icon} {group.label}</span>
-              <span style={{fontSize:10,transform:expanded[group.id]?"rotate(180deg)":"none",display:"inline-block"}}>▼</span>
+              <span style={{display:"flex",alignItems:"center",gap:8}}>
+                <Icon name={group.icon} size={14} color={expanded[group.id]?"#eee":"#999"}/>
+                {group.label}
+              </span>
+              <Icon name="chevronDown" size={14} color={expanded[group.id]?"#eee":"#666"}
+                style={{transition:"transform .25s",transform:expanded[group.id]?"rotate(0deg)":"rotate(-90deg)"}}/>
             </button>
             {expanded[group.id]&&group.children.map(item=>{
               if(!user.permissions?.[item.id]?.view)return null;
@@ -7239,7 +7306,7 @@ function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
                   onClick={()=>handleNav(item.id)}
                   onMouseOver={e=>{if(!active)e.currentTarget.style.background=C.sidebarHover;}}
                   onMouseOut={e=>{if(!active)e.currentTarget.style.background="none";}}>
-                  {item.icon} {item.label}
+                  <Icon name={item.icon} size={14} color={active?C.white:"#999"}/> {item.label}
                 </div>
               );
             })}
@@ -7250,7 +7317,7 @@ function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
         <button style={S.logoutBtn} onClick={onLogout}
           onMouseOver={e=>{e.target.style.background="#444";e.target.style.color="#fff";}}
           onMouseOut={e=>{e.target.style.background="none";e.target.style.color="#bbb";}}>
-          🚪 Sair do sistema
+          <Icon name="logout" size={14}/> Sair do sistema
         </button>
       </div>
     </div>
