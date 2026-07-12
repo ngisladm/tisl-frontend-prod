@@ -458,7 +458,7 @@ function EquipeItensModal({equipe,user,onClose}){
   useEffect(()=>{
     Promise.all([
       api.get(`/teams/${equipe.id}/itens`),
-      api.get("/funcionarios"),
+      api.get("/funcionarios/basic"),
     ]).then(([it,fn])=>{setItens(it);setFuncionarios(fn);}).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
 
@@ -1219,7 +1219,7 @@ function ExtraAvulsoScreen({user}){
 
   useEffect(()=>{
     if(!p?.view)return;
-    Promise.all([api.get("/extra-avulso"),api.get("/companies"),api.get("/teams"),api.get("/users")])
+    Promise.all([api.get("/extra-avulso"),api.get("/companies"),api.get("/teams"),api.get("/users/basic")])
       .then(([it,c,t,u])=>{setItems(it);setCompanies(c);setTeams(t);setAllUsers(u);})
       .catch(e=>alert(e.message)).finally(()=>setLoading(false));
   },[]);
@@ -1700,7 +1700,7 @@ function RegistroKmScreen({user}){
 
   useEffect(()=>{
     if(!p?.view)return;
-    Promise.all([api.get("/km-records"),api.get("/companies"),api.get("/teams"),api.get("/vehicle-types"),api.get("/users")])
+    Promise.all([api.get("/km-records"),api.get("/companies"),api.get("/teams"),api.get("/vehicle-types"),api.get("/users/basic")])
       .then(([it,c,t,vt,u])=>{setItems(it);setCompanies(c);setTeams(t);setVehicleTypes(vt);setAllUsers(u);})
       .catch(e=>alert(e.message)).finally(()=>setLoading(false));
   },[]);
@@ -1848,7 +1848,7 @@ function RelatorioKmScreen({user}){
 
   useEffect(()=>{
     if(!p?.view)return;
-    Promise.all([api.get("/companies"),api.get("/teams"),api.get("/users"),api.get("/vehicle-types")])
+    Promise.all([api.get("/companies"),api.get("/teams"),api.get("/users/basic"),api.get("/vehicle-types")])
       .then(([c,t,u,vt])=>{setCompanies(c);setTeams(t);setAllUsers(u);setVehicleTypes(vt);})
       .catch(e=>alert(e.message));
   },[]);
@@ -3761,7 +3761,7 @@ function ControleAtivosScreen({user}){
       api.get("/tipo-ativos"),api.get("/operadoras"),
       api.get("/linhas-disponiveis"),api.get("/ativos"),
       api.get("/controle-ativos/itens/all"),
-      api.get("/funcionarios"),
+      api.get("/funcionarios/basic"),
       api.get("/modelos-contrato"),
     ]).then(([ca,co,ta,op,ld,av,ai,func,mc])=>{
       setItems(ca);setCompanies(co);setTipoAtivos(ta);
@@ -5771,7 +5771,7 @@ function RelatorioFeriasScreen({user}){
 
   useEffect(()=>{
     if(!p?.view)return;
-    Promise.all([api.get("/companies"),api.get("/teams"),api.get("/funcionarios")])
+    Promise.all([api.get("/companies"),api.get("/teams"),api.get("/funcionarios/basic")])
       .then(([c,t,f])=>{setCompanies(c);setTeams(t);setFuncionarios(f);})
       .catch(()=>{});
   },[]);
