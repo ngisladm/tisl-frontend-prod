@@ -6485,6 +6485,7 @@ function ConfiguracaoInventarioScreen({user}){
     api.get("/inventory-config/networks").then(setRedes).catch(()=>{}).finally(()=>setRedesLoading(false));
     api.get("/inventory-config/domain").then(d=>{if(d)setDom({domain:d.domain||"",username:d.username||"",password:""});}).catch(()=>{});
     api.get("/inventory-config/tenants").then(setTenants).catch(()=>{}).finally(()=>setTenantsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   const saveRede=async()=>{
@@ -6676,6 +6677,7 @@ function InventarioRedeScreen({user}){
   const load=()=>{
     api.get("/inventory/collections").then(setItems).catch(()=>{}).finally(()=>setLoading(false));
   };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{if(!p?.view)return;load();},[]);
 
   // Polling automático para coletas em andamento
@@ -6694,6 +6696,7 @@ function InventarioRedeScreen({user}){
       },5000);
     }
     return()=>clearInterval(pollRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[items]);
 
   const save=async()=>{
@@ -7090,6 +7093,7 @@ function RelatorioComposicaoScreen({user}){
       .then(setItems)
       .catch(e=>alert(e.message))
       .finally(()=>setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   const toggle=id=>setExpanded(ex=>{const s=new Set(ex);s.has(id)?s.delete(id):s.add(id);return s;});
