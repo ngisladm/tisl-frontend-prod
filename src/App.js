@@ -6712,6 +6712,14 @@ function InventarioRedeScreen({user}){
     catch(e){alert(e.message);}
   };
 
+  const resetScan=async(col)=>{
+    if(!window.confirm(`Cancelar e resetar a coleta "${col.tipo}"?\nEla voltará para status Erro e poderá ser re-executada.`))return;
+    try{
+      await api.post(`/inventory/collections/${col.id}/reset`,{});
+      setItems(is=>is.map(i=>i.id===col.id?{...i,status:"Erro",errorMsg:"Cancelado manualmente pelo usuário.",finishedAt:new Date().toLocaleString("pt-BR")}:i));
+    }catch(e){alert(e.message);}
+  };
+
   const startScan=async(col)=>{
     if(!window.confirm(`Iniciar scan de "${col.tipo}"?\nIsso pode levar vários minutos.`))return;
     try{
@@ -6885,6 +6893,9 @@ function InventarioRedeScreen({user}){
               <td style={{...S.td,fontSize:11}}>{it.finishedAt||"—"}</td>
               <td style={S.td}>
                 <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {it.status==="Executando"&&
+                    <button style={{...S.actionBtn,background:"#FFF3E0",color:"#E65100",border:"1px solid #FFCC80"}}
+                      onClick={()=>resetScan(it)}><Icon name="x" size={13}/> Cancelar</button>}
                   {it.status!=="Executando"&&
                     <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"1px solid #A5D6A7"}}
                       onClick={()=>startScan(it)}>📡 Escanear</button>}
