@@ -7229,6 +7229,455 @@ function RelatorioComposicaoScreen({user}){
   );
 }
 
+// ── ENDEREÇOS DE REDE (s38) ────────────────────────────────────
+function cidrInfo(cidr){
+  try{
+    const[ip,pfx]=cidr.trim().split("/");const prefix=parseInt(pfx,10);
+    if(!ip||isNaN(prefix)||prefix<0||prefix>32)return null;
+    const pts=ip.split(".").map(Number);
+    if(pts.length!==4||pts.some(p=>isNaN(p)||p<0||p>255))return null;
+    const ipInt=((pts[0]<<24)|(pts[1]<<16)|(pts[2]<<8)|pts[3])>>>0;
+    const mask=prefix===0?0:(~((1<<(32-prefix))-1))>>>0;
+    const net=(ipInt&mask)>>>0;const bcast=(net|(~mask>>>0))>>>0;
+    const toIp=n=>[n>>>24,(n>>>16)&0xff,(n>>>8)&0xff,n&0xff].join(".");
+    const hosts=prefix>=31?(1<<(32-prefix)):(1<<(32-prefix))-2;
+    return{firstIp:toIp(net+(prefix<32?1:0)),lastIp:toIp(bcast-(prefix<32?1:0)),hosts,mask:toIp(mask),start:net,end:bcast};
+  }catch{return null;}
+}
+function rangesOverlap(a,b){return a.start<=b.end&&a.end>=b.start;}
+
+function feIpToInt(ip){const p=ip.trim().split(".").map(Number);if(p.length!==4||p.some(x=>isNaN(x)||x<0||x>255))return null;return((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;}
+function feIntToIp(n){return[(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join(".");}
+
+function DhcpModal({range,onClose,onDhcpDeleted}){
+  const info=cidrInfo(range.ipRange);
+  const[dhcpStart,setDhcpStart]=useState("");
+  const[dhcpEnd,setDhcpEnd]=useState("");
+  const[grid2,setGrid2]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    api.get(`/network-addresses/ranges/${range.id}/dhcp`)
+      .then(d=>{
+        setDhcpStart(d.dhcpStart||"");
+        setDhcpEnd(d.dhcpEnd||"");
+        if(d.dhcpStart&&d.dhcpEnd)buildGrid2(d.dhcpStart,d.dhcpEnd,d.statics||[]);
+        else setGrid2([]);
+      })
+      .catch(e=>alert(e.message))
+      .finally(()=>setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[range.id]);
+
+  function buildGrid2(start,end,savedStatics){
+    if(!info)return;
+    const si=feIpToInt(start);const ei=feIpToInt(end);
+    if(!si||!ei)return;
+    const firstHost=info.start+(info.prefix<32?1:0);
+    const lastHost=info.end-(info.prefix<32?1:0);
+    const ips=[];
+    for(let i=firstHost;i<si&&ips.length<2000;i++)ips.push(feIntToIp(i));
+    for(let i=ei+1;i<=lastHost&&ips.length<2000;i++)ips.push(feIntToIp(i));
+    const descMap={};savedStatics.forEach(s=>{descMap[s.ip]=s.descricao||"";});
+    setGrid2(ips.map(ip=>({ip,descricao:descMap[ip]||""})));
+  }
+
+  const hasFilledDesc=()=>grid2.some(g=>g.descricao?.trim());
+
+  const saveRange=async()=>{
+    if(!dhcpStart.trim()||!dhcpEnd.trim())return alert("Informe o IP inicial e final do DHCP.");
+    if(!info)return alert("Faixa pai inválida.");
+    const si=feIpToInt(dhcpStart);const ei=feIpToInt(dhcpEnd);
+    if(!si||!ei)return alert("IPs inválidos.");
+    if(si>ei)return alert("IP inicial deve ser menor ou igual ao IP final.");
+    const firstHost=info.start+(info.prefix<32?1:0);
+    const lastHost=info.end-(info.prefix<32?1:0);
+    if(si<firstHost||ei>lastHost)return alert("A faixa DHCP deve estar dentro da faixa de rede configurada.");
+    if(hasFilledDesc())return alert("Para alterar a faixa DHCP, limpe primeiro os campos de Descrição / Alocação dos IPs estáticos.");
+    setSaving(true);
+    try{
+      await api.put(`/network-addresses/ranges/${range.id}/dhcp/range`,{dhcpStart:dhcpStart.trim(),dhcpEnd:dhcpEnd.trim()});
+      buildGrid2(dhcpStart.trim(),dhcpEnd.trim(),[]);
+    }catch(err){alert(err.message);}finally{setSaving(false);}
+  };
+
+  const excluirFaixaDhcp=async()=>{
+    if(hasFilledDesc())return alert("Para excluir a faixa DHCP, limpe primeiro os campos de Descrição / Alocação dos IPs estáticos.");
+    setSaving(true);
+    try{
+      await api.delete(`/network-addresses/ranges/${range.id}/dhcp`);
+      setDhcpStart("");setDhcpEnd("");setGrid2([]);
+      if(onDhcpDeleted)onDhcpDeleted(range.id);
+    }catch(err){alert(err.message);}finally{setSaving(false);}
+  };
+
+  const saveStatics=async()=>{
+    setSaving(true);
+    try{
+      await api.put(`/network-addresses/ranges/${range.id}/dhcp/statics`,{statics:grid2});
+    }catch(err){alert(err.message);}finally{setSaving(false);}
+  };
+
+  const hasDhcpRange=dhcpStart||dhcpEnd;
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:C.white,borderRadius:12,width:"min(780px,100%)",maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px",borderBottom:`1px solid ${C.border}`}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:15,color:C.text}}>Detalhes DHCP — {range.nome}</div>
+            <div style={{fontSize:12,color:C.textLight,marginTop:2}}>{range.ipRange}{info?` · ${info.firstIp} – ${info.lastIp} · ${info.hosts} hosts`:""}</div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",padding:4}}><Icon name="x" size={18}/></button>
+        </div>
+
+        {loading?<div style={{padding:40,textAlign:"center"}}><Spinner/></div>:<div style={{overflowY:"auto",flex:1,padding:20}}>
+          {/* Grid 1 */}
+          <div style={{background:C.bg,border:`0.5px solid ${C.border}`,borderRadius:8,padding:"14px 16px",marginBottom:20}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontWeight:600,fontSize:13,color:C.text}}>Faixa DHCP</div>
+              {hasDhcpRange&&<button style={{...S.actionBtn,background:"#FFEBEE",color:"#C62828",border:"0.5px solid #FFCDD2",fontSize:12}} disabled={saving} onClick={excluirFaixaDhcp}><Icon name="trash" size={12}/> Excluir Faixa DHCP</button>}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div style={S.formRow}>
+                <label style={S.label}>DHCP Inicial *</label>
+                <input style={S.input} value={dhcpStart} onChange={e=>setDhcpStart(e.target.value)} placeholder={info?info.firstIp:"ex: 192.168.1.10"}/>
+              </div>
+              <div style={S.formRow}>
+                <label style={S.label}>DHCP Final *</label>
+                <input style={S.input} value={dhcpEnd} onChange={e=>setDhcpEnd(e.target.value)} placeholder={info?info.lastIp:"ex: 192.168.1.200"}/>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button style={{...S.btnSave,opacity:saving?0.7:1}} disabled={saving} onClick={saveRange}>{saving?"Salvando...":"Salvar Faixa DHCP"}</button>
+            </div>
+          </div>
+
+          {/* Grid 2 */}
+          {grid2.length>0&&(
+            <div>
+              <div style={{fontWeight:600,fontSize:13,marginBottom:8,color:C.text}}>
+                IPs Estáticos ({grid2.length})
+                <span style={{fontSize:11,color:C.textLight,fontWeight:400,marginLeft:8}}>IPs fora da faixa DHCP — informe a descrição de cada alocação</span>
+              </div>
+              <div style={{maxHeight:320,overflowY:"auto",border:`0.5px solid ${C.border}`,borderRadius:8}}>
+                <table style={{...S.table,marginBottom:0}}><thead><tr>
+                  <th style={S.th}>IP</th>
+                  <th style={S.th}>Descrição / Alocação</th>
+                </tr></thead>
+                <tbody>{grid2.map((g,i)=>(
+                  <tr key={g.ip}>
+                    <td style={{...S.td,fontFamily:"monospace",fontSize:12,width:140}}>{g.ip}</td>
+                    <td style={S.td}>
+                      <input style={{...S.input,marginBottom:0,padding:"4px 8px",fontSize:12}}
+                        value={g.descricao}
+                        placeholder="ex: Servidor, Impressora, Câmera..."
+                        onChange={e=>{const v=e.target.value;setGrid2(gs=>gs.map((x,j)=>j===i?{...x,descricao:v}:x));}}/>
+                    </td>
+                  </tr>
+                ))}</tbody></table>
+              </div>
+              <div style={{display:"flex",justifyContent:"flex-end",marginTop:10}}>
+                <button style={{...S.btnSave,opacity:saving?0.7:1}} disabled={saving} onClick={saveStatics}>{saving?"Salvando...":"Salvar Alocações"}</button>
+              </div>
+            </div>
+          )}
+        </div>}
+
+        <div style={{padding:"12px 20px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"flex-end"}}>
+          <button style={S.btnCancel} onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EnderecosRedeScreen({user}){
+  const p=user.permissions?.s38;
+  const[ranges,setRanges]=useState([]);
+  const[filiais,setFiliais]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[form,setForm]=useState(null);
+  const[filialForm,setFilialForm]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[delFilialId,setDelFilialId]=useState(null);
+  const[filterFilial,setFilterFilial]=useState("");
+  const[filterSync,setFilterSync]=useState("");
+  const[filterStatus,setFilterStatus]=useState("");
+  const[cidrPreview,setCidrPreview]=useState(null);
+  const[conflito,setConflito]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const[dhcpRange,setDhcpRange]=useState(null);
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/network-addresses/ranges"),api.get("/network-addresses/filiais")])
+      .then(([r,f])=>{setRanges(r);setFiliais(f);})
+      .catch(e=>alert(e.message))
+      .finally(()=>setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  useEffect(()=>{
+    if(!form?.ipRange){setCidrPreview(null);setConflito(null);return;}
+    const info=cidrInfo(form.ipRange);
+    setCidrPreview(info);
+    if(!info){setConflito(null);return;}
+    const others=ranges.filter(r=>r.id!==form.id&&r.active!==false);
+    let c=null;
+    for(const r of others){
+      const ri=cidrInfo(r.ipRange);
+      if(ri&&rangesOverlap(info,ri)){c=r;break;}
+    }
+    setConflito(c||false);
+  },[form?.ipRange,form?.id,ranges]);
+
+  const openAdd=()=>setForm({id:null,filialId:filiais[0]?.id||"",nome:"",ipRange:"",vlan:"",observacao:"",active:true,syncInventory:true,dhcp:false});
+  const openEdit=r=>setForm({...r,filialId:r.filialId,syncInventory:r.syncInventory??true,_originalDhcp:r.dhcp});
+
+  const save=async()=>{
+    if(!form.filialId||!form.nome?.trim()||!form.ipRange?.trim())return alert("Filial, nome e faixa de IP são obrigatórios.");
+    if(!cidrPreview)return alert("Faixa CIDR inválida. Use o formato: 192.168.1.0/24");
+    if(conflito)return alert(`Conflito com a faixa "${conflito.nome}" (${conflito.ipRange}).`);
+    setSaving(true);
+    try{
+      if(form.id){
+        const u=await api.put(`/network-addresses/ranges/${form.id}`,form);
+        setRanges(rs=>rs.map(r=>r.id===u.id?u:r));
+      }else{
+        const c=await api.post("/network-addresses/ranges",form);
+        setRanges(rs=>[...rs,c]);
+      }
+      setForm(null);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+
+  const del=async()=>{
+    try{await api.delete(`/network-addresses/ranges/${delId}`);setRanges(rs=>rs.filter(r=>r.id!==delId));setDelId(null);}
+    catch(e){alert(e.message);}
+  };
+
+  const saveFilial=async()=>{
+    if(!filialForm.nome?.trim())return alert("Nome é obrigatório.");
+    try{
+      if(filialForm.id){const u=await api.put(`/network-addresses/filiais/${filialForm.id}`,filialForm);setFiliais(fs=>fs.map(f=>f.id===u.id?u:f));}
+      else{const c=await api.post("/network-addresses/filiais",filialForm);setFiliais(fs=>[...fs,c]);}
+      setFilialForm(null);
+    }catch(e){alert(e.message);}
+  };
+  const delFilial=async()=>{
+    try{await api.delete(`/network-addresses/filiais/${delFilialId}`);setFiliais(fs=>fs.filter(f=>f.id!==delFilialId));setDelFilialId(null);}
+    catch(e){alert(e.message);}
+  };
+
+  const filtered=ranges.filter(r=>{
+    if(filterFilial&&r.filialId!==filterFilial)return false;
+    if(filterSync==="sim"&&!r.syncInventory)return false;
+    if(filterSync==="nao"&&r.syncInventory)return false;
+    if(filterStatus==="ativo"&&!r.active)return false;
+    if(filterStatus==="inativo"&&r.active)return false;
+    return true;
+  });
+
+  const totalHosts=filtered.reduce((acc,r)=>{const i=cidrInfo(r.ipRange);return acc+(i?.hosts||0);},0);
+  const syncCount=filtered.filter(r=>r.syncInventory).length;
+
+  if(!p?.view)return<div style={S.emptyState}><Icon name="lock" size={32}/><br/>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}><Icon name="network" size={16} style={{marginRight:6}}/>Endereços de Rede</span>
+        <div style={{display:"flex",gap:8}}>
+          {p?.insert&&<button style={{...S.btnCancel,fontSize:12}} onClick={()=>setFilialForm({id:null,nome:"",cidade:"",active:true})}>+ Nova Filial</button>}
+          {p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Nova Faixa</button>}
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,margin:"0 0 16px"}}>
+        {[
+          ["Total de faixas",filtered.length,C.primary],
+          ["Sincronizadas",syncCount,C.success],
+          ["Somente aqui",filtered.length-syncCount,C.text],
+          ["IPs disponíveis",totalHosts.toLocaleString("pt-BR"),C.warning],
+        ].map(([label,val,color])=>(
+          <div key={label} style={{background:C.white,border:`0.5px solid ${C.border}`,borderRadius:8,padding:"10px 14px"}}>
+            <div style={{fontSize:11,color:C.textLight,marginBottom:4}}>{label}</div>
+            <div style={{fontSize:20,fontWeight:500,color}}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
+        <span style={{fontSize:11,color:C.textLight}}>Filtrar:</span>
+        <select style={{...S.input,width:"auto",padding:"4px 10px",fontSize:12}} value={filterFilial} onChange={e=>setFilterFilial(e.target.value)}>
+          <option value="">Todas as filiais</option>
+          {filiais.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
+        </select>
+        <select style={{...S.input,width:"auto",padding:"4px 10px",fontSize:12}} value={filterSync} onChange={e=>setFilterSync(e.target.value)}>
+          <option value="">Inventário: todos</option>
+          <option value="sim">Sincronizadas</option>
+          <option value="nao">Não sincronizadas</option>
+        </select>
+        <select style={{...S.input,width:"auto",padding:"4px 10px",fontSize:12}} value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
+          <option value="">Status: todos</option>
+          <option value="ativo">Ativo</option>
+          <option value="inativo">Inativo</option>
+        </select>
+        {(filterFilial||filterSync||filterStatus)&&<button style={{...S.btnCancel,fontSize:12,padding:"4px 10px"}} onClick={()=>{setFilterFilial("");setFilterSync("");setFilterStatus("");}}>Limpar</button>}
+      </div>
+
+      {filtered.length===0
+        ?<div style={S.emptyState}><Icon name="network" size={32}/><br/>Nenhuma faixa encontrada.</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Filial","Nome / Descrição","Faixa CIDR","Primeiro IP","Último IP","Hosts","VLAN","Status","Inventário","DHCP","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{filtered.map(r=>{
+            const info=cidrInfo(r.ipRange);
+            return(
+              <tr key={r.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={S.td}><span style={{...S.badge,background:"#E3F2FD",color:"#1565C0"}}>{r.filialNome}</span></td>
+                <td style={{...S.td,fontWeight:600}}>{r.nome}</td>
+                <td style={S.td}><code style={{fontSize:12,background:C.bg,padding:"2px 6px",borderRadius:4,border:`0.5px solid ${C.border}`}}>{r.ipRange}</code></td>
+                <td style={{...S.td,fontFamily:"monospace",fontSize:11}}>{info?.firstIp||"—"}</td>
+                <td style={{...S.td,fontFamily:"monospace",fontSize:11}}>{info?.lastIp||"—"}</td>
+                <td style={{...S.td,textAlign:"center"}}>{info?info.hosts.toLocaleString("pt-BR"):"—"}</td>
+                <td style={S.td}>{r.vlan?<span style={{...S.badge,background:C.bg,color:C.textLight}}>{r.vlan}</span>:"—"}</td>
+                <td style={S.td}><span style={{...S.badge,background:r.active?"#E8F5E9":"#FFEBEE",color:r.active?"#2E7D32":"#C62828"}}>{r.active?"Ativo":"Inativo"}</span></td>
+                <td style={{...S.td,textAlign:"center"}}>
+                  {r.syncInventory
+                    ?<span style={{...S.badge,background:"#E8F5E9",color:"#2E7D32",display:"flex",alignItems:"center",gap:4,width:"fit-content",margin:"auto"}}><Icon name="link" size={11}/>Sim</span>
+                    :<span style={{...S.badge,background:C.bg,color:C.textLight,display:"flex",alignItems:"center",gap:4,width:"fit-content",margin:"auto"}}><Icon name="x" size={11}/>Não</span>}
+                </td>
+                <td style={{...S.td,textAlign:"center"}}>
+                  {r.dhcp
+                    ?<span style={{...S.badge,background:"#E3F2FD",color:"#1565C0"}}><Icon name="wrench" size={11}/> Sim</span>
+                    :<span style={{...S.badge,background:C.bg,color:C.textLight}}>Não</span>}
+                </td>
+                <td style={S.td}>
+                  <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                    {r.dhcp&&<button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"0.5px solid #90CAF9"}} onClick={()=>setDhcpRange(r)}><Icon name="wrench" size={13}/> DHCP</button>}
+                    {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(r)}><Icon name="edit" size={13}/> Editar</button>}
+                    {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(r.id)}><Icon name="trash" size={13}/></button>}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}</tbody></table>
+        </div>
+      }
+
+      {/* Modal Filial */}
+      {filialForm&&(
+        <Modal title={filialForm.id?"Editar Filial":"Nova Filial"} onClose={()=>setFilialForm(null)}>
+          <Input label="Nome *" value={filialForm.nome} onChange={v=>setFilialForm(f=>({...f,nome:v}))} placeholder="ex: Cariri"/>
+          <Input label="Cidade" value={filialForm.cidade||""} onChange={v=>setFilialForm(f=>({...f,cidade:v}))} placeholder="ex: Juazeiro do Norte"/>
+          <SelectField label="Status" value={String(filialForm.active)} onChange={v=>setFilialForm(f=>({...f,active:v==="true"}))}
+            options={[{value:"true",label:"Ativo"},{value:"false",label:"Inativo"}]}/>
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:12,color:C.textLight,marginBottom:6}}>Filiais cadastradas:</div>
+            {filiais.length===0?<div style={{fontSize:12,color:C.textLight}}>Nenhuma filial ainda.</div>:filiais.map(f=>(
+              <div key={f.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:`0.5px solid ${C.border}`}}>
+                <span style={{fontSize:13}}>{f.nome}{f.cidade?` — ${f.cidade}`:""}</span>
+                <div style={{display:"flex",gap:4}}>
+                  <button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>setFilialForm({...f})}><Icon name="edit" size={12}/></button>
+                  <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelFilialId(f.id)}><Icon name="trash" size={12}/></button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setFilialForm(null)}>Fechar</button>
+            <button style={S.btnSave} onClick={saveFilial}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal Faixa */}
+      {form&&(
+        <Modal title={form.id?"Editar Faixa":"Nova Faixa de Rede"} onClose={()=>setForm(null)}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={S.formRow}>
+              <label style={S.label}>Filial *</label>
+              <select style={S.input} value={form.filialId} onChange={e=>setForm(f=>({...f,filialId:e.target.value}))}>
+                <option value="">Selecione...</option>
+                {filiais.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
+              </select>
+            </div>
+            <Input label="VLAN (opcional)" value={form.vlan||""} onChange={v=>setForm(f=>({...f,vlan:v}))} placeholder="ex: VLAN 10"/>
+          </div>
+          <Input label="Nome / Descrição *" value={form.nome} onChange={v=>setForm(f=>({...f,nome:v}))} placeholder="ex: Rede LAN TI"/>
+          <Input label="Faixa de IP (CIDR) *" value={form.ipRange} onChange={v=>setForm(f=>({...f,ipRange:v}))} placeholder="ex: 192.168.1.0/24"/>
+
+          {cidrPreview&&(
+            <div style={{background:"#E3F2FD",border:"0.5px solid #90CAF9",borderRadius:6,padding:"10px 12px",marginBottom:10,fontSize:12,color:"#1565C0"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
+                <span><strong>Primeiro IP:</strong> {cidrPreview.firstIp}</span>
+                <span><strong>Último IP:</strong> {cidrPreview.lastIp}</span>
+                <span><strong>Hosts:</strong> {cidrPreview.hosts.toLocaleString("pt-BR")}</span>
+                <span><strong>Máscara:</strong> {cidrPreview.mask}</span>
+              </div>
+            </div>
+          )}
+          {form.ipRange&&!cidrPreview&&<div style={{background:"#FFEBEE",border:"0.5px solid #FFCDD2",borderRadius:6,padding:"8px 12px",marginBottom:10,fontSize:12,color:"#C62828"}}>CIDR inválido — use o formato: 192.168.1.0/24</div>}
+          {conflito===false&&cidrPreview&&<div style={{background:"#E8F5E9",border:"0.5px solid #A5D6A7",borderRadius:6,padding:"8px 12px",marginBottom:10,fontSize:12,color:"#2E7D32",display:"flex",alignItems:"center",gap:6}}><Icon name="check" size={14}/>Sem conflitos com as faixas existentes</div>}
+          {conflito&&<div style={{background:"#FFEBEE",border:"0.5px solid #FFCDD2",borderRadius:6,padding:"8px 12px",marginBottom:10,fontSize:12,color:"#C62828",display:"flex",alignItems:"center",gap:6}}><Icon name="info" size={14}/>Conflito com <strong>{conflito.nome}</strong> ({conflito.ipRange})</div>}
+
+          <div style={{background:C.bg,border:`0.5px solid ${C.border}`,borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+            <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer"}}>
+              <input type="checkbox" checked={!!form.syncInventory} onChange={e=>setForm(f=>({...f,syncInventory:e.target.checked}))}
+                style={{width:16,height:16,marginTop:2,accentColor:C.success,flexShrink:0}}/>
+              <div>
+                <div style={{fontWeight:500,fontSize:13,color:C.text,marginBottom:3}}>Usar no Inventário de Rede</div>
+                <div style={{fontSize:11,color:C.textLight,lineHeight:1.5}}>
+                  Cadastra/mantém esta faixa sincronizada na aba "Faixas de Rede" de Configuração de Inventário.<br/>
+                  <span style={{fontFamily:"monospace",fontSize:10}}>Nome → Filial/Nome &nbsp;·&nbsp; Faixa CIDR → Faixa de IP &nbsp;·&nbsp; Status → Status</span>
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <div style={{background:C.bg,border:`0.5px solid ${C.border}`,borderRadius:6,padding:"10px 12px",marginBottom:10}}>
+            <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer"}}>
+              <input type="checkbox" checked={!!form.dhcp}
+                onChange={e=>{
+                  if(!e.target.checked&&form.id&&form._originalDhcp){
+                    alert("Para desabilitar o DHCP, primeiro exclua a faixa DHCP usando o botão 'Excluir Faixa DHCP' em Detalhes DHCP.");
+                    return;
+                  }
+                  setForm(f=>({...f,dhcp:e.target.checked}));
+                }}
+                style={{width:16,height:16,marginTop:2,accentColor:C.primary,flexShrink:0}}/>
+              <div>
+                <div style={{fontWeight:500,fontSize:13,color:C.text,marginBottom:3}}>Habilitar DHCP</div>
+                <div style={{fontSize:11,color:C.textLight,lineHeight:1.5}}>Permite configurar a faixa DHCP e alocar IPs estáticos nesta rede.{form.id&&form._originalDhcp?<><br/><span style={{color:"#E65100"}}>Para desabilitar, use o botão "Excluir Faixa DHCP" em Detalhes DHCP.</span></>:""}</div>
+              </div>
+            </label>
+          </div>
+          <Input label="Observação" value={form.observacao||""} onChange={v=>setForm(f=>({...f,observacao:v}))} placeholder="ex: rede do 2º andar"/>
+          <SelectField label="Status" value={String(form.active)} onChange={v=>setForm(f=>({...f,active:v==="true"}))}
+            options={[{value:"true",label:"Ativo"},{value:"false",label:"Inativo"}]}/>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+            <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </Modal>
+      )}
+
+      {dhcpRange&&<DhcpModal range={dhcpRange} onClose={()=>setDhcpRange(null)} onDhcpDeleted={id=>{
+        setRanges(rs=>rs.map(r=>r.id===id?{...r,dhcp:false}:r));
+        setDhcpRange(null);
+        setForm(f=>f?{...f,dhcp:false,_originalDhcp:false}:f);
+      }}/>}
+      {delId&&<ConfirmModal msg="Excluir esta faixa? Se sincronizada com o inventário, será removida de lá também." onConfirm={del} onCancel={()=>setDelId(null)}/>}
+      {delFilialId&&<ConfirmModal msg="Excluir esta filial?" onConfirm={delFilial} onCancel={()=>setDelFilialId(null)}/>}
+    </div>
+  );
+}
+
 // ── SIDEBAR ───────────────────────────────────────────────────
 const navConfig=[
   {id:"cadastros",label:"Cadastros",icon:"folder",children:[
@@ -7258,6 +7707,7 @@ const navConfig=[
     {id:"s29",label:"Histórico de Movimentações", icon:"history"},
     {id:"s30",label:"Férias",                     icon:"vacation"},
     {id:"s34",label:"Inventário de Rede",         icon:"network"},
+    {id:"s38",label:"Endereços de Rede",          icon:"satellite"},
     {id:"s35",label:"Controle de Folgas",         icon:"folgas"},
     {id:"s37",label:"Políticas de TI",            icon:"policy"},
   ]},
@@ -7365,6 +7815,7 @@ const screenTitles={
   s32:"Relatórios › Composição de Equipe",
   s33:"Cadastros › Configuração de Inventário",
   s34:"Movimentações › Inventário de Rede",
+  s38:"Movimentações › Endereços de Rede",
   s35:"Movimentações › Controle de Folgas",
   s36:"Relatórios › Controle de Folgas",
   s37:"Movimentações › Políticas de TI",
@@ -7430,6 +7881,7 @@ export default function App(){
     s36:<RelatorioFolgasScreen user={user}/>,
     s37:<PoliticasScreen user={user}/>,
     s34:<InventarioRedeScreen user={user}/>,
+    s38:<EnderecosRedeScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
