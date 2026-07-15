@@ -7393,6 +7393,554 @@ function DhcpModal({range,onClose,onDhcpDeleted}){
   );
 }
 
+function FiliaisScreen({user}){
+  const p=user.permissions?.s39;
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(false);
+  const[delId,setDelId]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const empty={id:null,nome:"",logradouro:"",numero:"",bairro:"",cidade:"",estado:"",cep:"",complemento:"",active:true};
+  const[form,setForm]=useState(empty);
+  useEffect(()=>{if(!p?.view)return;api.get("/filiais").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));},[]);
+  const openAdd=()=>{setForm(empty);setModal(true);};
+  const openEdit=i=>{setForm({...empty,...i});setModal(true);};
+  const save=async()=>{
+    if(!form.nome.trim())return alert("Nome é obrigatório.");
+    setSaving(true);
+    try{
+      if(form.id){const u=await api.put(`/filiais/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
+      else{const c=await api.post("/filiais",form);setItems(is=>[...is,c]);}
+      setModal(false);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{try{await api.delete(`/filiais/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+  if(!p?.view)return<div style={S.emptyState}><Icon name="lock" size={32}/><br/>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>🏬 Filiais</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Nova Filial</button>}</div>
+      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏬</span>Nenhuma filial.</div>:(
+        <table style={S.table}><thead><tr>
+          {["Nome","Cidade","Estado","CEP","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+        </tr></thead>
+        <tbody>{items.map(it=>(
+          <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={S.td}><strong>{it.nome}</strong></td>
+            <td style={S.td}>{it.cidade||"—"}</td>
+            <td style={S.td}>{it.estado||"—"}</td>
+            <td style={S.td}>{it.cep||"—"}</td>
+            <td style={S.td}><span style={{...S.badge,...(it.active?S.badgeActive:S.badgeInactive)}}>{it.active?"Ativo":"Inativo"}</span></td>
+            <td style={S.td}>
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
+            </td>
+          </tr>
+        ))}</tbody></table>
+      )}
+      {modal&&(
+        <Modal title={form.id?"Editar Filial":"Nova Filial"} onClose={()=>setModal(false)}>
+          <Input label="Nome" value={form.nome} onChange={v=>setForm(f=>({...f,nome:v}))} required/>
+          <Input label="Logradouro" value={form.logradouro||""} onChange={v=>setForm(f=>({...f,logradouro:v}))}/>
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1}}><Input label="Número" value={form.numero||""} onChange={v=>setForm(f=>({...f,numero:v}))}/></div>
+            <div style={{flex:2}}><Input label="Bairro" value={form.bairro||""} onChange={v=>setForm(f=>({...f,bairro:v}))}/></div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:2}}><Input label="Cidade" value={form.cidade||""} onChange={v=>setForm(f=>({...f,cidade:v}))}/></div>
+            <div style={{flex:1}}><Input label="Estado" value={form.estado||""} onChange={v=>setForm(f=>({...f,estado:v}))}/></div>
+            <div style={{flex:1}}><Input label="CEP" value={form.cep||""} onChange={v=>setForm(f=>({...f,cep:v}))}/></div>
+          </div>
+          <Input label="Complemento" value={form.complemento||""} onChange={v=>setForm(f=>({...f,complemento:v}))}/>
+          <div style={S.formRow}><label style={S.label}>STATUS</label>
+            <div style={{display:"flex",gap:16}}>{[{v:true,l:"Ativo"},{v:false,l:"Inativo"}].map(o=>(
+              <label key={String(o.v)} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
+                <input type="radio" checked={form.active===o.v} onChange={()=>setForm(f=>({...f,active:o.v}))} style={{accentColor:C.primary}}/>{o.l}
+              </label>
+            ))}</div>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Deseja excluir esta filial?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+function LinksScreen({user}){
+  const p=user.permissions?.s40;
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(false);
+  const[delId,setDelId]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const[companies,setCompanies]=useState([]);
+  const[filiais,setFiliais]=useState([]);
+  const[suppliers,setSuppliers]=useState([]);
+  const[contracts,setContracts]=useState([]);
+  const[csvModal,setCsvModal]=useState(false);
+  const[csvText,setCsvText]=useState("");
+  const[csvResult,setCsvResult]=useState(null);
+  const[csvSaving,setCsvSaving]=useState(false);
+  const[filters,setFilters]=useState({empresaContratanteId:"",empresaBeneficiariaId:"",filialId:"",fornecedorId:"",numeroSerie:"",numeroConta:""});
+  const emptyForm={id:null,tipo:"Link",empresaContratanteId:"",cnpjContratante:"",empresaBeneficiariaId:"",filialId:"",enderecoFilial:"",ccusto:"",fornecedorId:"",contato:"",velocidade:"",contractId:"",emailConta:"",senhaConta:"",vrEquipamento:"",vrMensal:"",numeroSerie:"",numeroConta:"",plano:"",observacao:"",status:"Ativo"};
+  const[form,setForm]=useState(emptyForm);
+  useEffect(()=>{
+    if(!p?.view)return;
+    api.get("/links").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+    api.get("/companies").then(setCompanies).catch(()=>{});
+    api.get("/filiais/basic").then(setFiliais).catch(()=>{});
+    api.get("/suppliers").then(setSuppliers).catch(()=>{});
+    api.get("/contracts").then(setContracts).catch(()=>{});
+  },[]);
+  const openAdd=()=>{setForm(emptyForm);setModal(true);};
+  const openEdit=i=>{setForm({...emptyForm,...i,vrEquipamento:i.vrEquipamento!=null?String(i.vrEquipamento):"",vrMensal:i.vrMensal!=null?String(i.vrMensal):""});setModal(true);};
+  const setF=v=>setForm(f=>({...f,...v}));
+  const handleEmpresaContratante=id=>{
+    const emp=companies.find(c=>String(c.id)===String(id));
+    setF({empresaContratanteId:id,cnpjContratante:emp?emp.cnpj||"":""});
+  };
+  const handleFilial=id=>{
+    const fil=filiais.find(f=>String(f.id)===String(id));
+    let end="";
+    if(fil){
+      end=[fil.logradouro,fil.numero,fil.bairro,fil.cidade,fil.estado,fil.cep,fil.complemento].filter(x=>x&&String(x).trim()).join(", ");
+    }
+    setF({filialId:id,enderecoFilial:end});
+  };
+  const handleFornecedor=id=>{
+    const sup=suppliers.find(s=>String(s.id)===String(id));
+    setF({fornecedorId:id,contato:sup?sup.contact_phone||"":""});
+  };
+  const reloadItems=()=>api.get("/links").then(setItems).catch(e=>alert(e.message));
+  const save=async()=>{
+    setSaving(true);
+    try{
+      const payload={...form,vrEquipamento:form.vrEquipamento!==""?parseFloat(form.vrEquipamento):null,vrMensal:form.vrMensal!==""?parseFloat(form.vrMensal):null};
+      if(form.id){await api.put(`/links/${form.id}`,payload);}
+      else{await api.post("/links",payload);}
+      await reloadItems();
+      setModal(false);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{try{await api.delete(`/links/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+  const parseCsv=txt=>{
+    const lines=txt.split(/\r?\n/).filter(l=>l.trim());
+    if(lines.length<2)return[];
+    const headers=lines[0].split(";").map(h=>h.trim());
+    return lines.slice(1).map(line=>{
+      const cols=line.split(";");
+      const row={};
+      headers.forEach((h,i)=>{row[h]=cols[i]?cols[i].trim():"";});
+      return row;
+    });
+  };
+  const importCsv=async()=>{
+    const rows=parseCsv(csvText);
+    if(!rows.length)return alert("Nenhuma linha encontrada no CSV.");
+    setCsvSaving(true);
+    try{
+      const r=await api.post("/links/import",{rows});
+      setCsvResult(r);
+    }catch(e){alert(e.message);}finally{setCsvSaving(false);}
+  };
+  const filtered=items.filter(it=>{
+    if(filters.empresaContratanteId&&String(it.empresaContratanteId)!==String(filters.empresaContratanteId))return false;
+    if(filters.empresaBeneficiariaId&&String(it.empresaBeneficiariaId)!==String(filters.empresaBeneficiariaId))return false;
+    if(filters.filialId&&String(it.filialId)!==String(filters.filialId))return false;
+    if(filters.fornecedorId&&String(it.fornecedorId)!==String(filters.fornecedorId))return false;
+    if(filters.numeroSerie&&!(it.numeroSerie||"").toLowerCase().includes(filters.numeroSerie.toLowerCase()))return false;
+    if(filters.numeroConta&&!(it.numeroConta||"").toLowerCase().includes(filters.numeroConta.toLowerCase()))return false;
+    return true;
+  });
+  const companyName=id=>{ const c=companies.find(x=>String(x.id)===String(id)); return c?c.name:"—"; };
+  const filialName=id=>{ const f=filiais.find(x=>String(x.id)===String(id)); return f?f.nome:"—"; };
+  const supplierName=id=>{ const s=suppliers.find(x=>String(x.id)===String(id)); return s?s.name:"—"; };
+  const tipoOpts=[{value:"Link",label:"Link"},{value:"Starlink",label:"Starlink"},{value:"Telefonia",label:"Telefonia"}];
+  const statusOpts=[{value:"Ativo",label:"Ativo"},{value:"Inativo",label:"Inativo"}];
+  const companyOpts=[{value:"",label:"Todas"},...companies.map(c=>({value:String(c.id),label:c.name}))];
+  const filialOpts=[{value:"",label:"Todas"},...filiais.map(f=>({value:String(f.id),label:f.nome}))];
+  const supplierOpts=[{value:"",label:"Todos"},...suppliers.map(s=>({value:String(s.id),label:s.name}))];
+  const contractOpts=[{value:"",label:"Selecione"},...contracts.map(c=>({value:String(c.id),label:(c.supplierName||"")+" — "+(c.contractNumber||"")}))];
+  if(!p?.view)return<div style={S.emptyState}><Icon name="lock" size={32}/><br/>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>🔗 Links</span>
+        <div style={{display:"flex",gap:8}}>
+          <button style={{...S.btnAdd,background:"#1565C0"}} onClick={()=>{setCsvText("");setCsvResult(null);setCsvModal(true);}}>📥 Importar CSV</button>
+          {p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Link</button>}
+        </div>
+      </div>
+      <div style={{padding:"12px 20px",display:"flex",flexWrap:"wrap",gap:10,borderBottom:`1px solid ${C.border}`}}>
+        <SelectField label="Empresa Contratante" value={filters.empresaContratanteId} onChange={v=>setFilters(f=>({...f,empresaContratanteId:v}))} options={companyOpts}/>
+        <SelectField label="Empresa Beneficiária" value={filters.empresaBeneficiariaId} onChange={v=>setFilters(f=>({...f,empresaBeneficiariaId:v}))} options={companyOpts}/>
+        <SelectField label="Filial" value={filters.filialId} onChange={v=>setFilters(f=>({...f,filialId:v}))} options={filialOpts}/>
+        <SelectField label="Fornecedor" value={filters.fornecedorId} onChange={v=>setFilters(f=>({...f,fornecedorId:v}))} options={supplierOpts}/>
+        <div style={S.formRow}><label style={S.label}>Nº Série</label><input style={{...S.input,marginBottom:0}} value={filters.numeroSerie} onChange={e=>setFilters(f=>({...f,numeroSerie:e.target.value}))} placeholder="Filtrar..."/></div>
+        <div style={S.formRow}><label style={S.label}>Nº Conta</label><input style={{...S.input,marginBottom:0}} value={filters.numeroConta} onChange={e=>setFilters(f=>({...f,numeroConta:e.target.value}))} placeholder="Filtrar..."/></div>
+      </div>
+      {filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🔗</span>Nenhum link encontrado.</div>:(
+        <div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Tipo","Empresa Contratante","CNPJ Contratante","Empresa Beneficiária","Filial","Fornecedor","Velocidade","Nº Série","Nº Conta","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{filtered.map(it=>(
+            <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={S.td}>{it.tipo||"—"}</td>
+              <td style={S.td}>{companyName(it.empresaContratanteId)}</td>
+              <td style={S.td}>{it.cnpjContratante||"—"}</td>
+              <td style={S.td}>{companyName(it.empresaBeneficiariaId)}</td>
+              <td style={S.td}>{filialName(it.filialId)}</td>
+              <td style={S.td}>{supplierName(it.fornecedorId)}</td>
+              <td style={S.td}>{it.velocidade||"—"}</td>
+              <td style={S.td}>{it.numeroSerie||"—"}</td>
+              <td style={S.td}>{it.numeroConta||"—"}</td>
+              <td style={S.td}><span style={{...S.badge,...(it.status==="Ativo"?S.badgeActive:S.badgeInactive)}}>{it.status||"—"}</span></td>
+              <td style={S.td}>
+                {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+                {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
+              </td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      )}
+      {modal&&(
+        <Modal title={form.id?"Editar Link":"Novo Link"} onClose={()=>setModal(false)}>
+          <SelectField label="Tipo" value={form.tipo} onChange={v=>setF({tipo:v})} options={tipoOpts} required/>
+          <SelectField label="Empresa Contratante" value={form.empresaContratanteId} onChange={handleEmpresaContratante} options={[{value:"",label:"Selecione"},...companies.map(c=>({value:String(c.id),label:c.name}))]}/>
+          <Input label="CNPJ Contratante" value={form.cnpjContratante} onChange={()=>{}} disabled/>
+          <SelectField label="Empresa Beneficiária" value={form.empresaBeneficiariaId} onChange={v=>setF({empresaBeneficiariaId:v})} options={[{value:"",label:"Selecione"},...companies.map(c=>({value:String(c.id),label:c.name}))]}/>
+          <SelectField label="Filial" value={form.filialId} onChange={handleFilial} options={[{value:"",label:"Selecione"},...filiais.map(f=>({value:String(f.id),label:f.nome}))]}/>
+          <Input label="Endereço Filial" value={form.enderecoFilial} onChange={()=>{}} disabled/>
+          <Input label="CC Custo" value={form.ccusto||""} onChange={v=>setF({ccusto:v})}/>
+          <SelectField label="Fornecedor" value={form.fornecedorId} onChange={handleFornecedor} options={[{value:"",label:"Selecione"},...suppliers.map(s=>({value:String(s.id),label:s.name}))]}/>
+          <Input label="Contato" value={form.contato||""} onChange={()=>{}} disabled/>
+          <Input label="Velocidade" value={form.velocidade||""} onChange={v=>setF({velocidade:v})}/>
+          <SelectField label="Contrato" value={form.contractId} onChange={v=>setF({contractId:v})} options={contractOpts}/>
+          <Input label="Email Conta" value={form.emailConta||""} onChange={v=>setF({emailConta:v})}/>
+          <Input label="Senha Conta" value={form.senhaConta||""} onChange={v=>setF({senhaConta:v})}/>
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1}}><Input label="Vr Equipamento" type="number" value={form.vrEquipamento} onChange={v=>setF({vrEquipamento:v})}/></div>
+            <div style={{flex:1}}><Input label="Vr Mensal" type="number" value={form.vrMensal} onChange={v=>setF({vrMensal:v})}/></div>
+          </div>
+          <Input label="Número Série" value={form.numeroSerie||""} onChange={v=>setF({numeroSerie:v})}/>
+          <Input label="Número Conta" value={form.numeroConta||""} onChange={v=>setF({numeroConta:v})}/>
+          <Input label="Plano" value={form.plano||""} onChange={v=>setF({plano:v})}/>
+          <div style={S.formRow}><label style={S.label}>Observação</label><textarea value={form.observacao||""} onChange={e=>setF({observacao:e.target.value})} style={{...S.input,minHeight:72,resize:"vertical"}}/></div>
+          <div style={S.formRow}>
+            <label style={S.label}>Status *</label>
+            <select style={S.input} value={form.status} onChange={e=>setF({status:e.target.value})}>
+              <option value="Ativo">Ativo</option>
+              <option value="Inativo">Inativo</option>
+            </select>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </Modal>
+      )}
+      {csvModal&&(
+        <Modal title="Importar Links via CSV" onClose={()=>setCsvModal(false)}>
+          {!csvResult?(
+            <>
+              <div style={S.formRow}><label style={S.label}>Cole o CSV abaixo (separado por ponto e vírgula)</label>
+                <div style={{fontSize:11,color:C.textLight,marginBottom:6}}>Cabeçalhos: Tipo; Empresa Contratante; Empresa Beneficiária; Filial; CCusto; Fornecedor; Velocidade; Email conta; Senha conta; Vr Equipamento; Vr Mensal; Numero Série; Numero Conta; Plano; Status; Observação</div>
+                <textarea value={csvText} onChange={e=>setCsvText(e.target.value)} style={{...S.input,minHeight:200,resize:"vertical",fontFamily:"monospace",fontSize:12}}/>
+              </div>
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+                <button style={S.btnCancel} onClick={()=>setCsvModal(false)}>Cancelar</button>
+                <button style={{...S.btnSave,opacity:csvSaving?0.7:1}} onClick={importCsv} disabled={csvSaving}>{csvSaving?"Importando...":"Importar"}</button>
+              </div>
+            </>
+          ):(
+            <>
+              <div style={{padding:16,background:csvResult.errors&&csvResult.errors.length?"#FFF3E0":"#E8F5E9",borderRadius:8,marginBottom:16}}>
+                <div style={{fontWeight:600,fontSize:14,marginBottom:8}}>{csvResult.imported!=null?`✅ ${csvResult.imported} registro(s) importado(s).`:""}</div>
+                {csvResult.errors&&csvResult.errors.length>0&&(
+                  <div>
+                    <div style={{fontWeight:600,color:"#E65100",marginBottom:4}}>⚠️ {csvResult.errors.length} erro(s):</div>
+                    <ul style={{margin:0,paddingLeft:20,fontSize:12,color:"#E65100"}}>{csvResult.errors.map((e,i)=><li key={i}>{e}</li>)}</ul>
+                  </div>
+                )}
+              </div>
+              <div style={{display:"flex",justifyContent:"flex-end"}}>
+                <button style={S.btnCancel} onClick={()=>{setCsvModal(false);api.get("/links").then(setItems).catch(()=>{})}}>Fechar</button>
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Deseja excluir este link?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+function FirewallVlanModal({fw,user,onClose}){
+  const p=user.permissions?.s41;
+  const[vlans,setVlans]=useState([]);
+  const[ranges,setRanges]=useState([]);
+  const[selRange,setSelRange]=useState("");
+  const[loading,setLoading]=useState(true);
+  const[saving,setSaving]=useState(false);
+  const[delId,setDelId]=useState(null);
+  useEffect(()=>{
+    Promise.all([
+      api.get(`/firewall/${fw.id}/vlans`),
+      api.get("/network-addresses/ranges"),
+    ]).then(([v,r])=>{setVlans(v);setRanges(r);}).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[fw.id]);
+  const add=async()=>{
+    if(!selRange)return alert("Selecione uma faixa de rede.");
+    setSaving(true);
+    try{const r=await api.post(`/firewall/${fw.id}/vlans`,{rangeId:selRange});
+      const range=ranges.find(x=>x.id===selRange);
+      setVlans(v=>[...v,{id:r.id,firewallId:fw.id,rangeId:selRange,rangeNome:range?.nome,ipRange:range?.ipRange}]);
+      setSelRange("");
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/firewall/${fw.id}/vlans/${delId}`);setVlans(v=>v.filter(x=>x.id!==delId));setDelId(null);}
+    catch(e){alert(e.message);}
+  };
+  const info=id=>{const r=ranges.find(x=>x.id===id);if(!r)return null;const i=cidrInfo(r.ipRange);return i;};
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:C.white,borderRadius:12,width:"min(700px,100%)",maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px",borderBottom:`1px solid ${C.border}`}}>
+          <div style={{fontWeight:700,fontSize:15,color:C.text}}>VLANs — {fw.equipamento}</div>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",padding:4}}><Icon name="x" size={18}/></button>
+        </div>
+        {loading?<div style={{padding:40,textAlign:"center"}}><Spinner/></div>:<div style={{flex:1,overflowY:"auto",padding:20}}>
+          {p?.insert&&<div style={{display:"flex",gap:10,marginBottom:16,alignItems:"flex-end"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <label style={S.label}>Faixa de Rede</label>
+              <select style={S.input} value={selRange} onChange={e=>setSelRange(e.target.value)}>
+                <option value="">Selecione...</option>
+                {ranges.map(r=><option key={r.id} value={r.id}>{r.nome} — {r.ipRange}</option>)}
+              </select>
+            </div>
+            {selRange&&(()=>{const i=info(selRange);return i?<div style={{fontSize:11,color:C.textLight,whiteSpace:"nowrap",paddingBottom:10}}>{i.firstIp} → {i.lastIp}</div>:null;})()}
+            <button style={{...S.btnSave,opacity:saving?0.7:1,whiteSpace:"nowrap",paddingBottom:10}} disabled={saving} onClick={add}>+ Adicionar</button>
+          </div>}
+          <table style={S.table}><thead><tr>
+            {["Nome / Descrição","Faixa CIDR","Primeiro IP","Último IP","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{vlans.map(v=>{
+            const i=cidrInfo(v.ipRange);
+            return(<tr key={v.id}>
+              <td style={{...S.td,fontWeight:600}}>{v.rangeNome}</td>
+              <td style={S.td}><code style={{fontSize:11,background:C.bg,padding:"2px 6px",borderRadius:4}}>{v.ipRange}</code></td>
+              <td style={{...S.td,fontFamily:"monospace",fontSize:11}}>{i?.firstIp||"—"}</td>
+              <td style={{...S.td,fontFamily:"monospace",fontSize:11}}>{i?.lastIp||"—"}</td>
+              <td style={S.td}>{p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(v.id)}><Icon name="trash" size={13}/></button>}</td>
+            </tr>);
+          })}</tbody></table>
+          {vlans.length===0&&<div style={S.emptyState}><Icon name="network" size={28}/><br/>Nenhuma VLAN vinculada.</div>}
+        </div>}
+        {delId&&<ConfirmModal msg="Remover esta VLAN?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+        <div style={{padding:"12px 20px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"flex-end"}}>
+          <button style={S.btnCancel} onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FirewallLinksModal({fw,user,onClose}){
+  const p=user.permissions?.s41;
+  const[items,setItems]=useState([]);
+  const[allLinks,setAllLinks]=useState([]);
+  const[form,setForm]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[loading,setLoading]=useState(true);
+  const[saving,setSaving]=useState(false);
+  useEffect(()=>{
+    Promise.all([api.get(`/firewall/${fw.id}/links`),api.get("/links")])
+      .then(([fl,l])=>{setItems(fl);setAllLinks(l);}).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[fw.id]);
+  const linkLabel=l=>l?[l.tipo,l.fornecedorNome,l.filialNome].filter(Boolean).join(" — "):"";
+  const save=async()=>{
+    setSaving(true);
+    try{
+      if(form.id){await api.put(`/firewall/${fw.id}/links/${form.id}`,form);setItems(it=>it.map(x=>x.id===form.id?{...x,...form,provedorLabel:linkLabel(allLinks.find(l=>l.id===form.linkId))}:x));}
+      else{const r=await api.post(`/firewall/${fw.id}/links`,form);setItems(it=>[...it,{id:r.id,...form,provedorLabel:linkLabel(allLinks.find(l=>l.id===form.linkId))}]);}
+      setForm(null);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/firewall/${fw.id}/links/${delId}`);setItems(it=>it.filter(x=>x.id!==delId));setDelId(null);}
+    catch(e){alert(e.message);}
+  };
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:C.white,borderRadius:12,width:"min(720px,100%)",maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px",borderBottom:`1px solid ${C.border}`}}>
+          <div style={{fontWeight:700,fontSize:15,color:C.text}}>Links Vinculados — {fw.equipamento}</div>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",padding:4}}><Icon name="x" size={18}/></button>
+        </div>
+        {loading?<div style={{padding:40,textAlign:"center"}}><Spinner/></div>:<div style={{flex:1,overflowY:"auto",padding:20}}>
+          {p?.insert&&!form&&<div style={{marginBottom:12}}><button style={S.btnAdd} onClick={()=>setForm({id:null,linkId:"",portas:"",ipFixo:""})}>+ Adicionar Link</button></div>}
+          {form&&<div style={{background:C.bg,border:`0.5px solid ${C.border}`,borderRadius:8,padding:"14px 16px",marginBottom:16}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div style={S.formRow}>
+                <label style={S.label}>Provedor</label>
+                <select style={S.input} value={form.linkId} onChange={e=>setForm(f=>({...f,linkId:e.target.value}))}>
+                  <option value="">Selecione...</option>
+                  {allLinks.map(l=><option key={l.id} value={l.id}>{linkLabel(l)}</option>)}
+                </select>
+              </div>
+              <Input label="IP Fixo" value={form.ipFixo||""} onChange={v=>setForm(f=>({...f,ipFixo:v}))} placeholder="ex: 200.x.x.x"/>
+            </div>
+            <Input label="Portas" value={form.portas||""} onChange={v=>setForm(f=>({...f,portas:v}))} placeholder="ex: WAN1, WAN2"/>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+              <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
+              <button style={{...S.btnSave,opacity:saving?0.7:1}} disabled={saving} onClick={save}>{saving?"Salvando...":"Salvar"}</button>
+            </div>
+          </div>}
+          <table style={S.table}><thead><tr>
+            {["Provedor","Portas","IP Fixo","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{items.map(it=>(
+            <tr key={it.id}>
+              <td style={S.td}>{it.provedorLabel||"—"}</td>
+              <td style={S.td}>{it.portas||"—"}</td>
+              <td style={{...S.td,fontFamily:"monospace",fontSize:11}}>{it.ipFixo||"—"}</td>
+              <td style={S.td}><div style={{display:"flex",gap:4}}>
+                {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>setForm({...it})}><Icon name="edit" size={13}/> Editar</button>}
+                {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>}
+              </div></td>
+            </tr>
+          ))}</tbody></table>
+          {items.length===0&&!form&&<div style={S.emptyState}><Icon name="link" size={28}/><br/>Nenhum link vinculado.</div>}
+        </div>}
+        {delId&&<ConfirmModal msg="Remover este link vinculado?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+        <div style={{padding:"12px 20px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"flex-end"}}>
+          <button style={S.btnCancel} onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FirewallScreen({user}){
+  const p=user.permissions?.s41;
+  const[items,setItems]=useState([]);
+  const[filiais,setFiliais]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[form,setForm]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const[vlanFw,setVlanFw]=useState(null);
+  const[linksFw,setLinksFw]=useState(null);
+  const[filters,setFilters]=useState({equipamento:"",filialId:"",modelo:"",numeroSerie:"",firmware:""});
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/firewall"),api.get("/filiais/basic")])
+      .then(([fw,f])=>{setItems(fw);setFiliais(f);}).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[]);
+
+  const load=()=>{
+    const q=new URLSearchParams();
+    Object.entries(filters).forEach(([k,v])=>{if(v)q.set(k,v);});
+    api.get(`/firewall?${q}`).then(setItems).catch(e=>alert(e.message));
+  };
+
+  const save=async()=>{
+    if(!form.equipamento?.trim())return alert("Equipamento é obrigatório.");
+    setSaving(true);
+    try{
+      if(form.id){await api.put(`/firewall/${form.id}`,form);load();}
+      else{await api.post("/firewall",form);load();}
+      setForm(null);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+
+  const del=async()=>{
+    try{await api.delete(`/firewall/${delId}`);setItems(it=>it.filter(x=>x.id!==delId));setDelId(null);}
+    catch(e){alert(e.message);}
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><Icon name="lock" size={32}/><br/>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}><Icon name="monitor" size={16} style={{marginRight:6}}/>Firewall</span>
+        {p?.insert&&<button style={S.btnAdd} onClick={()=>setForm({id:null,equipamento:"",filialId:"",modelo:"",numeroSerie:"",firmware:"",redeNativa:""})}>+ Novo</button>}
+      </div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14,alignItems:"flex-end"}}>
+        {[["equipamento","Equipamento"],["modelo","Modelo"],["numeroSerie","Nº Série"],["firmware","Firmware"]].map(([k,lbl])=>(
+          <div key={k} style={S.formRow}>
+            <label style={S.label}>{lbl}</label>
+            <input style={{...S.input,width:130,padding:"4px 8px",fontSize:12}} value={filters[k]} onChange={e=>setFilters(f=>({...f,[k]:e.target.value}))} placeholder={lbl}/>
+          </div>
+        ))}
+        <div style={S.formRow}>
+          <label style={S.label}>Filial</label>
+          <select style={{...S.input,width:150,padding:"4px 8px",fontSize:12}} value={filters.filialId} onChange={e=>setFilters(f=>({...f,filialId:e.target.value}))}>
+            <option value="">Todas</option>
+            {filiais.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
+          </select>
+        </div>
+        <button style={S.btnAdd} onClick={load}>Filtrar</button>
+        {Object.values(filters).some(v=>v)&&<button style={S.btnCancel} onClick={()=>setFilters({equipamento:"",filialId:"",modelo:"",numeroSerie:"",firmware:""})}>Limpar</button>}
+      </div>
+      {items.length===0?<div style={S.emptyState}><Icon name="monitor" size={32}/><br/>Nenhum firewall encontrado.</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Equipamento","Filial","Modelo","Nº Série","Firmware","Rede Nativa","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{items.map(fw=>(
+            <tr key={fw.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={{...S.td,fontWeight:600}}>{fw.equipamento}</td>
+              <td style={S.td}>{fw.filialNome?<span style={{...S.badge,background:"#E3F2FD",color:"#1565C0"}}>{fw.filialNome}</span>:"—"}</td>
+              <td style={S.td}>{fw.modelo||"—"}</td>
+              <td style={{...S.td,fontFamily:"monospace",fontSize:11}}>{fw.numeroSerie||"—"}</td>
+              <td style={S.td}>{fw.firmware||"—"}</td>
+              <td style={S.td}>{fw.redeNativa||"—"}</td>
+              <td style={S.td}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"0.5px solid #A5D6A7"}} onClick={()=>setVlanFw(fw)}><Icon name="network" size={13}/> Vlan</button>
+                <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"0.5px solid #90CAF9"}} onClick={()=>setLinksFw(fw)}><Icon name="link" size={13}/> Links</button>
+                {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>setForm({...fw})}><Icon name="edit" size={13}/> Editar</button>}
+                {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(fw.id)}><Icon name="trash" size={13}/></button>}
+              </div></td>
+            </tr>
+          ))}</tbody></table>
+        </div>}
+      {form&&<Modal title={form.id?"Editar Firewall":"Novo Firewall"} onClose={()=>setForm(null)}>
+        <Input label="Equipamento *" value={form.equipamento} onChange={v=>setForm(f=>({...f,equipamento:v}))}/>
+        <div style={S.formRow}>
+          <label style={S.label}>Filial</label>
+          <select style={S.input} value={form.filialId||""} onChange={e=>setForm(f=>({...f,filialId:e.target.value}))}>
+            <option value="">Selecione...</option>
+            {filiais.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
+          </select>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Input label="Modelo" value={form.modelo||""} onChange={v=>setForm(f=>({...f,modelo:v}))}/>
+          <Input label="Nº Série" value={form.numeroSerie||""} onChange={v=>setForm(f=>({...f,numeroSerie:v}))}/>
+          <Input label="Firmware" value={form.firmware||""} onChange={v=>setForm(f=>({...f,firmware:v}))}/>
+          <Input label="Rede Nativa" value={form.redeNativa||""} onChange={v=>setForm(f=>({...f,redeNativa:v}))}/>
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
+          <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
+          <button style={{...S.btnSave,opacity:saving?0.7:1}} disabled={saving} onClick={save}>{saving?"Salvando...":"Salvar"}</button>
+        </div>
+      </Modal>}
+      {vlanFw&&<FirewallVlanModal fw={vlanFw} user={user} onClose={()=>setVlanFw(null)}/>}
+      {linksFw&&<FirewallLinksModal fw={linksFw} user={user} onClose={()=>setLinksFw(null)}/>}
+      {delId&&<ConfirmModal msg="Excluir este firewall?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
 function EnderecosRedeScreen({user}){
   const p=user.permissions?.s38;
   const[ranges,setRanges]=useState([]);
@@ -7433,7 +7981,7 @@ function EnderecosRedeScreen({user}){
     setConflito(c||false);
   },[form?.ipRange,form?.id,ranges]);
 
-  const openAdd=()=>setForm({id:null,filialId:filiais[0]?.id||"",nome:"",ipRange:"",vlan:"",observacao:"",active:true,syncInventory:true,dhcp:false});
+  const openAdd=()=>setForm({id:null,filialId:filiais[0]?.id||"",nome:"",ipRange:"",vlan:"",vlanId:"",tipo:"",observacao:"",active:true,syncInventory:true,dhcp:false});
   const openEdit=r=>setForm({...r,filialId:r.filialId,syncInventory:r.syncInventory??true,_originalDhcp:r.dhcp});
 
   const save=async()=>{
@@ -7491,7 +8039,6 @@ function EnderecosRedeScreen({user}){
       <div style={S.cardHeader}>
         <span style={S.cardTitle}><Icon name="network" size={16} style={{marginRight:6}}/>Endereços de Rede</span>
         <div style={{display:"flex",gap:8}}>
-          {p?.insert&&<button style={{...S.btnCancel,fontSize:12}} onClick={()=>setFilialForm({id:null,nome:"",cidade:"",active:true})}>+ Nova Filial</button>}
           {p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Nova Faixa</button>}
         </div>
       </div>
@@ -7533,7 +8080,7 @@ function EnderecosRedeScreen({user}){
         ?<div style={S.emptyState}><Icon name="network" size={32}/><br/>Nenhuma faixa encontrada.</div>
         :<div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
-            {["Filial","Nome / Descrição","Faixa CIDR","Primeiro IP","Último IP","Hosts","VLAN","Status","Inventário","DHCP","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            {["Filial","Nome / Descrição","Faixa CIDR","Primeiro IP","Último IP","Hosts","VLAN Id","Tipo","Status","Inventário","DHCP","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
           <tbody>{filtered.map(r=>{
             const info=cidrInfo(r.ipRange);
@@ -7545,7 +8092,8 @@ function EnderecosRedeScreen({user}){
                 <td style={{...S.td,fontFamily:"monospace",fontSize:11}}>{info?.firstIp||"—"}</td>
                 <td style={{...S.td,fontFamily:"monospace",fontSize:11}}>{info?.lastIp||"—"}</td>
                 <td style={{...S.td,textAlign:"center"}}>{info?info.hosts.toLocaleString("pt-BR"):"—"}</td>
-                <td style={S.td}>{r.vlan?<span style={{...S.badge,background:C.bg,color:C.textLight}}>{r.vlan}</span>:"—"}</td>
+                <td style={{...S.td,textAlign:"center"}}>{r.vlanId?<span style={{...S.badge,background:C.bg,color:C.textLight,fontFamily:"monospace"}}>{r.vlanId}</span>:"—"}</td>
+                <td style={S.td}>{r.tipo?<span style={{...S.badge,background:r.tipo==="Wifi"?"#F3E5F5":"#E8EAF6",color:r.tipo==="Wifi"?"#6A1B9A":"#283593"}}>{r.tipo}</span>:"—"}</td>
                 <td style={S.td}><span style={{...S.badge,background:r.active?"#E8F5E9":"#FFEBEE",color:r.active?"#2E7D32":"#C62828"}}>{r.active?"Ativo":"Inativo"}</span></td>
                 <td style={{...S.td,textAlign:"center"}}>
                   {r.syncInventory
@@ -7611,6 +8159,21 @@ function EnderecosRedeScreen({user}){
           </div>
           <Input label="Nome / Descrição *" value={form.nome} onChange={v=>setForm(f=>({...f,nome:v}))} placeholder="ex: Rede LAN TI"/>
           <Input label="Faixa de IP (CIDR) *" value={form.ipRange} onChange={v=>setForm(f=>({...f,ipRange:v}))} placeholder="ex: 192.168.1.0/24"/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={S.formRow}>
+              <label style={S.label}>Vlan Id</label>
+              <input type="number" min="1" max="4094" style={S.input} value={form.vlanId||""} placeholder="ex: 10"
+                onChange={e=>setForm(f=>({...f,vlanId:e.target.value}))}/>
+            </div>
+            <div style={S.formRow}>
+              <label style={S.label}>Tipo</label>
+              <select style={S.input} value={form.tipo||""} onChange={e=>setForm(f=>({...f,tipo:e.target.value}))}>
+                <option value="">Selecione...</option>
+                <option value="Cabeada">Cabeada</option>
+                <option value="Wifi">Wifi</option>
+              </select>
+            </div>
+          </div>
 
           {cidrPreview&&(
             <div style={{background:"#E3F2FD",border:"0.5px solid #90CAF9",borderRadius:6,padding:"10px 12px",marginBottom:10,fontSize:12,color:"#1565C0"}}>
@@ -7696,6 +8259,7 @@ const navConfig=[
     {id:"s23",label:"Modelos de Contrato",        icon:"clipboard"},
     {id:"s28",label:"Configuração de E-mail",     icon:"mail"},
     {id:"s33",label:"Configuração de Inventário", icon:"wrench"},
+    {id:"s39",label:"Filiais",                    icon:"building"},
   ]},
   {id:"movimentacoes",label:"Movimentações",icon:"refresh",children:[
     {id:"s5", label:"Sobreaviso/Extra",           icon:"clock"},
@@ -7708,6 +8272,8 @@ const navConfig=[
     {id:"s30",label:"Férias",                     icon:"vacation"},
     {id:"s34",label:"Inventário de Rede",         icon:"network"},
     {id:"s38",label:"Endereços de Rede",          icon:"satellite"},
+    {id:"s40",label:"Links",                      icon:"link"},
+    {id:"s41",label:"Firewall",                   icon:"monitor"},
     {id:"s35",label:"Controle de Folgas",         icon:"folgas"},
     {id:"s37",label:"Políticas de TI",            icon:"policy"},
   ]},
@@ -7816,6 +8382,9 @@ const screenTitles={
   s33:"Cadastros › Configuração de Inventário",
   s34:"Movimentações › Inventário de Rede",
   s38:"Movimentações › Endereços de Rede",
+  s39:"Cadastros › Filiais",
+  s40:"Movimentações › Links",
+  s41:"Movimentações › Firewall",
   s35:"Movimentações › Controle de Folgas",
   s36:"Relatórios › Controle de Folgas",
   s37:"Movimentações › Políticas de TI",
@@ -7882,6 +8451,9 @@ export default function App(){
     s37:<PoliticasScreen user={user}/>,
     s34:<InventarioRedeScreen user={user}/>,
     s38:<EnderecosRedeScreen user={user}/>,
+    s39:<FiliaisScreen user={user}/>,
+    s40:<LinksScreen user={user}/>,
+    s41:<FirewallScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
