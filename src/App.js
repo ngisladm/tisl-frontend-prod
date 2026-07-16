@@ -204,7 +204,7 @@ function Input({label,value,onChange,type="text",placeholder,required,disabled})
     </div>
   );
 }
-function SelectField({label,value,onChange,options,required}){
+function SelectField({label,value,onChange,options=[],required}){
   const[open,setOpen]=useState(false);
   const[search,setSearch]=useState("");
   const[dropPos,setDropPos]=useState({top:0,left:0,width:200});
@@ -7685,6 +7685,7 @@ function FirewallVlanModal({fw,user,onClose}){
   const p=user.permissions?.s41;
   const[vlans,setVlans]=useState([]);
   const[ranges,setRanges]=useState([]);
+  const[usedIds,setUsedIds]=useState([]);
   const[selRange,setSelRange]=useState("");
   const[loading,setLoading]=useState(true);
   const[saving,setSaving]=useState(false);
@@ -7693,22 +7694,33 @@ function FirewallVlanModal({fw,user,onClose}){
     Promise.all([
       api.get(`/firewall/${fw.id}/vlans`),
       api.get("/network-addresses/ranges"),
-    ]).then(([v,r])=>{setVlans(v);setRanges(r);}).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+      api.get("/firewall/used-ranges"),
+    ]).then(([v,r,u])=>{setVlans(v);setRanges(r);setUsedIds(u);}).catch(e=>alert(e.message)).finally(()=>setLoading(false));
   },[fw.id]);
   const add=async()=>{
     if(!selRange)return alert("Selecione uma faixa de rede.");
     setSaving(true);
-    try{const r=await api.post(`/firewall/${fw.id}/vlans`,{rangeId:selRange});
+    try{
+      const r=await api.post(`/firewall/${fw.id}/vlans`,{rangeId:selRange});
       const range=ranges.find(x=>x.id===selRange);
       setVlans(v=>[...v,{id:r.id,firewallId:fw.id,rangeId:selRange,rangeNome:range?.nome,ipRange:range?.ipRange}]);
+      setUsedIds(u=>[...u,selRange]);
       setSelRange("");
     }catch(e){alert(e.message);}finally{setSaving(false);}
   };
   const del=async()=>{
-    try{await api.delete(`/firewall/${fw.id}/vlans/${delId}`);setVlans(v=>v.filter(x=>x.id!==delId));setDelId(null);}
-    catch(e){alert(e.message);}
+    const removed=vlans.find(x=>x.id===delId);
+    try{
+      await api.delete(`/firewall/${fw.id}/vlans/${delId}`);
+      setVlans(v=>v.filter(x=>x.id!==delId));
+      if(removed)setUsedIds(u=>u.filter(id=>id!==removed.rangeId));
+      setDelId(null);
+    }catch(e){alert(e.message);}
   };
-  const info=id=>{const r=ranges.find(x=>x.id===id);if(!r)return null;const i=cidrInfo(r.ipRange);return i;};
+  const info=id=>{const r=ranges.find(x=>x.id===id);if(!r)return null;return cidrInfo(r.ipRange);};
+  const availableRanges=ranges.filter(r=>!usedIds.includes(r.id));
+  const rangeOpts=availableRanges.map(r=>({value:r.id,label:`${r.nome} — ${r.ipRange}`}));
+  const selInfo=selRange?info(selRange):null;
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:C.white,borderRadius:12,width:"min(700px,100%)",maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
@@ -7717,16 +7729,12 @@ function FirewallVlanModal({fw,user,onClose}){
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",padding:4}}><Icon name="x" size={18}/></button>
         </div>
         {loading?<div style={{padding:40,textAlign:"center"}}><Spinner/></div>:<div style={{flex:1,overflowY:"auto",padding:20}}>
-          {p?.insert&&<div style={{display:"flex",gap:10,marginBottom:16,alignItems:"flex-end"}}>
-            <div style={{flex:1,minWidth:0}}>
-              <label style={S.label}>Faixa de Rede</label>
-              <select style={S.input} value={selRange} onChange={e=>setSelRange(e.target.value)}>
-                <option value="">Selecione...</option>
-                {ranges.map(r=><option key={r.id} value={r.id}>{r.nome} — {r.ipRange}</option>)}
-              </select>
+          {p?.insert&&<div style={{marginBottom:16}}>
+            <SelectField label="Faixa de Rede" value={selRange} onChange={setSelRange} options={[{value:"",label:"Selecione..."},...rangeOpts]}/>
+            {selInfo&&<div style={{fontSize:11,color:C.textLight,marginTop:-8,marginBottom:8,paddingLeft:2}}>{selInfo.firstIp} → {selInfo.lastIp} · {selInfo.hosts} hosts</div>}
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+              <button style={{...S.btnSave,opacity:saving?0.7:1}} disabled={saving||!selRange} onClick={add}>+ Adicionar</button>
             </div>
-            {selRange&&(()=>{const i=info(selRange);return i?<div style={{fontSize:11,color:C.textLight,whiteSpace:"nowrap",paddingBottom:10}}>{i.firstIp} → {i.lastIp}</div>:null;})()}
-            <button style={{...S.btnSave,opacity:saving?0.7:1,whiteSpace:"nowrap",paddingBottom:10}} disabled={saving} onClick={add}>+ Adicionar</button>
           </div>}
           <table style={S.table}><thead><tr>
             {["Nome / Descrição","Faixa CIDR","Primeiro IP","Último IP","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
@@ -7787,17 +7795,12 @@ function FirewallLinksModal({fw,user,onClose}){
         {loading?<div style={{padding:40,textAlign:"center"}}><Spinner/></div>:<div style={{flex:1,overflowY:"auto",padding:20}}>
           {p?.insert&&!form&&<div style={{marginBottom:12}}><button style={S.btnAdd} onClick={()=>setForm({id:null,linkId:"",portas:"",ipFixo:""})}>+ Adicionar Link</button></div>}
           {form&&<div style={{background:C.bg,border:`0.5px solid ${C.border}`,borderRadius:8,padding:"14px 16px",marginBottom:16}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-              <div style={S.formRow}>
-                <label style={S.label}>Provedor</label>
-                <select style={S.input} value={form.linkId} onChange={e=>setForm(f=>({...f,linkId:e.target.value}))}>
-                  <option value="">Selecione...</option>
-                  {allLinks.map(l=><option key={l.id} value={l.id}>{linkLabel(l)}</option>)}
-                </select>
-              </div>
+            <SelectField label="Provedor" value={form.linkId||""} onChange={v=>setForm(f=>({...f,linkId:v}))}
+              options={[{value:"",label:"Selecione..."},...allLinks.map(l=>({value:l.id,label:linkLabel(l)}))]}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <Input label="Portas" value={form.portas||""} onChange={v=>setForm(f=>({...f,portas:v}))} placeholder="ex: WAN1, WAN2"/>
               <Input label="IP Fixo" value={form.ipFixo||""} onChange={v=>setForm(f=>({...f,ipFixo:v}))} placeholder="ex: 200.x.x.x"/>
             </div>
-            <Input label="Portas" value={form.portas||""} onChange={v=>setForm(f=>({...f,portas:v}))} placeholder="ex: WAN1, WAN2"/>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
               <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
               <button style={{...S.btnSave,opacity:saving?0.7:1}} disabled={saving} onClick={save}>{saving?"Salvando...":"Salvar"}</button>
@@ -8241,6 +8244,269 @@ function EnderecosRedeScreen({user}){
   );
 }
 
+// ── RELATÓRIO FIREWALL (s42) ──────────────────────────────────
+function RelatorioFirewallScreen({user}){
+  const p=user.permissions?.s41||user.permissions?.s42;
+  const[filiais,setFiliais]=useState([]);
+  const[equipamentos,setEquipamentos]=useState([]);
+  const[modelos,setModelos]=useState([]);
+  const[fornecedores,setFornecedores]=useState([]);
+  const[filters,setFilters]=useState({equipamento:"",filialId:"",modelo:"",numeroSerie:"",fornecedorId:"",portas:""});
+  const[applied,setApplied]=useState(null);
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const[err,setErr]=useState(null);
+
+  useEffect(()=>{
+    api.get("/filiais/basic").then(r=>setFiliais(Array.isArray(r)?r:[])).catch(()=>{});
+    api.get("/firewall").then(r=>{
+      const list=Array.isArray(r)?r:[];
+      setEquipamentos([...new Set(list.map(f=>f.equipamento).filter(Boolean))].sort());
+      setModelos([...new Set(list.map(f=>f.modelo).filter(Boolean))].sort());
+    }).catch(()=>{});
+    api.get("/suppliers").then(r=>setFornecedores(Array.isArray(r)?r:[])).catch(()=>{});
+  },[]);
+
+  function applyFilters(){
+    setApplied({...filters});
+  }
+
+  useEffect(()=>{
+    if(applied===null)return;
+    setLoading(true);setErr(null);
+    const params=new URLSearchParams();
+    if(applied.equipamento)params.set("equipamento",applied.equipamento);
+    if(applied.filialId)params.set("filialId",applied.filialId);
+    if(applied.modelo)params.set("modelo",applied.modelo);
+    if(applied.numeroSerie)params.set("numeroSerie",applied.numeroSerie);
+    if(applied.fornecedorId){
+      const s=fornecedores.find(f=>f.id===applied.fornecedorId);
+      if(s)params.set("provedor",s.name);
+    }
+    if(applied.portas)params.set("portas",applied.portas);
+    api.get("/firewall/report?"+params.toString())
+      .then(r=>{setItems(Array.isArray(r)?r:[]);setLoading(false);})
+      .catch(e=>{setErr("Erro ao carregar relatório: "+(e?.message||""));setLoading(false);});
+  },[applied]);
+
+  if(!p?.view)return<div style={{padding:32,color:C.danger}}>Sem permissão.</div>;
+
+  const fSet=(k,v)=>setFilters(f=>({...f,[k]:v}));
+
+  function exportPdf(){
+    const doc=new jsPDF({orientation:"landscape"});
+    doc.setFontSize(14);
+    doc.text("Relatório de Firewall",14,15);
+    let y=22;
+    items.forEach((fw,idx)=>{
+      if(idx>0){doc.addPage();y=15;}
+      doc.setFontSize(11);
+      doc.setFont(undefined,"bold");
+      doc.text(fw.equipamento,14,y);
+      doc.setFont(undefined,"normal");
+      doc.setFontSize(9);
+      const meta=[
+        fw.filialNome&&`Filial: ${fw.filialNome}`,
+        fw.modelo&&`Modelo: ${fw.modelo}`,
+        fw.numeroSerie&&`Nº Série: ${fw.numeroSerie}`,
+        fw.firmware&&`Firmware: ${fw.firmware}`,
+        fw.redeNativa&&`Rede Nativa: ${fw.redeNativa}`,
+      ].filter(Boolean).join("   ");
+      if(meta){doc.text(meta,14,y+5);y+=10;}else{y+=6;}
+
+      doc.setFontSize(10);doc.setFont(undefined,"bold");
+      doc.text("VLANs",14,y+2);doc.setFont(undefined,"normal");y+=4;
+      const fwVlans=fw.vlans||[];
+      const fwLinks=fw.links||[];
+      if(fwVlans.length===0){
+        doc.setFontSize(9);doc.text("Nenhuma VLAN vinculada.",14,y+4);y+=8;
+      }else{
+        autoTable(doc,{
+          startY:y,margin:{left:14},
+          head:[["Nome / Descrição","Faixa CIDR","Primeiro IP","Último IP","Vlan Id","Tipo"]],
+          body:fwVlans.map(v=>{const ci=cidrInfo(v.ipRange)||{};return[v.rangeNome||"—",v.ipRange||"—",ci.firstIp||"—",ci.lastIp||"—",v.vlanId??"—",v.tipo||"—"];}),
+          styles:{fontSize:8},headStyles:{fillColor:[37,99,235]},
+          theme:"striped",
+        });
+        y=doc.lastAutoTable.finalY+6;
+      }
+
+      doc.setFontSize(10);doc.setFont(undefined,"bold");
+      doc.text("Links Vinculados",14,y+2);doc.setFont(undefined,"normal");y+=4;
+      if(fwLinks.length===0){
+        doc.setFontSize(9);doc.text("Nenhum link vinculado.",14,y+4);y+=8;
+      }else{
+        autoTable(doc,{
+          startY:y,margin:{left:14},
+          head:[["Provedor","Portas","IP Fixo"]],
+          body:fwLinks.map(l=>[l.provedorLabel||"—",l.portas||"—",l.ipFixo||"—"]),
+          styles:{fontSize:8},headStyles:{fillColor:[37,99,235]},
+          theme:"striped",
+        });
+        y=doc.lastAutoTable.finalY+6;
+      }
+    });
+    doc.save("relatorio-firewall.pdf");
+  }
+
+  function exportExcel(){
+    const wb=XLSX.utils.book_new();
+    // Aba resumo
+    const resumoData=[["Equipamento","Filial","Modelo","Nº Série","Firmware","Rede Nativa","VLANs","Links"]];
+    items.forEach(fw=>resumoData.push([
+      fw.equipamento,fw.filialNome||"",fw.modelo||"",fw.numeroSerie||"",fw.firmware||"",fw.redeNativa||"",
+      (fw.vlans||[]).length,(fw.links||[]).length,
+    ]));
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(resumoData),"Resumo");
+
+    // Aba VLANs
+    const vlanData=[["Equipamento","Nome / Descrição","Faixa CIDR","Primeiro IP","Último IP","Vlan Id","Tipo"]];
+    items.forEach(fw=>(fw.vlans||[]).forEach(v=>{
+      const ci=cidrInfo(v.ipRange)||{};
+      vlanData.push([fw.equipamento,v.rangeNome||"",v.ipRange||"",ci.firstIp||"",ci.lastIp||"",v.vlanId??"",v.tipo||""]);
+    }));
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(vlanData),"VLANs");
+
+    // Aba Links
+    const linksData=[["Equipamento","Provedor","Portas","IP Fixo"]];
+    items.forEach(fw=>(fw.links||[]).forEach(l=>{
+      linksData.push([fw.equipamento,l.provedorLabel||"",l.portas||"",l.ipFixo||""]);
+    }));
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(linksData),"Links Vinculados");
+
+    XLSX.writeFile(wb,"relatorio-firewall.xlsx");
+  }
+
+  return(
+    <div style={{padding:24,maxWidth:1100}}>
+      {/* Filtros */}
+      <div style={{background:C.surface,borderRadius:8,padding:16,marginBottom:20,display:"flex",flexWrap:"wrap",gap:12,alignItems:"flex-end"}}>
+        <div style={{flex:"1 1 160px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Equipamento</div>
+          <SelectField value={filters.equipamento} onChange={v=>fSet("equipamento",v)} options={[{value:"",label:"Todos"},...equipamentos.map(e=>({value:e,label:e}))]}/>
+        </div>
+        <div style={{flex:"1 1 160px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Filial</div>
+          <SelectField value={filters.filialId} onChange={v=>fSet("filialId",v)} options={[{value:"",label:"Todas"},...filiais.map(f=>({value:f.id,label:f.nome}))]}/>
+        </div>
+        <div style={{flex:"1 1 140px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Modelo</div>
+          <SelectField value={filters.modelo} onChange={v=>fSet("modelo",v)} options={[{value:"",label:"Todos"},...modelos.map(m=>({value:m,label:m}))]}/>
+        </div>
+        <div style={{flex:"1 1 140px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Nº Série</div>
+          <Input value={filters.numeroSerie} onChange={e=>fSet("numeroSerie",e.target.value)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&applyFilters()}/>
+        </div>
+        <div style={{flex:"1 1 160px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Provedor</div>
+          <SelectField value={filters.fornecedorId} onChange={v=>fSet("fornecedorId",v)} options={[{value:"",label:"Todos"},...fornecedores.map(s=>({value:s.id,label:s.name}))]}/>
+        </div>
+        <div style={{flex:"1 1 120px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Portas</div>
+          <Input value={filters.portas} onChange={e=>fSet("portas",e.target.value)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&applyFilters()}/>
+        </div>
+        <button onClick={applyFilters} style={{...S.btn,background:C.primary,color:C.white,padding:"8px 20px",whiteSpace:"nowrap"}}>Aplicar</button>
+        {items.length>0&&<>
+          <button onClick={exportPdf} style={{...S.btn,background:"#dc2626",color:C.white,padding:"8px 16px",whiteSpace:"nowrap"}}>PDF</button>
+          <button onClick={exportExcel} style={{...S.btn,background:"#16a34a",color:C.white,padding:"8px 16px",whiteSpace:"nowrap"}}>Excel</button>
+        </>}
+      </div>
+
+      {loading&&<div style={{textAlign:"center",padding:32}}><Spinner/></div>}
+      {err&&<div style={{color:C.danger,padding:12}}>{err}</div>}
+      {applied!==null&&!loading&&!err&&items.length===0&&(
+        <div style={{color:C.muted,padding:24,textAlign:"center"}}>Nenhum resultado encontrado.</div>
+      )}
+      {applied===null&&!loading&&(
+        <div style={{color:C.muted,padding:24,textAlign:"center"}}>Utilize os filtros acima e clique em Aplicar para gerar o relatório.</div>
+      )}
+
+      {items.map(fw=>{
+        const vlans=fw.vlans||[];
+        const links=fw.links||[];
+        return(
+        <div key={fw.id} style={{background:C.surface,borderRadius:8,marginBottom:20,overflow:"hidden",border:`1px solid ${C.border}`}}>
+          {/* Cabeçalho do equipamento */}
+          <div style={{background:C.primary,padding:"10px 16px",display:"flex",flexWrap:"wrap",gap:16}}>
+            <span style={{color:C.white,fontWeight:700,fontSize:15}}>{fw.equipamento}</span>
+            {fw.filialNome&&<span style={{color:"rgba(255,255,255,0.85)",fontSize:13}}>Filial: {fw.filialNome}</span>}
+            {fw.modelo&&<span style={{color:"rgba(255,255,255,0.85)",fontSize:13}}>Modelo: {fw.modelo}</span>}
+            {fw.numeroSerie&&<span style={{color:"rgba(255,255,255,0.85)",fontSize:13}}>Nº Série: {fw.numeroSerie}</span>}
+            {fw.firmware&&<span style={{color:"rgba(255,255,255,0.85)",fontSize:13}}>Firmware: {fw.firmware}</span>}
+            {fw.redeNativa&&<span style={{color:"rgba(255,255,255,0.85)",fontSize:13}}>Rede Nativa: {fw.redeNativa}</span>}
+          </div>
+          <div style={{padding:16,display:"flex",flexDirection:"column",gap:16}}>
+            {/* VLANs */}
+            <div>
+              <div style={{fontWeight:600,fontSize:13,color:C.muted,marginBottom:8}}>VLANs</div>
+              {vlans.length===0
+                ? <div style={{color:C.muted,fontSize:12,fontStyle:"italic"}}>Nenhuma VLAN vinculada.</div>
+                : <div style={{overflowX:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                      <thead>
+                        <tr style={{background:C.hover}}>
+                          <th style={{textAlign:"left",padding:"6px 10px",color:C.muted,fontWeight:600}}>Nome / Descrição</th>
+                          <th style={{textAlign:"left",padding:"6px 10px",color:C.muted,fontWeight:600}}>Faixa CIDR</th>
+                          <th style={{textAlign:"left",padding:"6px 10px",color:C.muted,fontWeight:600}}>Primeiro IP</th>
+                          <th style={{textAlign:"left",padding:"6px 10px",color:C.muted,fontWeight:600}}>Último IP</th>
+                          <th style={{textAlign:"left",padding:"6px 10px",color:C.muted,fontWeight:600}}>Vlan Id</th>
+                          <th style={{textAlign:"left",padding:"6px 10px",color:C.muted,fontWeight:600}}>Tipo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {vlans.map((v,i)=>{
+                          const ci=cidrInfo(v.ipRange)||{};
+                          return(
+                            <tr key={i} style={{borderTop:`1px solid ${C.border}`}}>
+                              <td style={{padding:"6px 10px"}}>{v.rangeNome||"—"}</td>
+                              <td style={{padding:"6px 10px",fontFamily:"monospace"}}>{v.ipRange||"—"}</td>
+                              <td style={{padding:"6px 10px",fontFamily:"monospace"}}>{ci.firstIp||"—"}</td>
+                              <td style={{padding:"6px 10px",fontFamily:"monospace"}}>{ci.lastIp||"—"}</td>
+                              <td style={{padding:"6px 10px"}}>{v.vlanId??"—"}</td>
+                              <td style={{padding:"6px 10px"}}>{v.tipo||"—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+              }
+            </div>
+            {/* Links Vinculados */}
+            <div>
+              <div style={{fontWeight:600,fontSize:13,color:C.muted,marginBottom:8}}>Links Vinculados</div>
+              {links.length===0
+                ? <div style={{color:C.muted,fontSize:12,fontStyle:"italic"}}>Nenhum link vinculado.</div>
+                : <div style={{overflowX:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                      <thead>
+                        <tr style={{background:C.hover}}>
+                          <th style={{textAlign:"left",padding:"6px 10px",color:C.muted,fontWeight:600}}>Provedor</th>
+                          <th style={{textAlign:"left",padding:"6px 10px",color:C.muted,fontWeight:600}}>Portas</th>
+                          <th style={{textAlign:"left",padding:"6px 10px",color:C.muted,fontWeight:600}}>IP Fixo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {links.map((l,i)=>(
+                          <tr key={i} style={{borderTop:`1px solid ${C.border}`}}>
+                            <td style={{padding:"6px 10px"}}>{l.provedorLabel||"—"}</td>
+                            <td style={{padding:"6px 10px"}}>{l.portas||"—"}</td>
+                            <td style={{padding:"6px 10px",fontFamily:"monospace"}}>{l.ipFixo||"—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+              }
+            </div>
+          </div>
+        </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── SIDEBAR ───────────────────────────────────────────────────
 const navConfig=[
   {id:"cadastros",label:"Cadastros",icon:"folder",children:[
@@ -8289,6 +8555,7 @@ const navConfig=[
     {id:"s31",label:"Relatório de Férias",        icon:"vacation"},
     {id:"s32",label:"Composição de Equipe",       icon:"users"},
     {id:"s36",label:"Controle de Folgas",         icon:"calendar"},
+    {id:"s42",label:"Firewall",                   icon:"monitor"},
   ]},
 ];
 function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
@@ -8385,6 +8652,7 @@ const screenTitles={
   s39:"Cadastros › Filiais",
   s40:"Movimentações › Links",
   s41:"Movimentações › Firewall",
+  s42:"Relatórios › Firewall",
   s35:"Movimentações › Controle de Folgas",
   s36:"Relatórios › Controle de Folgas",
   s37:"Movimentações › Políticas de TI",
@@ -8454,6 +8722,7 @@ export default function App(){
     s39:<FiliaisScreen user={user}/>,
     s40:<LinksScreen user={user}/>,
     s41:<FirewallScreen user={user}/>,
+    s42:<RelatorioFirewallScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
