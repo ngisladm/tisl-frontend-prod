@@ -7485,7 +7485,7 @@ function LinksScreen({user}){
   const[csvText,setCsvText]=useState("");
   const[csvResult,setCsvResult]=useState(null);
   const[csvSaving,setCsvSaving]=useState(false);
-  const[filters,setFilters]=useState({empresaContratanteId:"",empresaBeneficiariaId:"",filialId:"",fornecedorId:"",numeroSerie:"",numeroConta:""});
+  const[filters,setFilters]=useState({tipo:"",empresaContratanteId:"",empresaBeneficiariaId:"",filialId:"",fornecedorId:"",numeroSerie:"",numeroConta:""});
   const emptyForm={id:null,tipo:"Link",empresaContratanteId:"",cnpjContratante:"",empresaBeneficiariaId:"",filialId:"",enderecoFilial:"",ccusto:"",fornecedorId:"",contato:"",velocidade:"",contractId:"",emailConta:"",senhaConta:"",vrEquipamento:"",vrMensal:"",numeroSerie:"",numeroConta:"",plano:"",observacao:"",status:"Ativo"};
   const[form,setForm]=useState(emptyForm);
   useEffect(()=>{
@@ -7548,6 +7548,7 @@ function LinksScreen({user}){
     }catch(e){alert(e.message);}finally{setCsvSaving(false);}
   };
   const filtered=items.filter(it=>{
+    if(filters.tipo&&String(it.tipo||"")!==String(filters.tipo))return false;
     if(filters.empresaContratanteId&&String(it.empresaContratanteId)!==String(filters.empresaContratanteId))return false;
     if(filters.empresaBeneficiariaId&&String(it.empresaBeneficiariaId)!==String(filters.empresaBeneficiariaId))return false;
     if(filters.filialId&&String(it.filialId)!==String(filters.filialId))return false;
@@ -7577,6 +7578,7 @@ function LinksScreen({user}){
         </div>
       </div>
       <div style={{padding:"12px 20px",display:"flex",flexWrap:"wrap",gap:10,borderBottom:`1px solid ${C.border}`}}>
+        <SelectField label="Tipo" value={filters.tipo} onChange={v=>setFilters(f=>({...f,tipo:v}))} options={[{value:"",label:"Todos"},...tipoOpts]}/>
         <SelectField label="Empresa Contratante" value={filters.empresaContratanteId} onChange={v=>setFilters(f=>({...f,empresaContratanteId:v}))} options={companyOpts}/>
         <SelectField label="Empresa Beneficiária" value={filters.empresaBeneficiariaId} onChange={v=>setFilters(f=>({...f,empresaBeneficiariaId:v}))} options={companyOpts}/>
         <SelectField label="Filial" value={filters.filialId} onChange={v=>setFilters(f=>({...f,filialId:v}))} options={filialOpts}/>
@@ -8244,6 +8246,181 @@ function EnderecosRedeScreen({user}){
   );
 }
 
+// ── RELATÓRIO LINKS (s43) ────────────────────────────────────
+function RelatorioLinksScreen({user}){
+  const p=user.permissions?.s40||user.permissions?.s43;
+  const[filiais,setFiliais]=useState([]);
+  const[companies,setCompanies]=useState([]);
+  const[suppliers,setSuppliers]=useState([]);
+  const tipoOpts=["Link","Starlink","Telefonia"];
+  const statusOpts=["Ativo","Inativo"];
+  const[filters,setFilters]=useState({tipo:"",empresaContratanteId:"",cnpjContratante:"",filialId:"",ccusto:"",fornecedorId:"",status:""});
+  const[applied,setApplied]=useState(null);
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const[err,setErr]=useState(null);
+
+  useEffect(()=>{
+    api.get("/filiais/basic").then(r=>setFiliais(Array.isArray(r)?r:[])).catch(()=>{});
+    api.get("/companies").then(r=>setCompanies(Array.isArray(r)?r:[])).catch(()=>{});
+    api.get("/suppliers").then(r=>setSuppliers(Array.isArray(r)?r:[])).catch(()=>{});
+  },[]);
+
+  useEffect(()=>{
+    if(applied===null)return;
+    setLoading(true);setErr(null);
+    const params=new URLSearchParams();
+    if(applied.tipo)params.set("tipo",applied.tipo);
+    if(applied.empresaContratanteId)params.set("empresaContratanteId",applied.empresaContratanteId);
+    if(applied.cnpjContratante)params.set("cnpjContratante",applied.cnpjContratante);
+    if(applied.filialId)params.set("filialId",applied.filialId);
+    if(applied.ccusto)params.set("ccusto",applied.ccusto);
+    if(applied.fornecedorId)params.set("fornecedorId",applied.fornecedorId);
+    if(applied.status)params.set("status",applied.status);
+    api.get("/links/report?"+params.toString())
+      .then(r=>{setItems(Array.isArray(r)?r:[]);setLoading(false);})
+      .catch(e=>{setErr("Erro ao carregar relatório: "+(e?.message||""));setLoading(false);});
+  },[applied]);
+
+  if(!p?.view)return<div style={{padding:32,color:C.danger}}>Sem permissão.</div>;
+
+  const fSet=(k,v)=>setFilters(f=>({...f,[k]:v}));
+
+  // Agrupa por filial
+  function groupByFilial(list){
+    const map=new Map();
+    list.forEach(l=>{
+      const key=l.filialId||"__sem_filial__";
+      if(!map.has(key))map.set(key,{filialId:l.filialId,filialNome:l.filialNome||"Sem Filial",endereco:buildEndereco(l),links:[]});
+      map.get(key).links.push(l);
+    });
+    return [...map.values()];
+  }
+  function buildEndereco(l){
+    return[l.logradouro,l.filialNumero,l.bairro,l.cidade,l.estado,l.cep,l.complemento].filter(x=>x&&String(x).trim()).join(", ")||"—";
+  }
+
+  function exportPdf(){
+    const doc=new jsPDF({orientation:"landscape"});
+    doc.setFontSize(14);doc.text("Relatório de Links",14,15);
+    let firstPage=true;
+    groupByFilial(items).forEach(g=>{
+      if(!firstPage){doc.addPage();}firstPage=false;
+      let y=22;
+      doc.setFontSize(12);doc.setFont(undefined,"bold");
+      doc.text(g.filialNome,14,y);doc.setFont(undefined,"normal");
+      doc.setFontSize(9);doc.text(g.endereco,14,y+5);y+=12;
+      autoTable(doc,{
+        startY:y,margin:{left:14},
+        head:[["Tipo","Fornecedor","Contato","Velocidade","Empresa Contratante","CNPJ Contratante","CCusto","Email Conta","Senha Conta","Nº Série","Nº Conta","Status"]],
+        body:g.links.map(l=>[l.tipo||"—",l.fornecedorNome||"—",l.contato||"—",l.velocidade||"—",l.empresaContratanteNome||"—",l.cnpjContratante||"—",l.ccusto||"—",l.emailConta||"—",l.senhaConta||"—",l.numeroSerie||"—",l.numeroConta||"—",l.status||"—"]),
+        styles:{fontSize:7},headStyles:{fillColor:[37,99,235]},theme:"striped",
+      });
+    });
+    doc.save("relatorio-links.pdf");
+  }
+
+  function exportExcel(){
+    const wb=XLSX.utils.book_new();
+    const rows=[["Filial","Endereço Filial","Tipo","Fornecedor","Contato","Velocidade","Empresa Contratante","CNPJ Contratante","CCusto","Email Conta","Senha Conta","Nº Série","Nº Conta","Status"]];
+    groupByFilial(items).forEach(g=>g.links.forEach(l=>rows.push([g.filialNome,g.endereco,l.tipo||"",l.fornecedorNome||"",l.contato||"",l.velocidade||"",l.empresaContratanteNome||"",l.cnpjContratante||"",l.ccusto||"",l.emailConta||"",l.senhaConta||"",l.numeroSerie||"",l.numeroConta||"",l.status||""])));
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),"Links");
+    XLSX.writeFile(wb,"relatorio-links.xlsx");
+  }
+
+  const groups=groupByFilial(items);
+
+  return(
+    <div style={{padding:24,maxWidth:1200}}>
+      {/* Filtros */}
+      <div style={{background:C.surface,borderRadius:8,padding:16,marginBottom:20,display:"flex",flexWrap:"wrap",gap:12,alignItems:"flex-end"}}>
+        <div style={{flex:"1 1 130px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Tipo</div>
+          <SelectField value={filters.tipo} onChange={v=>fSet("tipo",v)} options={[{value:"",label:"Todos"},...tipoOpts.map(t=>({value:t,label:t}))]}/>
+        </div>
+        <div style={{flex:"1 1 180px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Empresa Contratante</div>
+          <SelectField value={filters.empresaContratanteId} onChange={v=>fSet("empresaContratanteId",v)} options={[{value:"",label:"Todas"},...companies.map(c=>({value:String(c.id),label:c.name}))]}/>
+        </div>
+        <div style={{flex:"1 1 150px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>CNPJ Contratante</div>
+          <Input value={filters.cnpjContratante} onChange={e=>fSet("cnpjContratante",e.target.value)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&setApplied({...filters})}/>
+        </div>
+        <div style={{flex:"1 1 160px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Filial</div>
+          <SelectField value={filters.filialId} onChange={v=>fSet("filialId",v)} options={[{value:"",label:"Todas"},...filiais.map(f=>({value:String(f.id),label:f.nome}))]}/>
+        </div>
+        <div style={{flex:"1 1 120px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>CCusto</div>
+          <Input value={filters.ccusto} onChange={e=>fSet("ccusto",e.target.value)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&setApplied({...filters})}/>
+        </div>
+        <div style={{flex:"1 1 160px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Fornecedor</div>
+          <SelectField value={filters.fornecedorId} onChange={v=>fSet("fornecedorId",v)} options={[{value:"",label:"Todos"},...suppliers.map(s=>({value:String(s.id),label:s.name}))]}/>
+        </div>
+        <div style={{flex:"1 1 120px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Status</div>
+          <SelectField value={filters.status} onChange={v=>fSet("status",v)} options={[{value:"",label:"Todos"},...statusOpts.map(s=>({value:s,label:s}))]}/>
+        </div>
+        <button onClick={()=>setApplied({...filters})} style={{...S.btn,background:C.primary,color:C.white,padding:"8px 20px",whiteSpace:"nowrap"}}>Aplicar</button>
+        {items.length>0&&<>
+          <button onClick={exportPdf} style={{...S.btn,background:"#dc2626",color:C.white,padding:"8px 16px",whiteSpace:"nowrap"}}>PDF</button>
+          <button onClick={exportExcel} style={{...S.btn,background:"#16a34a",color:C.white,padding:"8px 16px",whiteSpace:"nowrap"}}>Excel</button>
+        </>}
+      </div>
+
+      {loading&&<div style={{textAlign:"center",padding:32}}><Spinner/></div>}
+      {err&&<div style={{color:C.danger,padding:12}}>{err}</div>}
+      {applied!==null&&!loading&&!err&&groups.length===0&&(
+        <div style={{color:C.muted,padding:24,textAlign:"center"}}>Nenhum resultado encontrado.</div>
+      )}
+      {applied===null&&!loading&&(
+        <div style={{color:C.muted,padding:24,textAlign:"center"}}>Utilize os filtros acima e clique em Aplicar para gerar o relatório.</div>
+      )}
+
+      {groups.map((g,gi)=>(
+        <div key={gi} style={{background:C.surface,borderRadius:8,marginBottom:20,overflow:"hidden",border:`1px solid ${C.border}`}}>
+          <div style={{background:C.primary,padding:"10px 16px"}}>
+            <div style={{color:C.white,fontWeight:700,fontSize:15}}>{g.filialNome}</div>
+            <div style={{color:"rgba(255,255,255,0.85)",fontSize:12,marginTop:2}}>{g.endereco}</div>
+          </div>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{background:C.hover}}>
+                  {["Tipo","Fornecedor","Contato","Velocidade","Empresa Contratante","CNPJ Contratante","CCusto","Email Conta","Senha Conta","Nº Série","Nº Conta","Status"].map(h=>(
+                    <th key={h} style={{textAlign:"left",padding:"6px 10px",color:C.muted,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {g.links.map((l,i)=>(
+                  <tr key={i} style={{borderTop:`1px solid ${C.border}`}}>
+                    <td style={{padding:"6px 10px",whiteSpace:"nowrap"}}>{l.tipo||"—"}</td>
+                    <td style={{padding:"6px 10px"}}>{l.fornecedorNome||"—"}</td>
+                    <td style={{padding:"6px 10px",whiteSpace:"nowrap"}}>{l.contato||"—"}</td>
+                    <td style={{padding:"6px 10px"}}>{l.velocidade||"—"}</td>
+                    <td style={{padding:"6px 10px"}}>{l.empresaContratanteNome||"—"}</td>
+                    <td style={{padding:"6px 10px",fontFamily:"monospace"}}>{l.cnpjContratante||"—"}</td>
+                    <td style={{padding:"6px 10px"}}>{l.ccusto||"—"}</td>
+                    <td style={{padding:"6px 10px"}}>{l.emailConta||"—"}</td>
+                    <td style={{padding:"6px 10px"}}>{l.senhaConta||"—"}</td>
+                    <td style={{padding:"6px 10px",fontFamily:"monospace"}}>{l.numeroSerie||"—"}</td>
+                    <td style={{padding:"6px 10px"}}>{l.numeroConta||"—"}</td>
+                    <td style={{padding:"6px 10px"}}>
+                      <span style={{padding:"2px 8px",borderRadius:10,fontSize:11,fontWeight:600,background:l.status==="Ativo"?"#dcfce7":"#fee2e2",color:l.status==="Ativo"?"#166534":"#991b1b"}}>{l.status||"—"}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── RELATÓRIO FIREWALL (s42) ──────────────────────────────────
 function RelatorioFirewallScreen({user}){
   const p=user.permissions?.s41||user.permissions?.s42;
@@ -8555,6 +8732,7 @@ const navConfig=[
     {id:"s31",label:"Relatório de Férias",        icon:"vacation"},
     {id:"s32",label:"Composição de Equipe",       icon:"users"},
     {id:"s36",label:"Controle de Folgas",         icon:"calendar"},
+    {id:"s43",label:"Links",                      icon:"link"},
     {id:"s42",label:"Firewall",                   icon:"monitor"},
   ]},
 ];
@@ -8653,6 +8831,7 @@ const screenTitles={
   s40:"Movimentações › Links",
   s41:"Movimentações › Firewall",
   s42:"Relatórios › Firewall",
+  s43:"Relatórios › Links",
   s35:"Movimentações › Controle de Folgas",
   s36:"Relatórios › Controle de Folgas",
   s37:"Movimentações › Políticas de TI",
@@ -8723,6 +8902,7 @@ export default function App(){
     s40:<LinksScreen user={user}/>,
     s41:<FirewallScreen user={user}/>,
     s42:<RelatorioFirewallScreen user={user}/>,
+    s43:<RelatorioLinksScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
