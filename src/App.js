@@ -7396,13 +7396,19 @@ function DhcpModal({range,onClose,onDhcpDeleted}){
 function FiliaisScreen({user}){
   const p=user.permissions?.s39;
   const[items,setItems]=useState([]);
+  const[companies,setCompanies]=useState([]);
   const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
-  const empty={id:null,nome:"",logradouro:"",numero:"",bairro:"",cidade:"",estado:"",cep:"",complemento:"",active:true};
+  const[filters,setFilters]=useState({nome:"",empresaId:"",status:""});
+  const empty={id:null,nome:"",empresaId:"",logradouro:"",numero:"",bairro:"",cidade:"",estado:"",cep:"",complemento:"",active:true};
   const[form,setForm]=useState(empty);
-  useEffect(()=>{if(!p?.view)return;api.get("/filiais").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));},[]);
+  useEffect(()=>{
+    if(!p?.view)return;
+    api.get("/filiais").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+    api.get("/companies").then(r=>setCompanies(Array.isArray(r)?r:[])).catch(()=>{});
+  },[]);
   const openAdd=()=>{setForm(empty);setModal(true);};
   const openEdit=i=>{setForm({...empty,...i});setModal(true);};
   const save=async()=>{
@@ -7415,18 +7421,32 @@ function FiliaisScreen({user}){
     }catch(e){alert(e.message);}finally{setSaving(false);}
   };
   const del=async()=>{try{await api.delete(`/filiais/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+  const filtered=items.filter(it=>{
+    if(filters.nome&&!(it.nome||"").toLowerCase().includes(filters.nome.toLowerCase()))return false;
+    if(filters.empresaId&&String(it.empresaId||"")!==String(filters.empresaId))return false;
+    if(filters.status==="Ativo"&&!it.active)return false;
+    if(filters.status==="Inativo"&&it.active)return false;
+    return true;
+  });
+  const companyOpts=[{value:"",label:"Todas"},...companies.map(c=>({value:String(c.id),label:c.name}))];
   if(!p?.view)return<div style={S.emptyState}><Icon name="lock" size={32}/><br/>Sem permissão.</div>;
   if(loading)return<Spinner/>;
   return(
     <div style={S.card}>
       <div style={S.cardHeader}><span style={S.cardTitle}>🏬 Filiais</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Nova Filial</button>}</div>
-      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏬</span>Nenhuma filial.</div>:(
+      <div style={{padding:"12px 20px",display:"flex",flexWrap:"wrap",gap:10,borderBottom:`1px solid ${C.border}`}}>
+        <div style={S.formRow}><label style={S.label}>Nome</label><input style={{...S.input,marginBottom:0,width:180}} value={filters.nome} onChange={e=>setFilters(f=>({...f,nome:e.target.value}))} placeholder="Filtrar..."/></div>
+        <SelectField label="Empresa" value={filters.empresaId} onChange={v=>setFilters(f=>({...f,empresaId:v}))} options={companyOpts}/>
+        <SelectField label="Status" value={filters.status} onChange={v=>setFilters(f=>({...f,status:v}))} options={[{value:"",label:"Todos"},{value:"Ativo",label:"Ativo"},{value:"Inativo",label:"Inativo"}]}/>
+      </div>
+      {filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏬</span>Nenhuma filial.</div>:(
         <table style={S.table}><thead><tr>
-          {["Nome","Cidade","Estado","CEP","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          {["Nome","Empresa","Cidade","Estado","CEP","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
-        <tbody>{items.map(it=>(
+        <tbody>{filtered.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}><strong>{it.nome}</strong></td>
+            <td style={S.td}>{it.empresaNome||"—"}</td>
             <td style={S.td}>{it.cidade||"—"}</td>
             <td style={S.td}>{it.estado||"—"}</td>
             <td style={S.td}>{it.cep||"—"}</td>
@@ -7441,6 +7461,7 @@ function FiliaisScreen({user}){
       {modal&&(
         <Modal title={form.id?"Editar Filial":"Nova Filial"} onClose={()=>setModal(false)}>
           <Input label="Nome" value={form.nome} onChange={v=>setForm(f=>({...f,nome:v}))} required/>
+          <SelectField label="Empresa" value={form.empresaId||""} onChange={v=>setForm(f=>({...f,empresaId:v}))} options={[{value:"",label:"Selecione"},...companies.map(c=>({value:String(c.id),label:c.name}))]}/>
           <Input label="Logradouro" value={form.logradouro||""} onChange={v=>setForm(f=>({...f,logradouro:v}))}/>
           <div style={{display:"flex",gap:10}}>
             <div style={{flex:1}}><Input label="Número" value={form.numero||""} onChange={v=>setForm(f=>({...f,numero:v}))}/></div>
@@ -7555,6 +7576,7 @@ function LinksScreen({user}){
     if(filters.fornecedorId&&String(it.fornecedorId)!==String(filters.fornecedorId))return false;
     if(filters.numeroSerie&&!(it.numeroSerie||"").toLowerCase().includes(filters.numeroSerie.toLowerCase()))return false;
     if(filters.numeroConta&&!(it.numeroConta||"").toLowerCase().includes(filters.numeroConta.toLowerCase()))return false;
+    if(filters.status&&String(it.status||"")!==String(filters.status))return false;
     return true;
   });
   const companyName=id=>{ const c=companies.find(x=>String(x.id)===String(id)); return c?c.name:"—"; };
@@ -7585,6 +7607,7 @@ function LinksScreen({user}){
         <SelectField label="Fornecedor" value={filters.fornecedorId} onChange={v=>setFilters(f=>({...f,fornecedorId:v}))} options={supplierOpts}/>
         <div style={S.formRow}><label style={S.label}>Nº Série</label><input style={{...S.input,marginBottom:0}} value={filters.numeroSerie} onChange={e=>setFilters(f=>({...f,numeroSerie:e.target.value}))} placeholder="Filtrar..."/></div>
         <div style={S.formRow}><label style={S.label}>Nº Conta</label><input style={{...S.input,marginBottom:0}} value={filters.numeroConta} onChange={e=>setFilters(f=>({...f,numeroConta:e.target.value}))} placeholder="Filtrar..."/></div>
+        <SelectField label="Status" value={filters.status||""} onChange={v=>setFilters(f=>({...f,status:v}))} options={[{value:"",label:"Todos"},{value:"Ativo",label:"Ativo"},{value:"Inativo",label:"Inativo"}]}/>
       </div>
       {filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🔗</span>Nenhum link encontrado.</div>:(
         <div style={{overflowX:"auto"}}>
@@ -7843,7 +7866,7 @@ function FirewallScreen({user}){
   const[saving,setSaving]=useState(false);
   const[vlanFw,setVlanFw]=useState(null);
   const[linksFw,setLinksFw]=useState(null);
-  const[filters,setFilters]=useState({equipamento:"",filialId:"",modelo:"",numeroSerie:"",firmware:""});
+  const[filters,setFilters]=useState({equipamento:"",filialId:"",modelo:"",numeroSerie:"",firmware:"",status:""});
 
   useEffect(()=>{
     if(!p?.view)return;
@@ -7878,7 +7901,7 @@ function FirewallScreen({user}){
     <div style={S.card}>
       <div style={S.cardHeader}>
         <span style={S.cardTitle}><Icon name="monitor" size={16} style={{marginRight:6}}/>Firewall</span>
-        {p?.insert&&<button style={S.btnAdd} onClick={()=>setForm({id:null,equipamento:"",filialId:"",modelo:"",numeroSerie:"",firmware:"",redeNativa:""})}>+ Novo</button>}
+        {p?.insert&&<button style={S.btnAdd} onClick={()=>setForm({id:null,equipamento:"",filialId:"",modelo:"",numeroSerie:"",firmware:"",redeNativa:"",status:"Ativo"})}>+ Novo</button>}
       </div>
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14,alignItems:"flex-end"}}>
         {[["equipamento","Equipamento"],["modelo","Modelo"],["numeroSerie","Nº Série"],["firmware","Firmware"]].map(([k,lbl])=>(
@@ -7894,13 +7917,21 @@ function FirewallScreen({user}){
             {filiais.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
           </select>
         </div>
+        <div style={S.formRow}>
+          <label style={S.label}>Status</label>
+          <select style={{...S.input,width:110,padding:"4px 8px",fontSize:12}} value={filters.status} onChange={e=>setFilters(f=>({...f,status:e.target.value}))}>
+            <option value="">Todos</option>
+            <option value="Ativo">Ativo</option>
+            <option value="Inativo">Inativo</option>
+          </select>
+        </div>
         <button style={S.btnAdd} onClick={load}>Filtrar</button>
-        {Object.values(filters).some(v=>v)&&<button style={S.btnCancel} onClick={()=>setFilters({equipamento:"",filialId:"",modelo:"",numeroSerie:"",firmware:""})}>Limpar</button>}
+        {Object.values(filters).some(v=>v)&&<button style={S.btnCancel} onClick={()=>setFilters({equipamento:"",filialId:"",modelo:"",numeroSerie:"",firmware:"",status:""})}>Limpar</button>}
       </div>
       {items.length===0?<div style={S.emptyState}><Icon name="monitor" size={32}/><br/>Nenhum firewall encontrado.</div>
         :<div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
-            {["Equipamento","Filial","Modelo","Nº Série","Firmware","Rede Nativa","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            {["Equipamento","Filial","Modelo","Nº Série","Firmware","Rede Nativa","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
           <tbody>{items.map(fw=>(
             <tr key={fw.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
@@ -7910,6 +7941,7 @@ function FirewallScreen({user}){
               <td style={{...S.td,fontFamily:"monospace",fontSize:11}}>{fw.numeroSerie||"—"}</td>
               <td style={S.td}>{fw.firmware||"—"}</td>
               <td style={S.td}>{fw.redeNativa||"—"}</td>
+              <td style={S.td}><span style={{...S.badge,...(fw.status==="Inativo"?S.badgeInactive:S.badgeActive)}}>{fw.status||"Ativo"}</span></td>
               <td style={S.td}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
                 <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"0.5px solid #A5D6A7"}} onClick={()=>setVlanFw(fw)}><Icon name="network" size={13}/> Vlan</button>
                 <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"0.5px solid #90CAF9"}} onClick={()=>setLinksFw(fw)}><Icon name="link" size={13}/> Links</button>
@@ -7933,6 +7965,13 @@ function FirewallScreen({user}){
           <Input label="Nº Série" value={form.numeroSerie||""} onChange={v=>setForm(f=>({...f,numeroSerie:v}))}/>
           <Input label="Firmware" value={form.firmware||""} onChange={v=>setForm(f=>({...f,firmware:v}))}/>
           <Input label="Rede Nativa" value={form.redeNativa||""} onChange={v=>setForm(f=>({...f,redeNativa:v}))}/>
+        </div>
+        <div style={S.formRow}><label style={S.label}>Status</label>
+          <div style={{display:"flex",gap:16}}>{["Ativo","Inativo"].map(o=>(
+            <label key={o} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
+              <input type="radio" checked={(form.status||"Ativo")===o} onChange={()=>setForm(f=>({...f,status:o}))} style={{accentColor:C.primary}}/>{o}
+            </label>
+          ))}</div>
         </div>
         <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
           <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
@@ -8344,7 +8383,7 @@ function RelatorioLinksScreen({user}){
         </div>
         <div style={{flex:"1 1 150px"}}>
           <div style={{fontSize:12,color:C.muted,marginBottom:4}}>CNPJ Contratante</div>
-          <Input value={filters.cnpjContratante} onChange={e=>fSet("cnpjContratante",e.target.value)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&setApplied({...filters})}/>
+          <Input value={filters.cnpjContratante} onChange={v=>fSet("cnpjContratante",v)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&setApplied({...filters})}/>
         </div>
         <div style={{flex:"1 1 160px"}}>
           <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Filial</div>
@@ -8352,7 +8391,7 @@ function RelatorioLinksScreen({user}){
         </div>
         <div style={{flex:"1 1 120px"}}>
           <div style={{fontSize:12,color:C.muted,marginBottom:4}}>CCusto</div>
-          <Input value={filters.ccusto} onChange={e=>fSet("ccusto",e.target.value)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&setApplied({...filters})}/>
+          <Input value={filters.ccusto} onChange={v=>fSet("ccusto",v)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&setApplied({...filters})}/>
         </div>
         <div style={{flex:"1 1 160px"}}>
           <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Fornecedor</div>
@@ -8572,7 +8611,7 @@ function RelatorioFirewallScreen({user}){
         </div>
         <div style={{flex:"1 1 140px"}}>
           <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Nº Série</div>
-          <Input value={filters.numeroSerie} onChange={e=>fSet("numeroSerie",e.target.value)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&applyFilters()}/>
+          <Input value={filters.numeroSerie} onChange={v=>fSet("numeroSerie",v)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&applyFilters()}/>
         </div>
         <div style={{flex:"1 1 160px"}}>
           <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Provedor</div>
@@ -8580,7 +8619,7 @@ function RelatorioFirewallScreen({user}){
         </div>
         <div style={{flex:"1 1 120px"}}>
           <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Portas</div>
-          <Input value={filters.portas} onChange={e=>fSet("portas",e.target.value)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&applyFilters()}/>
+          <Input value={filters.portas} onChange={v=>fSet("portas",v)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&applyFilters()}/>
         </div>
         <button onClick={applyFilters} style={{...S.btn,background:C.primary,color:C.white,padding:"8px 20px",whiteSpace:"nowrap"}}>Aplicar</button>
         {items.length>0&&<>
