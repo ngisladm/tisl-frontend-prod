@@ -8467,7 +8467,7 @@ function RelatorioFirewallScreen({user}){
   const[equipamentos,setEquipamentos]=useState([]);
   const[modelos,setModelos]=useState([]);
   const[fornecedores,setFornecedores]=useState([]);
-  const[filters,setFilters]=useState({equipamento:"",filialId:"",modelo:"",numeroSerie:"",fornecedorId:"",portas:""});
+  const[filters,setFilters]=useState({equipamento:"",filialId:"",modelo:"",numeroSerie:"",fornecedorId:"",portas:"",status:""});
   const[applied,setApplied]=useState(null);
   const[items,setItems]=useState([]);
   const[loading,setLoading]=useState(false);
@@ -8500,6 +8500,7 @@ function RelatorioFirewallScreen({user}){
       if(s)params.set("provedor",s.name);
     }
     if(applied.portas)params.set("portas",applied.portas);
+    if(applied.status)params.set("status",applied.status);
     api.get("/firewall/report?"+params.toString())
       .then(r=>{setItems(Array.isArray(r)?r:[]);setLoading(false);})
       .catch(e=>{setErr("Erro ao carregar relatório: "+(e?.message||""));setLoading(false);});
@@ -8620,6 +8621,10 @@ function RelatorioFirewallScreen({user}){
         <div style={{flex:"1 1 120px"}}>
           <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Portas</div>
           <Input value={filters.portas} onChange={v=>fSet("portas",v)} placeholder="Buscar..." onKeyDown={e=>e.key==="Enter"&&applyFilters()}/>
+        </div>
+        <div style={{flex:"1 1 120px"}}>
+          <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Status</div>
+          <SelectField value={filters.status} onChange={v=>fSet("status",v)} options={[{value:"",label:"Todos"},{value:"Ativo",label:"Ativo"},{value:"Inativo",label:"Inativo"}]}/>
         </div>
         <button onClick={applyFilters} style={{...S.btn,background:C.primary,color:C.white,padding:"8px 20px",whiteSpace:"nowrap"}}>Aplicar</button>
         {items.length>0&&<>
