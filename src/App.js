@@ -8728,6 +8728,526 @@ function RelatorioFirewallScreen({user}){
   );
 }
 
+// ── CADASTRO DE CCUSTO (s44) ─────────────────────────────────
+function CcustoConsumoScreen({user}){
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const isMobile=useIsMobile();
+  const load=()=>api.get("/consumo-ccusto").then(setItems).catch(()=>{}).finally(()=>setLoading(false));
+  useEffect(()=>{load();},[]);
+  const save=async()=>{
+    if(!modal.centroCusto?.trim()){setErr("Centro de Custo é obrigatório.");return;}
+    try{
+      if(modal.id) await api.put(`/consumo-ccusto/${modal.id}`,{centroCusto:modal.centroCusto});
+      else         await api.post("/consumo-ccusto",{centroCusto:modal.centroCusto});
+      setModal(null);load();
+    }catch(e){setErr(e?.error||e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/consumo-ccusto/${delId}`);setDelId(null);load();}
+    catch(e){alert(e?.error||e.message);}
+  };
+  const canI=act=>user.permissions?.s44?.[act];
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>Cadastro de CCusto</span>
+        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({centroCusto:""});}}>+ Novo CCusto</button>}
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>💰</span>Nenhum CCusto cadastrado</div>:(
+        isMobile
+          ?<MobileCardList items={items} columns={[{key:"centroCusto",label:"Centro de Custo"}]} actions={item=>(
+            <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,centroCusto:item.centroCusto});}}>Editar</button>}
+              {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}</>
+          )}/>
+          :<table style={S.table}><thead><tr>
+            <th style={S.th}>Centro de Custo</th>
+            <th style={{...S.th,width:140}}>Ações</th>
+          </tr></thead>
+          <tbody>{items.map(item=>(
+            <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={S.td}>{item.centroCusto}</td>
+              <td style={S.td}>
+                {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,centroCusto:item.centroCusto});}}>Editar</button>}
+                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+              </td>
+            </tr>
+          ))}</tbody></table>
+      )}
+      {modal&&<Modal title={modal.id?"Editar CCusto":"Novo CCusto"} onClose={()=>setModal(null)}>
+        <Input label="Centro de Custo" value={modal.centroCusto} onChange={v=>setModal(m=>({...m,centroCusto:v}))} required/>
+        {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+          <button style={S.btnSave} onClick={save}>Salvar</button>
+        </div>
+      </Modal>}
+      {delId&&<ConfirmModal msg="Excluir este CCusto?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── CADASTRO DE ÍTENS (s45) ───────────────────────────────────
+function ItensConsumoScreen({user}){
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const isMobile=useIsMobile();
+  const load=()=>api.get("/consumo-itens").then(setItems).catch(()=>{}).finally(()=>setLoading(false));
+  useEffect(()=>{load();},[]);
+  const save=async()=>{
+    if(!modal.item?.trim()){setErr("Item é obrigatório.");return;}
+    try{
+      if(modal.id) await api.put(`/consumo-itens/${modal.id}`,{item:modal.item});
+      else         await api.post("/consumo-itens",{item:modal.item});
+      setModal(null);load();
+    }catch(e){setErr(e?.error||e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/consumo-itens/${delId}`);setDelId(null);load();}
+    catch(e){alert(e?.error||e.message);}
+  };
+  const canI=act=>user.permissions?.s45?.[act];
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>Cadastro de Ítens</span>
+        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({item:""});}}>+ Novo Item</button>}
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum item cadastrado</div>:(
+        isMobile
+          ?<MobileCardList items={items} columns={[{key:"item",label:"Item"}]} actions={i=>(
+            <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:i.id,item:i.item});}}>Editar</button>}
+              {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(i.id)}>Excluir</button>}</>
+          )}/>
+          :<table style={S.table}><thead><tr>
+            <th style={S.th}>Item</th>
+            <th style={{...S.th,width:140}}>Ações</th>
+          </tr></thead>
+          <tbody>{items.map(i=>(
+            <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={S.td}>{i.item}</td>
+              <td style={S.td}>
+                {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:i.id,item:i.item});}}>Editar</button>}
+                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(i.id)}>Excluir</button>}
+              </td>
+            </tr>
+          ))}</tbody></table>
+      )}
+      {modal&&<Modal title={modal.id?"Editar Item":"Novo Item"} onClose={()=>setModal(null)}>
+        <Input label="Item" value={modal.item} onChange={v=>setModal(m=>({...m,item:v}))} required/>
+        {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+          <button style={S.btnSave} onClick={save}>Salvar</button>
+        </div>
+      </Modal>}
+      {delId&&<ConfirmModal msg="Excluir este item?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── CADASTRO DE ESTOQUE (s46) ─────────────────────────────────
+function EstoquesConsumoScreen({user}){
+  const[items,setItems]=useState([]);
+  const[ccustos,setCcustos]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const isMobile=useIsMobile();
+  const load=()=>{
+    Promise.all([api.get("/consumo-estoques"),api.get("/consumo-ccusto/basic")])
+      .then(([e,c])=>{setItems(Array.isArray(e)?e:[]);setCcustos(Array.isArray(c)?c:[]);})
+      .catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+  const save=async()=>{
+    if(!modal.estoque?.trim()){setErr("Estoque é obrigatório.");return;}
+    try{
+      const body={estoque:modal.estoque,ccustoEstoqueId:modal.ccustoEstoqueId||null};
+      if(modal.id) await api.put(`/consumo-estoques/${modal.id}`,body);
+      else         await api.post("/consumo-estoques",body);
+      setModal(null);load();
+    }catch(e){setErr(e?.error||e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/consumo-estoques/${delId}`);setDelId(null);load();}
+    catch(e){alert(e?.error||e.message);}
+  };
+  const canI=act=>user.permissions?.s46?.[act];
+  const openEdit=i=>{setErr("");setModal({id:i.id,estoque:i.estoque,ccustoEstoqueId:i.ccustoEstoqueId||""});};
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>Cadastro de Estoque</span>
+        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({estoque:"",ccustoEstoqueId:""});}}>+ Novo Estoque</button>}
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🗄️</span>Nenhum estoque cadastrado</div>:(
+        isMobile
+          ?<MobileCardList items={items} columns={[{key:"estoque",label:"Estoque"},{key:"ccustoEstoque",label:"CCusto Estoque"}]} actions={i=>(
+            <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(i)}>Editar</button>}
+              {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(i.id)}>Excluir</button>}</>
+          )}/>
+          :<table style={S.table}><thead><tr>
+            <th style={S.th}>Estoque</th>
+            <th style={S.th}>CCusto Estoque</th>
+            <th style={{...S.th,width:140}}>Ações</th>
+          </tr></thead>
+          <tbody>{items.map(i=>(
+            <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={S.td}>{i.estoque}</td>
+              <td style={S.td}>{i.ccustoEstoque||"—"}</td>
+              <td style={S.td}>
+                {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(i)}>Editar</button>}
+                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(i.id)}>Excluir</button>}
+              </td>
+            </tr>
+          ))}</tbody></table>
+      )}
+      {modal&&<Modal title={modal.id?"Editar Estoque":"Novo Estoque"} onClose={()=>setModal(null)}>
+        <Input label="Estoque" value={modal.estoque} onChange={v=>setModal(m=>({...m,estoque:v}))} required/>
+        <SelectField label="CCusto Estoque" value={modal.ccustoEstoqueId||""} onChange={v=>setModal(m=>({...m,ccustoEstoqueId:v}))}
+          options={[{value:"",label:"Nenhum"},...ccustos.map(c=>({value:c.id,label:c.centroCusto}))]}/>
+        {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+          <button style={S.btnSave} onClick={save}>Salvar</button>
+        </div>
+      </Modal>}
+      {delId&&<ConfirmModal msg="Excluir este estoque?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── MOVIMENTAÇÃO DE ÍTENS (s47) — read-only ───────────────────
+function MovimentacaoItensScreen({user}){
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[filterStatus,setFilterStatus]=useState("");
+  const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
+  const load=()=>{
+    setLoading(true);
+    const q=filterStatus?`?status=${encodeURIComponent(filterStatus)}`:"";
+    api.get(`/consumo-movimentacao${q}`).then(setItems).catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+  const statusBadge=s=>{
+    if(s==="Processado")       return<span style={{...S.badge,...S.badgeActive}}>Processado</span>;
+    if(s==="Aguardando Compra")return<span style={{...S.badge,background:"#DBEAFE",color:"#1D4ED8"}}>Aguardando Compra</span>;
+    if(s==="Em Estoque")       return<span style={{...S.badge,background:"#D1FAE5",color:"#065F46"}}>Em Estoque</span>;
+    if(s==="Consumido")        return<span style={{...S.badge,background:"#EDE9FE",color:"#5B21B6"}}>Consumido</span>;
+    return<span style={{...S.badge,background:"#FEF3C7",color:"#D97706"}}>{s||"Não Processado"}</span>;
+  };
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>Movimentação de Ítens</span>
+      </div>
+      <div style={{display:"flex",gap:12,alignItems:"flex-end",flexWrap:"wrap",marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
+        <div style={{flex:"1 1 200px"}}>
+          <SelectField label="Status" value={filterStatus} onChange={setFilterStatus}
+            options={[{value:"",label:"Todos"},{value:"Não Processado",label:"Não Processado"},{value:"Aguardando Compra",label:"Aguardando Compra"},{value:"Em Estoque",label:"Em Estoque"},{value:"Consumido",label:"Consumido"},{value:"Processado",label:"Processado"}]}/>
+        </div>
+        <div style={{paddingBottom:18}}>
+          <button style={S.btnSave} onClick={load}>Filtrar</button>
+        </div>
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhuma movimentação encontrada</div>:(
+        <div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Data","Item","Estoque","CCusto Despesa","Qtde Estoque","CCusto Consumidor","Qtde Consumida","Qtde Solicitada","Status"].map(h=>(
+              <th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>{items.map(i=>(
+            <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(i.data)}</td>
+              <td style={S.td}>{i.item||"—"}</td>
+              <td style={S.td}>{i.estoque||"—"}</td>
+              <td style={S.td}>{i.ccustoDespesa||"—"}</td>
+              <td style={{...S.td,textAlign:"center"}}>{i.qtdeEstoque??0}</td>
+              <td style={S.td}>{i.ccustoConsumidor||"—"}</td>
+              <td style={{...S.td,textAlign:"center"}}>{i.qtdeConsumida??0}</td>
+              <td style={{...S.td,textAlign:"center"}}>{i.qtdeSolicitada??0}</td>
+              <td style={S.td}>{statusBadge(i.status)}</td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── SOLICITAÇÃO DE ÍTENS (s48) ────────────────────────────────
+function SolicitacaoItensScreen({user}){
+  const[items,setItems]=useState([]);
+  const[itens,setItens]=useState([]);
+  const[estoques,setEstoques]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[err,setErr]=useState("");
+  const[delId,setDelId]=useState(null);
+  const today=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
+  const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
+  const load=()=>{
+    setLoading(true);
+    Promise.all([api.get("/consumo-solicitacao"),api.get("/consumo-itens/basic"),api.get("/consumo-estoques/basic")])
+      .then(([s,i,e])=>{setItems(Array.isArray(s)?s:[]);setItens(Array.isArray(i)?i:[]);setEstoques(Array.isArray(e)?e:[]);})
+      .catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+  const openNew=()=>{setErr("");setModal({data:today(),itemId:"",estoqueId:"",qtdeSolicitada:""});};
+  const save=async()=>{
+    if(!modal.data||!modal.itemId||!modal.estoqueId||!modal.qtdeSolicitada){setErr("Todos os campos são obrigatórios.");return;}
+    try{
+      await api.post("/consumo-solicitacao",{data:modal.data,itemId:modal.itemId,estoqueId:modal.estoqueId,qtdeSolicitada:Number(modal.qtdeSolicitada)});
+      setModal(null);load();
+    }catch(e){setErr(e?.error||e.message);}
+  };
+  const del=()=>api.delete(`/consumo-solicitacao/${delId}`).then(()=>{setDelId(null);load();}).catch(e=>alert(e?.error||e.message));
+  const canI=act=>user.permissions?.s48?.[act];
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>Solicitação de Ítens</span>
+        {canI("insert")&&<button style={S.btnAdd} onClick={openNew}>+ Nova Solicitação</button>}
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhuma solicitação cadastrada</div>:(
+        <div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Data","Item","Estoque","Qtde Solicitada","Qtde Atendida","Status","Ações"].map(h=>(
+              <th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>{items.map(i=>(
+            <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(i.data)}</td>
+              <td style={S.td}>{i.item||"—"}</td>
+              <td style={S.td}>{i.estoque||"—"}</td>
+              <td style={{...S.td,textAlign:"center"}}>{i.qtdeSolicitada??0}</td>
+              <td style={{...S.td,textAlign:"center"}}>{i.qtdeAtendida??0}</td>
+              <td style={S.td}>
+                <span style={{...S.badge,...S.badgeActive}}>Processado</span>
+              </td>
+              <td style={S.td}>
+                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(i.id)}>Excluir</button>}
+              </td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      )}
+      {modal&&<Modal title="Nova Solicitação" onClose={()=>setModal(null)}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+          <div style={S.formRow}>
+            <label style={S.label}>Data *</label>
+            <input type="date" value={modal.data} onChange={e=>setModal(m=>({...m,data:e.target.value}))} style={S.input}/>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Qtde Solicitada *</label>
+            <input type="number" min="1" value={modal.qtdeSolicitada} onChange={e=>setModal(m=>({...m,qtdeSolicitada:e.target.value}))} style={S.input}/>
+          </div>
+        </div>
+        <SelectField label="Item" value={modal.itemId} onChange={v=>setModal(m=>({...m,itemId:v}))} required
+          options={[{value:"",label:"Selecione..."},...itens.map(i=>({value:i.id,label:i.item}))]}/>
+        <SelectField label="Estoque" value={modal.estoqueId} onChange={v=>setModal(m=>({...m,estoqueId:v}))} required
+          options={[{value:"",label:"Selecione..."},...estoques.map(e=>({value:e.id,label:e.estoque}))]}/>
+        {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+          <button style={S.btnSave} onClick={save}>Salvar</button>
+        </div>
+      </Modal>}
+      {delId&&<ConfirmModal msg="Excluir esta solicitação? As movimentações geradas serão removidas." onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── ENTREGA DE ÍTENS (s49) ─────────────────────────────────────
+function EntregaItensScreen({user}){
+  const[items,setItems]=useState([]);
+  const[disponiveis,setDisponiveis]=useState([]);
+  const[ccustos,setCcustos]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const[selectedMov,setSelectedMov]=useState(null);
+  const today=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
+  const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
+  const load=()=>{
+    setLoading(true);
+    Promise.all([api.get("/consumo-entrega"),api.get("/consumo-entrega/disponiveis"),api.get("/consumo-ccusto/basic")])
+      .then(([e,d,c])=>{setItems(Array.isArray(e)?e:[]);setDisponiveis(Array.isArray(d)?d:[]);setCcustos(Array.isArray(c)?c:[]);})
+      .catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+  const openNew=()=>{setErr("");setSelectedMov(null);setModal({movimentacaoId:"",data:today(),ccustoConsumidorId:"",observacao:""});};
+  const onSelectMov=v=>{
+    setSelectedMov(disponiveis.find(d=>d.id===v)||null);
+    setModal(m=>({...m,movimentacaoId:v}));
+  };
+  const save=async()=>{
+    if(!modal.movimentacaoId||!modal.data||!modal.ccustoConsumidorId){setErr("Item disponível, Data e CCusto Consumidor são obrigatórios.");return;}
+    try{
+      await api.post("/consumo-entrega",{movimentacaoId:modal.movimentacaoId,data:modal.data,ccustoConsumidorId:modal.ccustoConsumidorId,observacao:modal.observacao||null});
+      setModal(null);load();
+    }catch(e){setErr(e?.error||e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/consumo-entrega/${delId}`);setDelId(null);load();}
+    catch(e){alert(e?.error||e.message);}
+  };
+  const canI=act=>user.permissions?.s49?.[act];
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>Entrega de Ítens</span>
+        {canI("insert")&&<button style={S.btnAdd} onClick={openNew}>+ Nova Entrega</button>}
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📤</span>Nenhuma entrega registrada</div>:(
+        <div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            <th style={S.th}>Data</th>
+            <th style={S.th}>Item</th>
+            <th style={S.th}>Estoque</th>
+            <th style={S.th}>CCusto Consumidor</th>
+            <th style={S.th}>Observação</th>
+            <th style={{...S.th,width:100}}>Ações</th>
+          </tr></thead>
+          <tbody>{items.map(i=>(
+            <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(i.data)}</td>
+              <td style={S.td}>{i.item||"—"}</td>
+              <td style={S.td}>{i.estoque||"—"}</td>
+              <td style={S.td}>{i.ccustoConsumidor||"—"}</td>
+              <td style={S.td}>{i.observacao||"—"}</td>
+              <td style={S.td}>
+                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(i.id)}>Excluir</button>}
+              </td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      )}
+      {modal&&<Modal title="Nova Entrega" onClose={()=>setModal(null)}>
+        <SelectField label="Item / Estoque disponível" value={modal.movimentacaoId} onChange={onSelectMov} required
+          options={[{value:"",label:"Selecione um item disponível..."},...disponiveis.map(d=>({value:d.id,label:d.label}))]}/>
+        {selectedMov&&(
+          <div style={{background:C.bg,borderRadius:6,padding:"8px 12px",marginBottom:8,fontSize:13,display:"flex",gap:24}}>
+            <span><b>Item:</b> {selectedMov.item}</span>
+            <span><b>Estoque:</b> {selectedMov.estoque}</span>
+          </div>
+        )}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+          <div style={S.formRow}>
+            <label style={S.label}>Data *</label>
+            <input type="date" value={modal.data} onChange={e=>setModal(m=>({...m,data:e.target.value}))} style={S.input}/>
+          </div>
+          <SelectField label="CCusto Consumidor" value={modal.ccustoConsumidorId} onChange={v=>setModal(m=>({...m,ccustoConsumidorId:v}))} required
+            options={[{value:"",label:"Selecione..."},...ccustos.map(c=>({value:c.id,label:c.centroCusto}))]}/>
+        </div>
+        <div style={S.formRow}>
+          <label style={S.label}>Observação</label>
+          <textarea value={modal.observacao||""} onChange={e=>setModal(m=>({...m,observacao:e.target.value}))}
+            rows={3} style={{...S.input,resize:"vertical"}}/>
+        </div>
+        {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+          <button style={S.btnSave} onClick={save}>Salvar</button>
+        </div>
+      </Modal>}
+      {delId&&<ConfirmModal msg="Excluir esta entrega e reverter a movimentação?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── RECEBIMENTO DE ESTOQUE (s50) ──────────────────────────────
+function RecebimentoEstoqueScreen({user}){
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(false);
+  const[disponiveis,setDisponiveis]=useState([]);
+  const[search,setSearch]=useState("");
+  const[selected,setSelected]=useState([]);
+  const[saving,setSaving]=useState(false);
+  const[delId,setDelId]=useState(null);
+  const canI=act=>user.permissions?.s50?.[act];
+  const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
+  const load=()=>{
+    setLoading(true);
+    api.get("/consumo-recebimento").then(r=>setItems(Array.isArray(r)?r:[])).catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+  const openModal=()=>{
+    api.get("/consumo-recebimento/disponiveis").then(d=>{
+      setDisponiveis(Array.isArray(d)?d:[]);
+      setSearch("");setSelected([]);setModal(true);
+    }).catch(()=>{});
+  };
+  const toggle=id=>setSelected(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
+  const save=()=>{
+    if(selected.length===0)return;
+    setSaving(true);
+    api.post("/consumo-recebimento",{movimentacaoIds:selected})
+      .then(()=>{setModal(false);load();}).catch(()=>{}).finally(()=>setSaving(false));
+  };
+  const del=()=>api.delete(`/consumo-recebimento/${delId}`).then(()=>{setDelId(null);load();}).catch(()=>{});
+  const filtered=disponiveis.filter(d=>(d.label||"").toLowerCase().includes(search.toLowerCase()));
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>Recebimento de Estoque</span>
+        {canI("insert")&&<button style={S.btnAdd} onClick={openModal}>+ Inserir</button>}
+      </div>
+      {loading?<Spinner/>:items.length===0
+        ?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum recebimento encontrado</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Data","Item","Estoque","Ações"].map(h=><th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>)}
+          </tr></thead>
+          <tbody>{items.map(i=>(
+            <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(i.data)}</td>
+              <td style={S.td}>{i.item||"—"}</td>
+              <td style={S.td}>{i.estoque||"—"}</td>
+              <td style={S.td}>
+                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(i.id)}>Excluir</button>}
+              </td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      }
+      {modal&&<Modal title="Selecionar Itens para Recebimento" onClose={()=>setModal(false)}>
+        <Input label="Pesquisar" value={search} onChange={setSearch} placeholder="Digite para filtrar..."/>
+        <div style={{maxHeight:300,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:6,marginTop:8}}>
+          {filtered.length===0
+            ?<div style={{padding:16,color:C.textLight,textAlign:"center"}}>Nenhum item disponível</div>
+            :filtered.map(d=>(
+              <label key={d.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:selected.includes(d.id)?C.bg:C.white}}>
+                <input type="checkbox" checked={selected.includes(d.id)} onChange={()=>toggle(d.id)}/>
+                <span style={{fontSize:14}}>{d.label}</span>
+              </label>
+            ))
+          }
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:16}}>
+          <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+          <button style={{...S.btnSave,opacity:selected.length===0?0.5:1}} onClick={save} disabled={selected.length===0||saving}>
+            {saving?"Salvando...":`OK (${selected.length} selecionado${selected.length!==1?"s":""})`}
+          </button>
+        </div>
+      </Modal>}
+      {delId&&<ConfirmModal msg="Excluir este recebimento? A movimentação será revertida para 'Aguardando Compra'." onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
 // ── SIDEBAR ───────────────────────────────────────────────────
 const navConfig=[
   {id:"cadastros",label:"Cadastros",icon:"folder",children:[
@@ -8747,6 +9267,9 @@ const navConfig=[
     {id:"s28",label:"Configuração de E-mail",     icon:"mail"},
     {id:"s33",label:"Configuração de Inventário", icon:"wrench"},
     {id:"s39",label:"Filiais",                    icon:"building"},
+    {id:"s44",label:"CCusto",                     icon:"coin"},
+    {id:"s45",label:"Ítens",                      icon:"package"},
+    {id:"s46",label:"Estoque",                    icon:"archive"},
   ]},
   {id:"movimentacoes",label:"Movimentações",icon:"refresh",children:[
     {id:"s5", label:"Sobreaviso/Extra",           icon:"clock"},
@@ -8763,6 +9286,10 @@ const navConfig=[
     {id:"s41",label:"Firewall",                   icon:"monitor"},
     {id:"s35",label:"Controle de Folgas",         icon:"folgas"},
     {id:"s37",label:"Políticas de TI",            icon:"policy"},
+    {id:"s47",label:"Movimentação de Ítens",      icon:"refresh"},
+    {id:"s48",label:"Solicitação de Ítens",       icon:"clipboard"},
+    {id:"s49",label:"Entrega de Ítens",           icon:"package"},
+    {id:"s50",label:"Recebimento de Estoque",     icon:"inbox"},
   ]},
   {id:"relatorios",label:"Relatórios",icon:"chart",children:[
     {id:"s6", label:"Relatório de Horas",         icon:"clock"},
@@ -8876,6 +9403,13 @@ const screenTitles={
   s41:"Movimentações › Firewall",
   s42:"Relatórios › Firewall",
   s43:"Relatórios › Links",
+  s44:"Cadastros › CCusto",
+  s45:"Cadastros › Ítens",
+  s46:"Cadastros › Estoque",
+  s47:"Movimentações › Movimentação de Ítens",
+  s48:"Movimentações › Solicitação de Ítens",
+  s49:"Movimentações › Entrega de Ítens",
+  s50:"Movimentações › Recebimento de Estoque",
   s35:"Movimentações › Controle de Folgas",
   s36:"Relatórios › Controle de Folgas",
   s37:"Movimentações › Políticas de TI",
@@ -8947,6 +9481,13 @@ export default function App(){
     s41:<FirewallScreen user={user}/>,
     s42:<RelatorioFirewallScreen user={user}/>,
     s43:<RelatorioLinksScreen user={user}/>,
+    s44:<CcustoConsumoScreen user={user}/>,
+    s45:<ItensConsumoScreen user={user}/>,
+    s46:<EstoquesConsumoScreen user={user}/>,
+    s47:<MovimentacaoItensScreen user={user}/>,
+    s48:<SolicitacaoItensScreen user={user}/>,
+    s49:<EntregaItensScreen user={user}/>,
+    s50:<RecebimentoEstoqueScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
