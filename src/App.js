@@ -32,6 +32,7 @@ const api = {
   get:    (path)       => api.request("GET",    path),
   post:   (path, body) => api.request("POST",   path, body),
   put:    (path, body) => api.request("PUT",    path, body),
+  patch:  (path, body) => api.request("PATCH",  path, body),
   delete: (path)       => api.request("DELETE", path),
 };
 
@@ -3136,6 +3137,99 @@ function LinhasDisponiveisScreen({user}){
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+// ── LIBERAÇÃO DE LINHAS PARA ESTOQUE (s57) ────────────────────
+function LiberacaoLinhasEstoqueScreen({user}){
+  const[items,setItems]=useState([]);
+  const[companies,setCompanies]=useState([]);
+  const[operadoras,setOperadoras]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[err,setErr]=useState({});
+  const[filter,setFilter]=useState({empresa:"",operadora:"",numeroLinha:"",iccid:""});
+  const canI=act=>user.permissions?.s57?.[act];
+  const load=()=>{
+    setLoading(true);
+    Promise.all([api.get("/linhas-disponiveis/liberacao"),api.get("/companies"),api.get("/operadoras")])
+      .then(([ld,co,op])=>{setItems(Array.isArray(ld)?ld:[]);setCompanies(Array.isArray(co)?co:[]);setOperadoras(Array.isArray(op)?op:[]);})
+      .catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+  const toggle=async(item,checked)=>{
+    const novoStatus=checked?"Em estoque":"Em análise";
+    setErr(e=>({...e,[item.id]:""}));
+    try{
+      await api.patch(`/linhas-disponiveis/${item.id}/status`,{status:novoStatus});
+      setItems(ls=>ls.map(l=>l.id===item.id?{...l,status:novoStatus}:l));
+    }catch(e){setErr(er=>({...er,[item.id]:e?.error||"Erro ao atualizar status."}));}
+  };
+  const filtered=items.filter(i=>{
+    if(filter.empresa&&i.companyId!==filter.empresa)return false;
+    if(filter.operadora&&i.operadoraId!==filter.operadora)return false;
+    if(filter.numeroLinha&&!(i.numeroLinha||"").toLowerCase().includes(filter.numeroLinha.toLowerCase()))return false;
+    if(filter.iccid&&!(i.iccid||"").toLowerCase().includes(filter.iccid.toLowerCase()))return false;
+    return true;
+  });
+  const statusBadge=s=>{
+    if(s==="Em estoque")return<span style={{...S.badge,...S.badgeActive}}>Em estoque</span>;
+    return<span style={{...S.badge,background:"#FFF3CD",color:"#856404"}}>{s||"Em análise"}</span>;
+  };
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>Liberação de Linhas para Estoque</span>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+        <select value={filter.empresa} onChange={e=>setFilter(f=>({...f,empresa:e.target.value}))}
+          style={{...S.select,width:"auto",minWidth:150}}>
+          <option value="">Todas as empresas</option>
+          {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select value={filter.operadora} onChange={e=>setFilter(f=>({...f,operadora:e.target.value}))}
+          style={{...S.select,width:"auto",minWidth:150}}>
+          <option value="">Todas as operadoras</option>
+          {operadoras.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+        <input placeholder="Número Linha..." value={filter.numeroLinha}
+          onChange={e=>setFilter(f=>({...f,numeroLinha:e.target.value}))}
+          style={{...S.input,width:"auto",minWidth:140,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="ICCID..." value={filter.iccid}
+          onChange={e=>setFilter(f=>({...f,iccid:e.target.value}))}
+          style={{...S.input,width:"auto",minWidth:140,padding:"6px 10px",fontSize:13}}/>
+        {(filter.empresa||filter.operadora||filter.numeroLinha||filter.iccid)&&
+          <button style={S.btnCancel} onClick={()=>setFilter({empresa:"",operadora:"",numeroLinha:"",iccid:""})}>Limpar</button>}
+      </div>
+      {loading?<Spinner/>:filtered.length===0
+        ?<div style={S.emptyState}><span style={S.emptyIcon}>📶</span>Nenhuma linha em análise ou estoque</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Empresa","Operadora","Número Linha","ICCID","Status","Liberar Estoque"].map(h=>(
+              <th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>{filtered.map(i=>(
+            <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={S.td}>{i.companyName||"—"}</td>
+              <td style={S.td}>{i.operadoraName||"—"}</td>
+              <td style={{...S.td,fontWeight:600}}>{i.numeroLinha}</td>
+              <td style={S.td}>{i.iccid||"—"}</td>
+              <td style={S.td}>{statusBadge(i.status)}</td>
+              <td style={{...S.td,textAlign:"center"}}>
+                {canI("edit")
+                  ?<div>
+                    <input type="checkbox" checked={i.status==="Em estoque"}
+                      onChange={e=>toggle(i,e.target.checked)}
+                      style={{width:18,height:18,cursor:"pointer"}}/>
+                    {err[i.id]&&<div style={{fontSize:11,color:"#DC2626",marginTop:2,maxWidth:200}}>{err[i.id]}</div>}
+                  </div>
+                  :<input type="checkbox" checked={i.status==="Em estoque"} readOnly style={{width:18,height:18}}/>}
+              </td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      }
     </div>
   );
 }
@@ -8835,8 +8929,8 @@ function CcustoConsumoScreen({user}){
   const save=async()=>{
     if(!modal.centroCusto?.trim()){setErr("Centro de Custo é obrigatório.");return;}
     try{
-      if(modal.id) await api.put(`/consumo-ccusto/${modal.id}`,{centroCusto:modal.centroCusto});
-      else         await api.post("/consumo-ccusto",{centroCusto:modal.centroCusto});
+      if(modal.id) await api.put(`/consumo-ccusto/${modal.id}`,{centroCusto:modal.centroCusto,descricao:modal.descricao||""});
+      else         await api.post("/consumo-ccusto",{centroCusto:modal.centroCusto,descricao:modal.descricao||""});
       setModal(null);load();
     }catch(e){setErr(e?.error||e.message);}
   };
@@ -8849,23 +8943,25 @@ function CcustoConsumoScreen({user}){
     <div style={S.card}>
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>Cadastro de CCusto</span>
-        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({centroCusto:""});}}>+ Novo CCusto</button>}
+        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({centroCusto:"",descricao:""});}}>+ Novo CCusto</button>}
       </div>
       {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>💰</span>Nenhum CCusto cadastrado</div>:(
         isMobile
-          ?<MobileCardList items={items} columns={[{key:"centroCusto",label:"Centro de Custo"}]} actions={item=>(
-            <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,centroCusto:item.centroCusto});}}>Editar</button>}
+          ?<MobileCardList items={items} columns={[{key:"centroCusto",label:"Centro de Custo"},{key:"descricao",label:"Descrição Ccusto"}]} actions={item=>(
+            <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,centroCusto:item.centroCusto,descricao:item.descricao||""});}}>Editar</button>}
               {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}</>
           )}/>
           :<table style={S.table}><thead><tr>
             <th style={S.th}>Centro de Custo</th>
+            <th style={S.th}>Descrição Ccusto</th>
             <th style={{...S.th,width:140}}>Ações</th>
           </tr></thead>
           <tbody>{items.map(item=>(
             <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={S.td}>{item.centroCusto}</td>
+              <td style={S.td}>{item.descricao||"—"}</td>
               <td style={S.td}>
-                {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,centroCusto:item.centroCusto});}}>Editar</button>}
+                {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,centroCusto:item.centroCusto,descricao:item.descricao||""});}}>Editar</button>}
                 {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
               </td>
             </tr>
@@ -8873,6 +8969,7 @@ function CcustoConsumoScreen({user}){
       )}
       {modal&&<Modal title={modal.id?"Editar CCusto":"Novo CCusto"} onClose={()=>setModal(null)}>
         <Input label="Centro de Custo" value={modal.centroCusto} onChange={v=>setModal(m=>({...m,centroCusto:v}))} required/>
+        <Input label="Descrição Ccusto" value={modal.descricao||""} onChange={v=>setModal(m=>({...m,descricao:v}))}/>
         {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
           <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
@@ -9055,7 +9152,7 @@ function MovimentacaoItensScreen({user}){
       {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhuma movimentação encontrada</div>:(
         <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
-            {["Num Sol.","Data","Item","Estoque","CCusto Despesa","Qtde Estoque","CCusto Consumidor","Qtde Consumida","Qtde Solicitada","Status"].map(h=>(
+            {["Num Sol.","Data","Item","Estoque","CCusto Despesa","Desc Ccusto Despesa","Qtde Estoque","CCusto Consumidor","Desc Ccusto Consumidor","Qtde Consumida","Qtde Solicitada","Status"].map(h=>(
               <th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>
             ))}
           </tr></thead>
@@ -9066,8 +9163,10 @@ function MovimentacaoItensScreen({user}){
               <td style={S.td}>{i.item||"—"}</td>
               <td style={S.td}>{i.estoque||"—"}</td>
               <td style={S.td}>{i.ccustoDespesa||"—"}</td>
+              <td style={S.td}>{i.descCcustoDespesa||"—"}</td>
               <td style={{...S.td,textAlign:"center"}}>{i.qtdeEstoque??0}</td>
               <td style={S.td}>{i.ccustoConsumidor||"—"}</td>
+              <td style={S.td}>{i.descCcustoConsumidor||"—"}</td>
               <td style={{...S.td,textAlign:"center"}}>{i.qtdeConsumida??0}</td>
               <td style={{...S.td,textAlign:"center"}}>{i.qtdeSolicitada??0}</td>
               <td style={S.td}>{statusBadge(i.status)}</td>
@@ -9187,13 +9286,13 @@ function EntregaItensScreen({user}){
   const openNew=()=>{
     setErr("");
     api.get("/consumo-entrega/disponiveis-agrupados").then(d=>{
-      setLinhas((Array.isArray(d)?d:[]).map(l=>({...l,qtdeEntregue:"",data:today(),ccustoConsumidorId:"",funcionarioId:"",observacao:""})));
+      setLinhas((Array.isArray(d)?d:[]).map(l=>({...l,qtdeEntregue:"",data:today(),ccustoConsumidor:"",funcionarioId:"",observacao:""})));
       setModal(true);
     }).catch(()=>{});
   };
   const setLinha=(idx,field,val)=>setLinhas(ls=>ls.map((l,i)=>i!==idx?l:{...l,[field]:val}));
   const save=()=>{
-    const itens=linhas.filter(l=>Number(l.qtdeEntregue)>0).map(l=>({itemId:l.itemId,estoqueId:l.estoqueId,qtdeEntregue:Number(l.qtdeEntregue),data:l.data,ccustoConsumidorId:l.ccustoConsumidorId,funcionarioId:l.funcionarioId||null,observacao:l.observacao||null}));
+    const itens=linhas.filter(l=>Number(l.qtdeEntregue)>0).map(l=>({itemId:l.itemId,estoqueId:l.estoqueId,qtdeEntregue:Number(l.qtdeEntregue),data:l.data,ccustoConsumidorId:ccustos.find(c=>c.centroCusto===l.ccustoConsumidor)?.id||null,funcionarioId:l.funcionarioId||null,observacao:l.observacao||null}));
     if(itens.length===0){setErr("Informe a Qtde Entregue em ao menos um item.");return;}
     const invalido=itens.find(l=>!l.data||!l.ccustoConsumidorId);
     if(invalido){setErr("Data e CCusto Consumidor são obrigatórios para cada item com Qtde Entregue.");return;}
@@ -9222,6 +9321,7 @@ function EntregaItensScreen({user}){
             <th style={S.th}>Item</th>
             <th style={S.th}>Estoque</th>
             <th style={S.th}>CCusto Consumidor</th>
+            <th style={S.th}>Descrição Ccusto</th>
             <th style={S.th}>Funcionário</th>
             <th style={S.th}>Observação</th>
             <th style={{...S.th,width:100}}>Ações</th>
@@ -9232,6 +9332,7 @@ function EntregaItensScreen({user}){
               <td style={S.td}>{i.item||"—"}</td>
               <td style={S.td}>{i.estoque||"—"}</td>
               <td style={S.td}>{i.ccustoConsumidor||"—"}</td>
+              <td style={S.td}>{i.descricaoCcusto||"—"}</td>
               <td style={S.td}>{i.funcionario||"—"}</td>
               <td style={S.td}>{i.observacao||"—"}</td>
               <td style={S.td}>
@@ -9246,13 +9347,13 @@ function EntregaItensScreen({user}){
           ?<div style={{padding:16,color:C.textLight,textAlign:"center"}}>Nenhum item disponível para entrega.</div>
           :<div style={{overflowX:"auto"}}>
             <table style={S.table}><thead><tr>
-              {["Item","Estoque","Qtde Estoque","Qtde Entregue","Data","CCusto Consumidor","Funcionário","Observação"].map(h=>(
+              {["Item","Estoque","Qtde Estoque","Qtde Entregue","Data","CCusto Consumidor","Descrição Ccusto","Funcionário","Observação"].map(h=>(
                 <th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>
               ))}
             </tr></thead>
             <tbody>{linhas.map((l,idx)=>(
               <tr key={`${l.itemId}-${l.estoqueId}`} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
-                <td style={S.td}><input value={l.item||""} readOnly style={inputRO}/></td>
+                <td style={{...S.td,minWidth:200}}><input value={l.item||""} readOnly style={{...inputRO,minWidth:180}}/></td>
                 <td style={S.td}><input value={l.estoque||""} readOnly style={inputRO}/></td>
                 <td style={{...S.td,textAlign:"center"}}><input value={l.qtdeEstoque} readOnly style={{...inputRO,textAlign:"center",width:70}}/></td>
                 <td style={{...S.td,textAlign:"center"}}>
@@ -9266,11 +9367,11 @@ function EntregaItensScreen({user}){
                     style={{...S.input,width:140}}/>
                 </td>
                 <td style={S.td}>
-                  <select value={l.ccustoConsumidorId} onChange={e=>setLinha(idx,"ccustoConsumidorId",e.target.value)}
-                    style={{...S.input,minWidth:160}}>
-                    <option value="">Selecione...</option>
-                    {ccustos.map(c=><option key={c.id} value={c.id}>{c.centroCusto}</option>)}
-                  </select>
+                  <input value={l.ccustoConsumidor} onChange={e=>setLinha(idx,"ccustoConsumidor",e.target.value)}
+                    style={{...S.input,minWidth:160}} placeholder="Digite o CCusto..."/>
+                </td>
+                <td style={S.td}>
+                  <input value={ccustos.find(c=>c.centroCusto===l.ccustoConsumidor)?.descricao||""} readOnly style={{...inputRO,minWidth:160}}/>
                 </td>
                 <td style={{...S.td,minWidth:200}}>
                   <SelectField value={l.funcionarioId} onChange={v=>setLinha(idx,"funcionarioId",v)}
@@ -9713,7 +9814,7 @@ function ManutencaoRegistrosScreen({user}){
     setModalAtivo(a);
     setModal(m=>({...m,ativoId:v,funcionarioId:a?.funcionarioId||""}));
   };
-  const openNew=()=>{setErr("");setModalAtivo(null);setModal({data:today(),ativoId:"",funcionarioId:"",ccustoId:"",observacao:""});};
+  const openNew=()=>{setErr("");setModalAtivo(null);setModal({data:today(),ativoId:"",funcionarioId:"",ccusto:"",observacao:""});};
   const openEdit=row=>{
     setErr("");
     // Tenta achar o ativo nos selects; se não estiver (já em uso), monta a partir dos dados da linha
@@ -9731,12 +9832,12 @@ function ManutencaoRegistrosScreen({user}){
     setModalAtivo(a);
     const dt=row.data?new Date(row.data):null;
     const ds=dt?`${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,"0")}-${String(dt.getUTCDate()).padStart(2,"0")}`:"";
-    setModal({id:row.id,data:ds,ativoId:row.ativoId||"",funcionarioId:row.funcionarioId||"",ccustoId:row.ccustoId||"",observacao:row.observacao||""});
+    setModal({id:row.id,data:ds,ativoId:row.ativoId||"",funcionarioId:row.funcionarioId||"",ccusto:row.ccusto||"",observacao:row.observacao||""});
   };
   const save=async()=>{
     if(!modal.data||!modal.ativoId){setErr("Data e Ativo são obrigatórios.");return;}
     try{
-      const body={data:modal.data,ativoId:modal.ativoId,funcionarioId:modal.funcionarioId||null,ccustoId:modal.ccustoId||null,observacao:modal.observacao||null};
+      const body={data:modal.data,ativoId:modal.ativoId,funcionarioId:modal.funcionarioId||null,ccustoId:selects.ccustos.find(c=>c.centroCusto===modal.ccusto)?.id||null,observacao:modal.observacao||null};
       if(modal.id) await api.put(`/manutencao-registros/${modal.id}`,body);
       else await api.post("/manutencao-registros",body);
       setModal(null);load();
@@ -9769,7 +9870,7 @@ function ManutencaoRegistrosScreen({user}){
     }catch(e){setItemErr(e?.error||e.message);}
   };
   const delItem=()=>api.delete(`/manutencao-registros/itens/${delItemId}`).then(()=>{setDelItemId(null);loadItens(regRow.id);}).catch(e=>alert(e?.error||e.message));
-  const COLS=["Data","Nome do Ativo","Empresa","Marca","Modelo","Nº Série","IMEI","Funcionário","Ccusto","Observação","Status","Ações"];
+  const COLS=["Data","Nome do Ativo","Empresa","Marca","Modelo","Nº Série","IMEI","Funcionário","Ccusto","Descrição Ccusto","Observação","Status","Ações"];
   return(
     <div style={S.card}>
       <div style={S.cardHeader}>
@@ -9793,6 +9894,7 @@ function ManutencaoRegistrosScreen({user}){
               <td style={S.td}>{i.imeiSlot1||"—"}</td>
               <td style={S.td}>{i.funcionario||"—"}</td>
               <td style={S.td}>{i.ccusto||"—"}</td>
+              <td style={S.td}>{i.descricaoCcusto||"—"}</td>
               <td style={S.td}>{i.observacao||"—"}</td>
               <td style={S.td}>{statusBadge(i.status)}</td>
               <td style={{...S.td,whiteSpace:"nowrap"}}>
@@ -9825,8 +9927,14 @@ function ManutencaoRegistrosScreen({user}){
           <label style={S.label}>Funcionário</label>
           <input value={modalAtivo?.funcionarioNome||"—"} readOnly style={{...S.input,background:C.bg,color:C.textLight}}/>
         </div>
-        <SelectField label="Ccusto" value={modal.ccustoId} onChange={v=>setModal(m=>({...m,ccustoId:v}))}
-          options={[{value:"",label:"Selecione..."},...selects.ccustos.map(c=>({value:c.id,label:c.centroCusto}))]}/>
+        <div style={S.formRow}>
+          <label style={S.label}>Ccusto</label>
+          <input value={modal.ccusto||""} onChange={e=>setModal(m=>({...m,ccusto:e.target.value}))} style={S.input} placeholder="Digite o CCusto..."/>
+        </div>
+        <div style={S.formRow}>
+          <label style={S.label}>Descrição Ccusto</label>
+          <input value={selects.ccustos.find(c=>c.centroCusto===modal.ccusto)?.descricao||""} readOnly style={{...S.input,background:C.bg,color:C.textLight}}/>
+        </div>
         <div style={S.formRow}>
           <label style={S.label}>Observação</label>
           <textarea value={modal.observacao||""} onChange={e=>setModal(m=>({...m,observacao:e.target.value}))} style={{...S.input,height:72,resize:"vertical"}}/>
@@ -9935,8 +10043,9 @@ const navConfig=[
     {id:"s30",label:"Férias",                     icon:"vacation"},
     {id:"s13",label:"Contratos",                  icon:"contracts"},
     {id:"s37",label:"Políticas de TI",            icon:"policy"},
-    {id:"s19",label:"Linhas Disponíveis",         icon:"signal"},
-    {id:"s21",label:"Controle de Ativos",         icon:"monitor"},
+    {id:"s19",label:"Linhas Disponíveis",               icon:"signal"},
+    {id:"s57",label:"Liberação de Linhas para Estoque", icon:"signal"},
+    {id:"s21",label:"Controle de Ativos",               icon:"monitor"},
     {id:"s29",label:"Histórico de Movimentações", icon:"history"},
     {id:"s38",label:"Endereços de Rede",          icon:"satellite"},
     {id:"s40",label:"Links",                      icon:"link"},
@@ -10045,6 +10154,7 @@ const screenTitles={
   s17:"Cadastros › Telefonia › Linhas Faturadas",
   s18:"Cadastros › Tipo de Ativo",
   s19:"Movimentações › Linhas Disponíveis",
+  s57:"Movimentações › Liberação de Linhas para Estoque",
   s20:"Cadastros › Ativos",
   s21:"Movimentações › Controle de Ativos",
   s22:"Cadastros › Funcionários",
@@ -10125,6 +10235,7 @@ export default function App(){
     s17:<LinhasFaturadasScreen user={user}/>,
     s18:<TipoAtivosScreen user={user}/>,
     s19:<LinhasDisponiveisScreen user={user}/>,
+    s57:<LiberacaoLinhasEstoqueScreen user={user}/>,
     s20:<AtivosScreen user={user}/>,
     s21:<ControleAtivosScreen user={user}/>,
     s22:<FuncionariosScreen user={user}/>,
