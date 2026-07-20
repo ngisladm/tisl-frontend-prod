@@ -204,7 +204,7 @@ function Input({label,value,onChange,type="text",placeholder,required,disabled})
     </div>
   );
 }
-function SelectField({label,value,onChange,options=[],required}){
+function SelectField({label,value,onChange,options=[],required,disabled}){
   const[open,setOpen]=useState(false);
   const[search,setSearch]=useState("");
   const[dropPos,setDropPos]=useState({top:0,left:0,width:200});
@@ -218,6 +218,7 @@ function SelectField({label,value,onChange,options=[],required}){
     return()=>document.removeEventListener("mousedown",h);
   },[open]);
   const handleOpen=()=>{
+    if(disabled)return;
     if(triggerRef.current){
       const r=triggerRef.current.getBoundingClientRect();
       setDropPos({top:r.bottom+4,left:r.left,width:r.width});
@@ -230,7 +231,7 @@ function SelectField({label,value,onChange,options=[],required}){
       <label style={S.label}>{label}{required&&" *"}</label>
       <div ref={triggerRef} style={{position:"relative"}}>
         <div onClick={handleOpen}
-          style={{...S.select,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",userSelect:"none",minHeight:36,padding:"0 10px"}}>
+          style={{...S.select,cursor:disabled?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",userSelect:"none",minHeight:36,padding:"0 10px",background:disabled?C.bg:C.white,opacity:disabled?0.7:1}}>
           <span style={{color:value?C.text:C.textLight,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,fontSize:13}}>{selectedLabel||"Selecione..."}</span>
           <span style={{marginLeft:6,fontSize:10,color:C.textLight,flexShrink:0}}>{open?"▲":"▼"}</span>
         </div>
@@ -1382,12 +1383,34 @@ function RelatorioHorasScreen({user}){
       setResult(data);setLoaded(true);
     }catch(e){alert(e.message);}finally{setLoading(false);}
   };
+  const exportHorasPDF=()=>{
+    if(!result||!result.length)return;
+    const doc=new jsPDF({orientation:"landscape"});
+    doc.setFontSize(14);doc.text("Relatório de Horas de Sobreaviso",14,14);
+    const body=[];
+    result.forEach(team=>{
+      body.push([{content:`Equipe: ${team.teamName}`,colSpan:4,styles:{fillColor:[240,165,0],textColor:[255,255,255],fontStyle:"bold",fontSize:10}}]);
+      team.users.forEach(u=>body.push([team.teamName,u.userName,u.plantoes,u.sobreavisoHHMM,u.extraHHMM]));
+      body.push([{content:`TOTAL ${team.teamName}`,colSpan:2,styles:{fillColor:[255,248,225],fontStyle:"bold"}},{content:team.users.reduce((s,u)=>s+u.plantoes,0),styles:{fillColor:[255,248,225],fontStyle:"bold"}},{content:team.totalSobreavisoHHMM,styles:{fillColor:[255,248,225],fontStyle:"bold"}},{content:team.totalExtraHHMM,styles:{fillColor:[255,248,225],fontStyle:"bold"}}]);
+    });
+    autoTable(doc,{startY:20,head:[["Equipe","Usuário","Plantões","Total Sobreaviso","Total Extra"]],body,styles:{fontSize:9},headStyles:{fillColor:[97,97,97]}});
+    doc.save("relatorio-horas.pdf");
+  };
+  const exportHorasExcel=()=>{
+    if(!result||!result.length)return;
+    const wsData=[["Equipe","Usuário","Plantões","Total Sobreaviso","Total Extra"]];
+    result.forEach(team=>{
+      team.users.forEach(u=>wsData.push([team.teamName,u.userName,u.plantoes,u.sobreavisoHHMM,u.extraHHMM]));
+      wsData.push([`TOTAL ${team.teamName}`,"",team.users.reduce((s,u)=>s+u.plantoes,0),team.totalSobreavisoHHMM,team.totalExtraHHMM]);
+    });
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(wsData),"Horas");XLSX.writeFile(wb,"relatorio-horas.xlsx");
+  };
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   return(
     <div>
       {/* Filtros */}
       <div style={{...S.card,marginBottom:20}}>
-        <div style={{...S.cardHeader,marginBottom:16}}><span style={S.cardTitle}>📊 Relatório de Horas de Sobreaviso</span></div>
+        <div style={{...S.cardHeader,marginBottom:16}}><span style={S.cardTitle}>📊 Relatório de Horas de Sobreaviso</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportHorasPDF} disabled={!result||!result.length}>⬇ PDF</button><button style={S.btnSave} onClick={exportHorasExcel} disabled={!result||!result.length}>⬇ Excel</button></div></div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12,marginBottom:16}}>
           <MaskedInput label="Período Inicial" mask={MASK_DATE} value={filters.dataInicio} onChange={v=>setFilters(f=>({...f,dataInicio:v}))} placeholder="01/01/2025" required/>
           <MaskedInput label="Período Final"   mask={MASK_DATE} value={filters.dataFim}    onChange={v=>setFilters(f=>({...f,dataFim:v}))}    placeholder="31/01/2025" required/>
@@ -1903,7 +1926,7 @@ function RelatorioKmScreen({user}){
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   return(
     <div style={S.card}>
-      <div style={S.cardHeader}><span style={S.cardTitle}>📊 Controle de Km</span></div>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📊 Controle de Km</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportKmPDF} disabled={rows.length===0}>⬇ PDF</button><button style={S.btnSave} onClick={exportKmExcel} disabled={rows.length===0}>⬇ Excel</button></div></div>
       {/* Filtros */}
       <div style={{background:C.bg,borderRadius:8,padding:16,marginBottom:20,border:`1px solid ${C.border}`}}>
         <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,letterSpacing:.5}}>FILTROS</div>
@@ -1957,10 +1980,6 @@ function RelatorioKmScreen({user}){
           <div style={{background:C.dark,color:C.white,padding:"12px 16px",borderRadius:6,display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:14,fontWeight:700}}>
             <span>TOTAL GERAL</span>
             <span style={{color:C.primary,fontSize:16}}>{fmtMoney(grandTotal)}</span>
-          </div>
-          <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"flex-end"}}>
-            <button style={{...S.btnCancel,display:"flex",alignItems:"center",gap:6}} onClick={exportKmPDF}>📄 Baixar PDF</button>
-            <button style={{...S.btnAdd,display:"flex",alignItems:"center",gap:6,background:"#1D6F42"}} onClick={exportKmExcel}>📊 Baixar Excel</button>
           </div>
         </div>
       )}
@@ -2389,7 +2408,7 @@ function RelatorioContratosScreen({user}){
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   return(
     <div style={S.card}>
-      <div style={S.cardHeader}><span style={S.cardTitle}>📑 Relatório de Contratos</span></div>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📑 Relatório de Contratos</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportContratosPDF} disabled={rows.length===0}>⬇ PDF</button><button style={S.btnSave} onClick={exportContratosExcel} disabled={rows.length===0}>⬇ Excel</button></div></div>
       <div style={{background:C.bg,borderRadius:8,padding:16,marginBottom:20,border:`1px solid ${C.border}`}}>
         <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,letterSpacing:.5}}>FILTROS</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12}}>
@@ -2426,12 +2445,6 @@ function RelatorioContratosScreen({user}){
             <td style={{...S.td,minWidth:180}}><span style={{fontSize:12,color:C.textLight,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{r.observacao||"—"}</span></td>
           </tr>
         );})}</tbody></table>
-        </div>
-      )}
-      {rows.length>0&&(
-        <div style={{display:"flex",gap:10,marginTop:16,justifyContent:"flex-end"}}>
-          <button style={{...S.btnCancel,display:"flex",alignItems:"center",gap:6}} onClick={exportContratosPDF}>📄 Baixar PDF</button>
-          <button style={{...S.btnAdd,display:"flex",alignItems:"center",gap:6,background:"#1D6F42"}} onClick={exportContratosExcel}>📊 Baixar Excel</button>
         </div>
       )}
     </div>
@@ -4579,6 +4592,20 @@ function RelatorioEscalaScreen({user}){
     doc.save(`Relatorio_Escala_${escala.companyName}_${escala.teamNamesStr||escala.teamName||""}.pdf`);
   };
 
+  const exportEscalaExcel=()=>{
+    if(!relatorio)return;
+    const{escala,turnos}=relatorio;
+    const days=buildCalendar(escala,turnos);
+    const wsData=[["Data","Dia da Semana","Turno 1","Turno 2"]];
+    days.forEach(d=>{
+      const wd=DAYS_PT[d.date.getUTCDay()];
+      const[,dm,dd]=d.iso.split("-");
+      wsData.push([`${dd}/${dm}`,wd,d.t1?.userName||"",d.t2?.userName||""]);
+    });
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(wsData),"Escala");
+    XLSX.writeFile(wb,`Relatorio_Escala_${escala.companyName}.xlsx`);
+  };
+
   const turnoLabel=(t,turnoKey)=>{
     if(!t)return<span style={{color:C.textLight,fontSize:11}}>—</span>;
     const bg=turnoKey==="turno1"?C.t1bg:C.t2bg;
@@ -4594,7 +4621,7 @@ function RelatorioEscalaScreen({user}){
   return(
     <div>
       <div style={S.card}>
-        <div style={S.cardHeader}><span style={S.cardTitle}>📅 Relatório de Escala de Sobreaviso</span></div>
+        <div style={S.cardHeader}><span style={S.cardTitle}>📅 Relatório de Escala de Sobreaviso</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportPDF} disabled={!relatorio}>⬇ PDF</button><button style={S.btnSave} onClick={exportEscalaExcel} disabled={!relatorio}>⬇ Excel</button></div></div>
         <div style={{display:"flex",gap:12,alignItems:"flex-end",flexWrap:"wrap"}}>
           <div style={{flex:1,minWidth:220}}>
             <label style={S.label}>Escala de Sobreaviso *</label>
@@ -4621,7 +4648,6 @@ function RelatorioEscalaScreen({user}){
                 <div style={S.cardTitle}>📋 {escala.companyName} — {escala.teamNamesStr||"—"}</div>
                 <div style={{fontSize:12,color:C.textLight,marginTop:4}}>{escala.dataInicio} a {escala.dataFim} · {days.length} dias · {preenchidos}/{total} turnos preenchidos</div>
               </div>
-              <button style={{...S.btnCancel,display:"flex",alignItems:"center",gap:6}} onClick={exportPDF}>📄 Exportar PDF</button>
             </div>
 
             {/* Legenda */}
@@ -4864,6 +4890,7 @@ function RelatorioAnaliseLinhasScreen({user}){
   const[filtNrLinha,setFiltNrLinha]=useState("");
   const[filtPlano,setFiltPlano]=useState("");
   const[filtConsumo,setFiltConsumo]=useState("Todos");
+  const[searched,setSearched]=useState(false);
 
   useEffect(()=>{
     if(!p?.view)return;
@@ -4920,10 +4947,17 @@ function RelatorioAnaliseLinhasScreen({user}){
     <div style={S.card}>
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>📊 Relatório de Análise de Linhas</span>
-        <button style={S.btnSave} onClick={()=>{
-          const ws=XLSX.utils.json_to_sheet(pivotData.map(r=>({Empresa:r.companyName||"",Operadora:r.operadoraName||"","Nº Linha":r.numeroLinha||"",Plano:r.plano||"",...Object.fromEntries(activeMeses.map(m=>[m,r.meses[m]||""]))})));
-          const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Análise");XLSX.writeFile(wb,"relatorio-analise-linhas.xlsx");
-        }}>⬇️ Excel</button>
+        <div style={{display:"flex",gap:8}}>
+          <button style={S.btnSave} onClick={()=>{
+            const doc=new jsPDF({orientation:"landscape"});doc.setFontSize(14);doc.text("Relatório de Análise de Linhas",14,14);
+            autoTable(doc,{startY:20,head:[["Empresa","Operadora","Nº Linha","Plano",...activeMeses]],body:pivotData.map(r=>[r.companyName||"",r.operadoraName||"",r.numeroLinha||"",r.plano||"",...activeMeses.map(m=>r.meses[m]||"")]),styles:{fontSize:8},headStyles:{fillColor:[97,97,97]}});
+            doc.save("relatorio-analise-linhas.pdf");
+          }} disabled={pivotData.length===0}>⬇ PDF</button>
+          <button style={S.btnSave} onClick={()=>{
+            const ws=XLSX.utils.json_to_sheet(pivotData.map(r=>({Empresa:r.companyName||"",Operadora:r.operadoraName||"","Nº Linha":r.numeroLinha||"",Plano:r.plano||"",...Object.fromEntries(activeMeses.map(m=>[m,r.meses[m]||""]))})));
+            const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Análise");XLSX.writeFile(wb,"relatorio-analise-linhas.xlsx");
+          }}>⬇️ Excel</button>
+        </div>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,alignItems:"flex-start"}}>
         <select value={filtEmp} onChange={e=>setFiltEmp(e.target.value)} style={{...S.select,width:"auto",minWidth:160}}>
@@ -4937,6 +4971,7 @@ function RelatorioAnaliseLinhasScreen({user}){
         <select value={filtConsumo} onChange={e=>setFiltConsumo(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
           {["Todos","Zerados","Não zerados"].map(v=><option key={v}>{v}</option>)}
         </select>
+        <button style={S.btnSave} onClick={()=>setSearched(true)}>Filtrar</button>
       </div>
       {mesesDispo.length>0&&(
         <div style={{marginBottom:14}}>
@@ -4946,8 +4981,8 @@ function RelatorioAnaliseLinhasScreen({user}){
           </div>
         </div>
       )}
-      <div style={{fontSize:12,color:C.textLight,marginBottom:8}}>{pivotData.length} linha(s)</div>
-      {pivotData.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📊</span>Nenhum dado encontrado.</div>:(
+      {searched&&<div style={{fontSize:12,color:C.textLight,marginBottom:8}}>{pivotData.length} linha(s)</div>}
+      {!searched?<div style={S.emptyState}><span style={S.emptyIcon}>📊</span>Use os filtros e clique em Filtrar.</div>:pivotData.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📊</span>Nenhum dado encontrado.</div>:(
         <div style={{overflowX:"auto"}}>
           <table style={{...S.table,minWidth:600}}>
             <thead><tr>{["Empresa","Operadora","Nº Linha","Plano",...activeMeses].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
@@ -4977,6 +5012,7 @@ function RelatorioResumoLinhasScreen({user}){
   const[filtEmp,setFiltEmp]=useState("");
   const[filtOp,setFiltOp]=useState("");
   const[selMeses,setSelMeses]=useState([]);
+  const[searched,setSearched]=useState(false);
 
   useEffect(()=>{
     if(!p?.view)return;
@@ -5050,7 +5086,19 @@ function RelatorioResumoLinhasScreen({user}){
 
   return(
     <div style={S.card}>
-      <div style={S.cardHeader}><span style={S.cardTitle}>📋 Relatório de Resumo de Linhas</span></div>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📋 Relatório de Resumo de Linhas</span>
+        <div style={{display:"flex",gap:8}}>
+          <button style={S.btnSave} disabled={filtered.length===0} onClick={()=>{
+            const doc=new jsPDF({orientation:"landscape"});doc.setFontSize(14);doc.text("Relatório de Resumo de Linhas",14,14);
+            autoTable(doc,{startY:20,head:[["Empresa / Operadora","Qtde Linhas","Linhas Consumo Zero","Consumo Total","Valor Total"]],body:[...summary.byEmpOp.map(r=>[`${r.cn} / ${r.on}`,r.lines.size,r.zero.size,fmtNum(r.c),fmtNum(r.v)]),["TOTAL GERAL",summary.totLines,summary.totZero,fmtNum(summary.totC),fmtNum(summary.totV)]],styles:{fontSize:9},headStyles:{fillColor:[97,97,97]}});
+            doc.save("relatorio-resumo-linhas.pdf");
+          }}>⬇ PDF</button>
+          <button style={S.btnSave} disabled={filtered.length===0} onClick={()=>{
+            const ws=XLSX.utils.json_to_sheet([...summary.byEmpOp.map(r=>({"Empresa / Operadora":`${r.cn} / ${r.on}`,"Qtde Linhas":r.lines.size,"Linhas Consumo Zero":r.zero.size,"Consumo Total":fmtNum(r.c),"Valor Total":fmtNum(r.v)})),{"Empresa / Operadora":"TOTAL GERAL","Qtde Linhas":summary.totLines,"Linhas Consumo Zero":summary.totZero,"Consumo Total":fmtNum(summary.totC),"Valor Total":fmtNum(summary.totV)}]);
+            const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Resumo Linhas");XLSX.writeFile(wb,"relatorio-resumo-linhas.xlsx");
+          }}>⬇ Excel</button>
+        </div>
+      </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
         <select value={filtEmp} onChange={e=>setFiltEmp(e.target.value)} style={{...S.select,width:"auto",minWidth:160}}>
           <option value="">Todas as empresas</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
@@ -5058,6 +5106,7 @@ function RelatorioResumoLinhasScreen({user}){
         <select value={filtOp} onChange={e=>setFiltOp(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
           <option value="">Todas as operadoras</option>{operadoras.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
         </select>
+        <button style={S.btnSave} onClick={()=>setSearched(true)}>Filtrar</button>
       </div>
       {mesesDispo.length>0&&(
         <div style={{marginBottom:14}}>
@@ -5067,7 +5116,7 @@ function RelatorioResumoLinhasScreen({user}){
           </div>
         </div>
       )}
-      {filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum dado encontrado.</div>:(
+      {!searched?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Use os filtros e clique em Filtrar.</div>:filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum dado encontrado.</div>:(
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:16}}>
           {[
             {title:"Quantidade de Linhas",rows:[...summary.byEmpOp.map(r=>({lbl:`${r.cn} / ${r.on}`,val:r.lines.size})),...summary.byEmp.map(r=>({lbl:`Empresa: ${r.n}`,val:r.lines.size})),...summary.byOp.map(r=>({lbl:`Operadora: ${r.n}`,val:r.lines.size})),{lbl:"Total",val:summary.totLines,bold:true}]},
@@ -5098,6 +5147,7 @@ function ResumoAtivosScreen({user}){
   const[filtSerie,setFiltSerie]=useState("");
   const[filtDoc,setFiltDoc]=useState("");
   const[filtStatus,setFiltStatus]=useState("");
+  const[searched,setSearched]=useState(false);
 
   useEffect(()=>{
     if(!p?.view)return;
@@ -5137,10 +5187,17 @@ function ResumoAtivosScreen({user}){
     <div style={S.card}>
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>📦 Resumo de Ativos</span>
-        <button style={S.btnSave} onClick={()=>{
-          const ws=XLSX.utils.json_to_sheet(grouped.map(r=>({"Tipo de Ativo":r.tipo,"Nome do Ativo":r.ativo,"Quantidade":r.count})));
-          const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Resumo");XLSX.writeFile(wb,"resumo-ativos.xlsx");
-        }}>⬇️ Excel</button>
+        <div style={{display:"flex",gap:8}}>
+          <button style={S.btnSave} onClick={()=>{
+            const doc=new jsPDF();doc.setFontSize(14);doc.text("Resumo de Ativos",14,14);
+            autoTable(doc,{startY:20,head:[["Tipo de Ativo","Nome do Ativo","Quantidade"]],body:grouped.map(r=>[r.tipo,r.ativo,r.count]),styles:{fontSize:9},headStyles:{fillColor:[97,97,97]}});
+            doc.save("resumo-ativos.pdf");
+          }} disabled={grouped.length===0}>⬇ PDF</button>
+          <button style={S.btnSave} onClick={()=>{
+            const ws=XLSX.utils.json_to_sheet(grouped.map(r=>({"Tipo de Ativo":r.tipo,"Nome do Ativo":r.ativo,"Quantidade":r.count})));
+            const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Resumo");XLSX.writeFile(wb,"resumo-ativos.xlsx");
+          }}>⬇️ Excel</button>
+        </div>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
         <input placeholder="Nome Funcionário..." value={filtNome} onChange={e=>setFiltNome(e.target.value)} style={{...S.input,width:"auto",minWidth:160,padding:"6px 10px",fontSize:13}}/>
@@ -5156,9 +5213,10 @@ function ResumoAtivosScreen({user}){
         <select value={filtStatus} onChange={e=>setFiltStatus(e.target.value)} style={{...S.select,width:"auto",minWidth:130}}>
           <option value="">Todos os status</option>{stOpts.map(s=><option key={s}>{s}</option>)}
         </select>
+        <button style={S.btnSave} onClick={()=>setSearched(true)}>Filtrar</button>
       </div>
-      <div style={{fontSize:12,color:C.textLight,marginBottom:8}}>{filtered.length} item(ns) · {grouped.length} grupo(s)</div>
-      {grouped.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum dado encontrado.</div>:(
+      {searched&&<div style={{fontSize:12,color:C.textLight,marginBottom:8}}>{filtered.length} item(ns) · {grouped.length} grupo(s)</div>}
+      {!searched?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Use os filtros e clique em Filtrar.</div>:grouped.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum dado encontrado.</div>:(
         <table style={S.table}>
           <thead><tr>{["Tipo de Ativo","Nome do Ativo","Quantidade"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
           <tbody>{grouped.map((r,i)=>{
@@ -5194,6 +5252,7 @@ function InventarioAtivosScreen({user}){
   const[filtIccid,setFiltIccid]=useState("");
   const[filtAcesso,setFiltAcesso]=useState("");
   const[filtEstrutura,setFiltEstrutura]=useState("");
+  const[searched,setSearched]=useState(false);
 
   useEffect(()=>{
     if(!p?.view)return;
@@ -5244,7 +5303,19 @@ function InventarioAtivosScreen({user}){
     <div style={S.card}>
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>📋 Inventário de Ativos</span>
-        <button style={S.btnSave} onClick={exportExcel}>⬇️ Excel</button>
+        <div style={{display:"flex",gap:8}}>
+          <button style={S.btnSave} onClick={()=>{
+            const doc=new jsPDF({orientation:"landscape"});doc.setFontSize(14);doc.text("Inventário de Ativos",14,14);
+            const body=[];
+            for(const[nome,itens] of grouped){
+              body.push([{content:`Funcionário: ${nome}`,colSpan:10,styles:{fillColor:[240,165,0],textColor:[255,255,255],fontStyle:"bold",fontSize:9}}]);
+              itens.forEach(r=>body.push([r.tipoAtivoName||"",r.companyName||"",r.ativoNome||"",r.numeroLinha||"",r.marca||"",r.modelo||"",r.numeroSerie||"",r.imeiSlot1||"",r.iccid||"",r.numeroDocumento||""]));
+            }
+            autoTable(doc,{startY:20,head:[["Tipo de Ativo","Empresa","Nome do Ativo","Nº Linha","Marca","Modelo","Nº Série","IMEI 1","ICCID","Nº Documento"]],body,styles:{fontSize:7},headStyles:{fillColor:[97,97,97]}});
+            doc.save("inventario-ativos.pdf");
+          }} disabled={grouped.length===0}>⬇ PDF</button>
+          <button style={S.btnSave} onClick={exportExcel}>⬇️ Excel</button>
+        </div>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
         <input placeholder="Nome Funcionário..." value={filtNome} onChange={e=>setFiltNome(e.target.value)} style={{...S.input,width:"auto",minWidth:160,padding:"6px 10px",fontSize:13}}/>
@@ -5267,9 +5338,10 @@ function InventarioAtivosScreen({user}){
         <input placeholder="ICCID..." value={filtIccid} onChange={e=>setFiltIccid(e.target.value)} style={{...S.input,width:"auto",minWidth:110,padding:"6px 10px",fontSize:13}}/>
         <input placeholder="Acesso..." value={filtAcesso} onChange={e=>setFiltAcesso(e.target.value)} style={{...S.input,width:"auto",minWidth:110,padding:"6px 10px",fontSize:13}}/>
         <input placeholder="Estrutura..." value={filtEstrutura} onChange={e=>setFiltEstrutura(e.target.value)} style={{...S.input,width:"auto",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <button style={S.btnSave} onClick={()=>setSearched(true)}>Filtrar</button>
       </div>
-      <div style={{fontSize:12,color:C.textLight,marginBottom:8}}>{filtered.length} item(ns)</div>
-      {grouped.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum dado encontrado.</div>:(
+      {searched&&<div style={{fontSize:12,color:C.textLight,marginBottom:8}}>{filtered.length} item(ns)</div>}
+      {!searched?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Use os filtros e clique em Filtrar.</div>:grouped.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum dado encontrado.</div>:(
         <div style={{overflowX:"auto"}}>
           <table style={{...S.table,minWidth:900}}>
             <thead><tr>{COLS.map(h=><th key={h} style={{...S.th,fontSize:11}}>{h}</th>)}</tr></thead>
@@ -5826,6 +5898,19 @@ function RelatorioFeriasScreen({user}){
     doc.save("Relatorio_Ferias.pdf");
   };
 
+  const exportFeriasExcel=()=>{
+    if(!rows||!rows.length)return;
+    const wsData=[];
+    rows.forEach(r=>{
+      if(r.periodos&&r.periodos.length){
+        r.periodos.forEach(px=>wsData.push({"Empresa":r.empresaNome||"","Equipe":r.equipeNome||"","Funcionário":r.funcionarioNome||"","Ano":r.ano||"","Limite Dias":r.dataLimite||"","Data Inicial":px.dataInicial||"","Data Final":px.dataFinal||"","Qtde Dias":px.qtdeDias??0,"Status":px.status||""}));
+      }else{
+        wsData.push({"Empresa":r.empresaNome||"","Equipe":r.equipeNome||"","Funcionário":r.funcionarioNome||"","Ano":r.ano||"","Limite Dias":r.dataLimite||"","Data Inicial":"","Data Final":"","Qtde Dias":0,"Status":""});
+      }
+    });
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(wsData),"Férias");XLSX.writeFile(wb,"Relatorio_Ferias.xlsx");
+  };
+
   const DtRange=({label,vDe,setDe,vAte,setAte})=>(
     <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:200}}>
       <label style={S.label}>{label}</label>
@@ -5848,7 +5933,7 @@ function RelatorioFeriasScreen({user}){
   return(
     <div>
       <div style={S.card}>
-        <div style={S.cardHeader}><span style={S.cardTitle}>🏖️ Relatório de Férias</span></div>
+        <div style={S.cardHeader}><span style={S.cardTitle}>🏖️ Relatório de Férias</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportPDF} disabled={!rows||rows.length===0}>⬇ PDF</button><button style={S.btnSave} onClick={exportFeriasExcel} disabled={!rows||rows.length===0}>⬇ Excel</button></div></div>
 
         {/* Linha 1: filtros principais */}
         <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",marginBottom:10}}>
@@ -5935,7 +6020,6 @@ function RelatorioFeriasScreen({user}){
             <div style={{...S.card,marginTop:16}}>
               <div style={{...S.cardHeader,flexWrap:"wrap",gap:8}}>
                 <span style={S.cardTitle}>Resultados ({rows.length} registro{rows.length!==1?"s":""})</span>
-                <button style={{...S.btnCancel,display:"flex",alignItems:"center",gap:6}} onClick={exportPDF}>📄 Exportar PDF</button>
               </div>
               {rows.map((r,i)=>(
                 <div key={r.feriasEquipeId||i} style={{marginBottom:16,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
@@ -6188,11 +6272,16 @@ function RelatorioFolgasScreen({user}){
     doc.save("relatorio-folgas.pdf");
   };
 
+  const exportFolgasExcel=()=>{
+    const wsData=items.map(r=>({"Equipe":r.equipeNome||"","Funcionário":r.funcionarioNome||"","Data":r.data||"","Início":r.horaInicio||"","Fim":r.horaFim||"","Total":r.totalHoras||"","Compensado":r.compensado||"","Observação":r.observacao||""}));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(wsData),"Folgas");XLSX.writeFile(wb,"relatorio-folgas.xlsx");
+  };
+
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
 
   return(
     <div style={S.card}>
-      <div style={S.cardHeader}><span style={S.cardTitle}>📋 Relatório — Controle de Folgas</span></div>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📋 Relatório — Controle de Folgas</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportPDF} disabled={items.length===0}>⬇ PDF</button><button style={S.btnSave} onClick={exportFolgasExcel} disabled={items.length===0}>⬇ Excel</button></div></div>
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16,padding:12,background:C.bg,borderRadius:8}}>
         <select style={{...S.input,width:160}} value={filters.empresa} onChange={e=>setFilters(f=>({...f,empresa:e.target.value}))}>
           <option value="">Empresa</option>
@@ -6208,7 +6297,6 @@ function RelatorioFolgasScreen({user}){
           <option>Sim</option><option>Não</option>
         </select>
         <button style={S.btnSave} onClick={load}><Icon name="search" size={13}/> Pesquisar</button>
-        {items.length>0&&<button style={{...S.btnCancel,background:"#C62828",color:"#fff",border:"none"}} onClick={exportPDF}><Icon name="file" size={13}/> PDF</button>}
       </div>
       {loading?<Spinner/>:Object.keys(grouped).length===0
         ?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Use os filtros e clique em Gerar.</div>
@@ -8371,6 +8459,13 @@ function RelatorioLinksScreen({user}){
 
   return(
     <div style={{padding:24,maxWidth:1200}}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>🔗 Relatório de Links</span>
+        <div style={{display:"flex",gap:8}}>
+          <button style={S.btnSave} onClick={exportPdf} disabled={items.length===0}>⬇ PDF</button>
+          <button style={S.btnSave} onClick={exportExcel} disabled={items.length===0}>⬇ Excel</button>
+        </div>
+      </div>
       {/* Filtros */}
       <div style={{background:C.surface,borderRadius:8,padding:16,marginBottom:20,display:"flex",flexWrap:"wrap",gap:12,alignItems:"flex-end"}}>
         <div style={{flex:"1 1 130px"}}>
@@ -8402,10 +8497,6 @@ function RelatorioLinksScreen({user}){
           <SelectField value={filters.status} onChange={v=>fSet("status",v)} options={[{value:"",label:"Todos"},...statusOpts.map(s=>({value:s,label:s}))]}/>
         </div>
         <button onClick={()=>setApplied({...filters})} style={{...S.btn,background:C.primary,color:C.white,padding:"8px 20px",whiteSpace:"nowrap"}}>Aplicar</button>
-        {items.length>0&&<>
-          <button onClick={exportPdf} style={{...S.btn,background:"#dc2626",color:C.white,padding:"8px 16px",whiteSpace:"nowrap"}}>PDF</button>
-          <button onClick={exportExcel} style={{...S.btn,background:"#16a34a",color:C.white,padding:"8px 16px",whiteSpace:"nowrap"}}>Excel</button>
-        </>}
       </div>
 
       {loading&&<div style={{textAlign:"center",padding:32}}><Spinner/></div>}
@@ -8596,6 +8687,13 @@ function RelatorioFirewallScreen({user}){
 
   return(
     <div style={{padding:24,maxWidth:1100}}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>🔥 Relatório de Firewall</span>
+        <div style={{display:"flex",gap:8}}>
+          <button style={S.btnSave} onClick={exportPdf} disabled={items.length===0}>⬇ PDF</button>
+          <button style={S.btnSave} onClick={exportExcel} disabled={items.length===0}>⬇ Excel</button>
+        </div>
+      </div>
       {/* Filtros */}
       <div style={{background:C.surface,borderRadius:8,padding:16,marginBottom:20,display:"flex",flexWrap:"wrap",gap:12,alignItems:"flex-end"}}>
         <div style={{flex:"1 1 160px"}}>
@@ -8627,10 +8725,6 @@ function RelatorioFirewallScreen({user}){
           <SelectField value={filters.status} onChange={v=>fSet("status",v)} options={[{value:"",label:"Todos"},{value:"Ativo",label:"Ativo"},{value:"Inativo",label:"Inativo"}]}/>
         </div>
         <button onClick={applyFilters} style={{...S.btn,background:C.primary,color:C.white,padding:"8px 20px",whiteSpace:"nowrap"}}>Aplicar</button>
-        {items.length>0&&<>
-          <button onClick={exportPdf} style={{...S.btn,background:"#dc2626",color:C.white,padding:"8px 16px",whiteSpace:"nowrap"}}>PDF</button>
-          <button onClick={exportExcel} style={{...S.btn,background:"#16a34a",color:C.white,padding:"8px 16px",whiteSpace:"nowrap"}}>Excel</button>
-        </>}
       </div>
 
       {loading&&<div style={{textAlign:"center",padding:32}}><Spinner/></div>}
@@ -8961,12 +9055,13 @@ function MovimentacaoItensScreen({user}){
       {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhuma movimentação encontrada</div>:(
         <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
-            {["Data","Item","Estoque","CCusto Despesa","Qtde Estoque","CCusto Consumidor","Qtde Consumida","Qtde Solicitada","Status"].map(h=>(
+            {["Num Sol.","Data","Item","Estoque","CCusto Despesa","Qtde Estoque","CCusto Consumidor","Qtde Consumida","Qtde Solicitada","Status"].map(h=>(
               <th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>
             ))}
           </tr></thead>
           <tbody>{items.map(i=>(
             <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={{...S.td,textAlign:"center",fontVariantNumeric:"tabular-nums"}}>{i.numSolicitacao||"—"}</td>
               <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(i.data)}</td>
               <td style={S.td}>{i.item||"—"}</td>
               <td style={S.td}>{i.estoque||"—"}</td>
@@ -9021,12 +9116,13 @@ function SolicitacaoItensScreen({user}){
       {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhuma solicitação cadastrada</div>:(
         <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
-            {["Data","Item","Estoque","Qtde Solicitada","Qtde Atendida","Status","Ações"].map(h=>(
+            {["Num Solicitação","Data","Item","Estoque","Qtde Solicitada","Qtde Atendida","Status","Ações"].map(h=>(
               <th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>
             ))}
           </tr></thead>
           <tbody>{items.map(i=>(
             <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={{...S.td,textAlign:"center",fontVariantNumeric:"tabular-nums"}}>{i.numero||"—"}</td>
               <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(i.data)}</td>
               <td style={S.td}>{i.item||"—"}</td>
               <td style={S.td}>{i.estoque||"—"}</td>
@@ -9071,39 +9167,48 @@ function SolicitacaoItensScreen({user}){
 // ── ENTREGA DE ÍTENS (s49) ─────────────────────────────────────
 function EntregaItensScreen({user}){
   const[items,setItems]=useState([]);
-  const[disponiveis,setDisponiveis]=useState([]);
   const[ccustos,setCcustos]=useState([]);
+  const[funcionarios,setFuncionarios]=useState([]);
   const[loading,setLoading]=useState(true);
-  const[modal,setModal]=useState(null);
-  const[delId,setDelId]=useState(null);
+  const[modal,setModal]=useState(false);
+  const[linhas,setLinhas]=useState([]);
+  const[saving,setSaving]=useState(false);
   const[err,setErr]=useState("");
-  const[selectedMov,setSelectedMov]=useState(null);
+  const[delId,setDelId]=useState(null);
   const today=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
   const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
   const load=()=>{
     setLoading(true);
-    Promise.all([api.get("/consumo-entrega"),api.get("/consumo-entrega/disponiveis"),api.get("/consumo-ccusto/basic")])
-      .then(([e,d,c])=>{setItems(Array.isArray(e)?e:[]);setDisponiveis(Array.isArray(d)?d:[]);setCcustos(Array.isArray(c)?c:[]);})
+    Promise.all([api.get("/consumo-entrega"),api.get("/consumo-ccusto/basic"),api.get("/relatorio-consumo/selects")])
+      .then(([e,c,sl])=>{setItems(Array.isArray(e)?e:[]);setCcustos(Array.isArray(c)?c:[]);setFuncionarios(sl?.funcionarios||[]);})
       .catch(()=>{}).finally(()=>setLoading(false));
   };
   useEffect(()=>{load();},[]);
-  const openNew=()=>{setErr("");setSelectedMov(null);setModal({movimentacaoId:"",data:today(),ccustoConsumidorId:"",observacao:""});};
-  const onSelectMov=v=>{
-    setSelectedMov(disponiveis.find(d=>d.id===v)||null);
-    setModal(m=>({...m,movimentacaoId:v}));
+  const openNew=()=>{
+    setErr("");
+    api.get("/consumo-entrega/disponiveis-agrupados").then(d=>{
+      setLinhas((Array.isArray(d)?d:[]).map(l=>({...l,qtdeEntregue:"",data:today(),ccustoConsumidorId:"",funcionarioId:"",observacao:""})));
+      setModal(true);
+    }).catch(()=>{});
   };
-  const save=async()=>{
-    if(!modal.movimentacaoId||!modal.data||!modal.ccustoConsumidorId){setErr("Item disponível, Data e CCusto Consumidor são obrigatórios.");return;}
-    try{
-      await api.post("/consumo-entrega",{movimentacaoId:modal.movimentacaoId,data:modal.data,ccustoConsumidorId:modal.ccustoConsumidorId,observacao:modal.observacao||null});
-      setModal(null);load();
-    }catch(e){setErr(e?.error||e.message);}
+  const setLinha=(idx,field,val)=>setLinhas(ls=>ls.map((l,i)=>i!==idx?l:{...l,[field]:val}));
+  const save=()=>{
+    const itens=linhas.filter(l=>Number(l.qtdeEntregue)>0).map(l=>({itemId:l.itemId,estoqueId:l.estoqueId,qtdeEntregue:Number(l.qtdeEntregue),data:l.data,ccustoConsumidorId:l.ccustoConsumidorId,funcionarioId:l.funcionarioId||null,observacao:l.observacao||null}));
+    if(itens.length===0){setErr("Informe a Qtde Entregue em ao menos um item.");return;}
+    const invalido=itens.find(l=>!l.data||!l.ccustoConsumidorId);
+    if(invalido){setErr("Data e CCusto Consumidor são obrigatórios para cada item com Qtde Entregue.");return;}
+    const excedido=linhas.find(l=>l.qtdeEntregue!==""&&Number(l.qtdeEntregue)>l.qtdeEstoque);
+    if(excedido){setErr("Qtde Entregue não pode ser maior que Qtde Estoque.");return;}
+    setSaving(true);setErr("");
+    api.post("/consumo-entrega",{itens})
+      .then(()=>{setModal(false);load();}).catch(e=>setErr(e?.error||"Erro ao salvar.")).finally(()=>setSaving(false));
   };
   const del=async()=>{
     try{await api.delete(`/consumo-entrega/${delId}`);setDelId(null);load();}
     catch(e){alert(e?.error||e.message);}
   };
   const canI=act=>user.permissions?.s49?.[act];
+  const inputRO={...S.input,background:C.bg,cursor:"not-allowed",opacity:0.8};
   return(
     <div style={S.card}>
       <div style={S.cardHeader}>
@@ -9117,6 +9222,7 @@ function EntregaItensScreen({user}){
             <th style={S.th}>Item</th>
             <th style={S.th}>Estoque</th>
             <th style={S.th}>CCusto Consumidor</th>
+            <th style={S.th}>Funcionário</th>
             <th style={S.th}>Observação</th>
             <th style={{...S.th,width:100}}>Ações</th>
           </tr></thead>
@@ -9126,6 +9232,7 @@ function EntregaItensScreen({user}){
               <td style={S.td}>{i.item||"—"}</td>
               <td style={S.td}>{i.estoque||"—"}</td>
               <td style={S.td}>{i.ccustoConsumidor||"—"}</td>
+              <td style={S.td}>{i.funcionario||"—"}</td>
               <td style={S.td}>{i.observacao||"—"}</td>
               <td style={S.td}>
                 {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(i.id)}>Excluir</button>}
@@ -9134,35 +9241,333 @@ function EntregaItensScreen({user}){
           ))}</tbody></table>
         </div>
       )}
-      {modal&&<Modal title="Nova Entrega" onClose={()=>setModal(null)}>
-        <SelectField label="Item / Estoque disponível" value={modal.movimentacaoId} onChange={onSelectMov} required
-          options={[{value:"",label:"Selecione um item disponível..."},...disponiveis.map(d=>({value:d.id,label:d.label}))]}/>
-        {selectedMov&&(
-          <div style={{background:C.bg,borderRadius:6,padding:"8px 12px",marginBottom:8,fontSize:13,display:"flex",gap:24}}>
-            <span><b>Item:</b> {selectedMov.item}</span>
-            <span><b>Estoque:</b> {selectedMov.estoque}</span>
+      {modal&&<Modal title="Entrega de Ítens" onClose={()=>setModal(false)} extraWide>
+        {linhas.length===0
+          ?<div style={{padding:16,color:C.textLight,textAlign:"center"}}>Nenhum item disponível para entrega.</div>
+          :<div style={{overflowX:"auto"}}>
+            <table style={S.table}><thead><tr>
+              {["Item","Estoque","Qtde Estoque","Qtde Entregue","Data","CCusto Consumidor","Funcionário","Observação"].map(h=>(
+                <th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>{linhas.map((l,idx)=>(
+              <tr key={`${l.itemId}-${l.estoqueId}`} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={S.td}><input value={l.item||""} readOnly style={inputRO}/></td>
+                <td style={S.td}><input value={l.estoque||""} readOnly style={inputRO}/></td>
+                <td style={{...S.td,textAlign:"center"}}><input value={l.qtdeEstoque} readOnly style={{...inputRO,textAlign:"center",width:70}}/></td>
+                <td style={{...S.td,textAlign:"center"}}>
+                  <input type="number" min="0" max={l.qtdeEstoque} value={l.qtdeEntregue}
+                    onChange={e=>setLinha(idx,"qtdeEntregue",e.target.value)}
+                    style={{...S.input,textAlign:"center",width:70}}/>
+                </td>
+                <td style={S.td}>
+                  <input type="date" value={l.data}
+                    onChange={e=>setLinha(idx,"data",e.target.value)}
+                    style={{...S.input,width:140}}/>
+                </td>
+                <td style={S.td}>
+                  <select value={l.ccustoConsumidorId} onChange={e=>setLinha(idx,"ccustoConsumidorId",e.target.value)}
+                    style={{...S.input,minWidth:160}}>
+                    <option value="">Selecione...</option>
+                    {ccustos.map(c=><option key={c.id} value={c.id}>{c.centroCusto}</option>)}
+                  </select>
+                </td>
+                <td style={{...S.td,minWidth:200}}>
+                  <SelectField value={l.funcionarioId} onChange={v=>setLinha(idx,"funcionarioId",v)}
+                    options={funcionarios.map(f=>({value:f.id,label:f.nome}))}
+                    placeholder="Selecione..." label=""/>
+                </td>
+                <td style={S.td}>
+                  <input value={l.observacao} onChange={e=>setLinha(idx,"observacao",e.target.value)}
+                    style={{...S.input,minWidth:160}}/>
+                </td>
+              </tr>
+            ))}</tbody></table>
           </div>
-        )}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
-          <div style={S.formRow}>
-            <label style={S.label}>Data *</label>
-            <input type="date" value={modal.data} onChange={e=>setModal(m=>({...m,data:e.target.value}))} style={S.input}/>
-          </div>
-          <SelectField label="CCusto Consumidor" value={modal.ccustoConsumidorId} onChange={v=>setModal(m=>({...m,ccustoConsumidorId:v}))} required
-            options={[{value:"",label:"Selecione..."},...ccustos.map(c=>({value:c.id,label:c.centroCusto}))]}/>
-        </div>
-        <div style={S.formRow}>
-          <label style={S.label}>Observação</label>
-          <textarea value={modal.observacao||""} onChange={e=>setModal(m=>({...m,observacao:e.target.value}))}
-            rows={3} style={{...S.input,resize:"vertical"}}/>
-        </div>
-        {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
-        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-          <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
-          <button style={S.btnSave} onClick={save}>Salvar</button>
+        }
+        {err&&<div style={{...S.errorMsg,textAlign:"left",marginTop:8}}>{err}</div>}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:16}}>
+          <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+          <button style={S.btnSave} onClick={save} disabled={saving||linhas.length===0}>
+            {saving?"Salvando...":"Salvar"}
+          </button>
         </div>
       </Modal>}
       {delId&&<ConfirmModal msg="Excluir esta entrega e reverter a movimentação?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
+// ── RELATÓRIOS DE CONSUMO ─────────────────────────────────────
+function useRelatorioSelects(){
+  const[sl,setSl]=useState({itens:[],estoques:[],ccustos:[],funcionarios:[],ativos:[]});
+  useEffect(()=>{api.get("/relatorio-consumo/selects").then(r=>setSl(r&&typeof r==="object"?r:sl)).catch(()=>{});},[]);
+  return sl;
+}
+function FiltroBar({children,onFiltrar}){
+  return(
+    <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end",marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
+      {children}
+      <div><button style={{...S.btnSave,marginTop:20}} onClick={onFiltrar}>Filtrar</button></div>
+    </div>
+  );
+}
+function RelTabela({cols,rows,renderRow,empty="Nenhum dado encontrado"}){
+  if(rows.length===0)return<div style={S.emptyState}><span style={S.emptyIcon}>📊</span>{empty}</div>;
+  return(
+    <div style={{overflowX:"auto"}}>
+      <table style={S.table}><thead><tr>
+        {cols.map(h=><th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>)}
+      </tr></thead>
+      <tbody>{rows.map((r,i)=>renderRow(r,i))}</tbody></table>
+    </div>
+  );
+}
+
+// s52 — Movimentação de Ítens - Detalhado
+function RelMovDetalhadoScreen({user}){
+  const sl=useRelatorioSelects();
+  const[f,setF]=useState({numSol:"",dataInicio:"",dataFim:"",itemId:"",estoqueId:"",ccustoDespesaId:"",status:""});
+  const[rows,setRows]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
+  const load=()=>{setLoading(true);const q=new URLSearchParams();Object.entries(f).forEach(([k,v])=>{if(v)q.set(k,v);});api.get(`/relatorio-consumo/movimentacao-detalhado?${q}`).then(r=>setRows(Array.isArray(r)?r:[])).catch(()=>{}).finally(()=>setLoading(false));};
+  const sf=(k,v)=>setF(p=>({...p,[k]:v}));
+  const STATUSES=["Não Processado","Aguardando Compra","Em Estoque","Consumido","Processado"];
+  const COLS=["Num Sol.","Data","Item","Estoque","CCusto Despesa","Status","Qtde Estoque","Qtde Consumida","Qtde Solicitada"];
+  const rowArr=r=>[r.numSolicitacao||"",fmtDate(r.data),r.item||"",r.estoque||"",r.ccustoDespesa||"",r.status||"",r.qtdeEstoque??0,r.qtdeConsumida??0,r.qtdeSolicitada??0];
+  const exportPDF=()=>{const doc=new jsPDF({orientation:"landscape"});doc.setFontSize(14);doc.text("Movimentação de Ítens - Detalhado",14,14);autoTable(doc,{startY:20,head:[COLS],body:rows.map(rowArr),styles:{fontSize:8},headStyles:{fillColor:[37,99,235]}});doc.save("mov-detalhado.pdf");};
+  const exportExcel=()=>{const ws=XLSX.utils.aoa_to_sheet([COLS,...rows.map(rowArr)]);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Detalhado");XLSX.writeFile(wb,"mov-detalhado.xlsx");};
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>Movimentação de Ítens - Detalhado</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportPDF} disabled={rows.length===0}>⬇ PDF</button><button style={S.btnSave} onClick={exportExcel} disabled={rows.length===0}>⬇ Excel</button></div></div>
+      <FiltroBar onFiltrar={load}>
+        <div><label style={S.label}>Num Sol.</label><input type="number" style={{...S.input,width:90}} value={f.numSol} onChange={e=>sf("numSol",e.target.value)}/></div>
+        <div><label style={S.label}>Data De</label><input type="date" style={S.input} value={f.dataInicio} onChange={e=>sf("dataInicio",e.target.value)}/></div>
+        <div><label style={S.label}>Data Até</label><input type="date" style={S.input} value={f.dataFim} onChange={e=>sf("dataFim",e.target.value)}/></div>
+        <div style={{minWidth:160}}><label style={S.label}>Item</label><select style={S.input} value={f.itemId} onChange={e=>sf("itemId",e.target.value)}><option value="">Todos</option>{sl.itens.map(i=><option key={i.id} value={i.id}>{i.item}</option>)}</select></div>
+        <div style={{minWidth:160}}><label style={S.label}>Estoque</label><select style={S.input} value={f.estoqueId} onChange={e=>sf("estoqueId",e.target.value)}><option value="">Todos</option>{sl.estoques.map(e=><option key={e.id} value={e.id}>{e.estoque}</option>)}</select></div>
+        <div style={{minWidth:160}}><label style={S.label}>CCusto Despesa</label><select style={S.input} value={f.ccustoDespesaId} onChange={e=>sf("ccustoDespesaId",e.target.value)}><option value="">Todos</option>{sl.ccustos.map(c=><option key={c.id} value={c.id}>{c.centroCusto}</option>)}</select></div>
+        <div style={{minWidth:140}}><label style={S.label}>Status</label><select style={S.input} value={f.status} onChange={e=>sf("status",e.target.value)}><option value="">Todos</option>{STATUSES.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+      </FiltroBar>
+      {loading?<Spinner/>:<RelTabela cols={["Num Sol.","Data","Item","Estoque","CCusto Despesa","Status","Qtde Estoque","Qtde Consumida","Qtde Solicitada"]} rows={rows} renderRow={(r,i)=>(
+        <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+          <td style={{...S.td,textAlign:"center",fontVariantNumeric:"tabular-nums"}}>{r.numSolicitacao||"—"}</td>
+          <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(r.data)}</td>
+          <td style={S.td}>{r.item||"—"}</td>
+          <td style={S.td}>{r.estoque||"—"}</td>
+          <td style={S.td}>{r.ccustoDespesa||"—"}</td>
+          <td style={S.td}>{r.status||"—"}</td>
+          <td style={{...S.td,textAlign:"center"}}>{r.qtdeEstoque??0}</td>
+          <td style={{...S.td,textAlign:"center"}}>{r.qtdeConsumida??0}</td>
+          <td style={{...S.td,textAlign:"center"}}>{r.qtdeSolicitada??0}</td>
+        </tr>
+      )}/>}
+    </div>
+  );
+}
+
+// s53 — Movimentação de Ítens - Agr Sol
+function RelMovAgrSolScreen({user}){
+  const sl=useRelatorioSelects();
+  const[f,setF]=useState({numSol:"",dataInicio:"",dataFim:"",itemId:"",estoqueId:"",ccustoDespesaId:"",status:""});
+  const[rows,setRows]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
+  const load=()=>{setLoading(true);const q=new URLSearchParams();Object.entries(f).forEach(([k,v])=>{if(v)q.set(k,v);});api.get(`/relatorio-consumo/movimentacao-agr-sol?${q}`).then(r=>setRows(Array.isArray(r)?r:[])).catch(()=>{}).finally(()=>setLoading(false));};
+  const sf=(k,v)=>setF(p=>({...p,[k]:v}));
+  const STATUSES=["Não Processado","Aguardando Compra","Em Estoque","Consumido","Processado"];
+  const exportPDF=()=>{const doc=new jsPDF({orientation:"landscape"});doc.setFontSize(14);doc.text("Movimentação de Ítens - Agr Sol",14,14);autoTable(doc,{startY:20,head:[["Num Sol.","Data","Item","Estoque","Qtde Estoque","Qtde Consumida","Qtde Solicitada"]],body:rows.map(r=>[r.numSolicitacao||"—",fmtDate(r.data),r.item||"—",r.estoque||"—",r.qtdeEstoque??0,r.qtdeConsumida??0,r.qtdeSolicitada??0])});doc.save("mov-agr-sol.pdf");};
+  const exportExcel=()=>{const ws=XLSX.utils.json_to_sheet(rows.map(r=>({"Num Sol.":r.numSolicitacao||"","Data":fmtDate(r.data),"Item":r.item||"","Estoque":r.estoque||"","Qtde Estoque":r.qtdeEstoque??0,"Qtde Consumida":r.qtdeConsumida??0,"Qtde Solicitada":r.qtdeSolicitada??0})));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Agr Sol");XLSX.writeFile(wb,"mov-agr-sol.xlsx");};
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>Movimentação de Ítens - Agr Sol</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportPDF} disabled={rows.length===0}>⬇ PDF</button><button style={S.btnSave} onClick={exportExcel} disabled={rows.length===0}>⬇ Excel</button></div></div>
+      <FiltroBar onFiltrar={load}>
+        <div><label style={S.label}>Num Sol.</label><input type="number" style={{...S.input,width:90}} value={f.numSol} onChange={e=>sf("numSol",e.target.value)}/></div>
+        <div><label style={S.label}>Data De</label><input type="date" style={S.input} value={f.dataInicio} onChange={e=>sf("dataInicio",e.target.value)}/></div>
+        <div><label style={S.label}>Data Até</label><input type="date" style={S.input} value={f.dataFim} onChange={e=>sf("dataFim",e.target.value)}/></div>
+        <div style={{minWidth:160}}><label style={S.label}>Item</label><select style={S.input} value={f.itemId} onChange={e=>sf("itemId",e.target.value)}><option value="">Todos</option>{sl.itens.map(i=><option key={i.id} value={i.id}>{i.item}</option>)}</select></div>
+        <div style={{minWidth:160}}><label style={S.label}>Estoque</label><select style={S.input} value={f.estoqueId} onChange={e=>sf("estoqueId",e.target.value)}><option value="">Todos</option>{sl.estoques.map(e=><option key={e.id} value={e.id}>{e.estoque}</option>)}</select></div>
+        <div style={{minWidth:160}}><label style={S.label}>CCusto Despesa</label><select style={S.input} value={f.ccustoDespesaId} onChange={e=>sf("ccustoDespesaId",e.target.value)}><option value="">Todos</option>{sl.ccustos.map(c=><option key={c.id} value={c.id}>{c.centroCusto}</option>)}</select></div>
+        <div style={{minWidth:140}}><label style={S.label}>Status</label><select style={S.input} value={f.status} onChange={e=>sf("status",e.target.value)}><option value="">Todos</option>{STATUSES.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+      </FiltroBar>
+      {loading?<Spinner/>:<RelTabela cols={["Num Sol.","Data","Item","Estoque","Qtde Estoque","Qtde Consumida","Qtde Solicitada"]} rows={rows} renderRow={(r,i)=>(
+        <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+          <td style={{...S.td,textAlign:"center",fontVariantNumeric:"tabular-nums"}}>{r.numSolicitacao||"—"}</td>
+          <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(r.data)}</td>
+          <td style={S.td}>{r.item||"—"}</td><td style={S.td}>{r.estoque||"—"}</td>
+          <td style={{...S.td,textAlign:"center"}}>{r.qtdeEstoque??0}</td>
+          <td style={{...S.td,textAlign:"center"}}>{r.qtdeConsumida??0}</td>
+          <td style={{...S.td,textAlign:"center"}}>{r.qtdeSolicitada??0}</td>
+        </tr>
+      )}/>}
+    </div>
+  );
+}
+
+// s54 — Movimentação de Ítens - Resumo
+function RelMovResumoScreen({user}){
+  const sl=useRelatorioSelects();
+  const[f,setF]=useState({dataInicio:"",dataFim:"",itemId:"",estoqueId:"",status:""});
+  const[rows,setRows]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const load=()=>{setLoading(true);const q=new URLSearchParams();Object.entries(f).forEach(([k,v])=>{if(v)q.set(k,v);});api.get(`/relatorio-consumo/movimentacao-resumo?${q}`).then(r=>setRows(Array.isArray(r)?r:[])).catch(()=>{}).finally(()=>setLoading(false));};
+  const sf=(k,v)=>setF(p=>({...p,[k]:v}));
+  const STATUSES=["Não Processado","Aguardando Compra","Em Estoque","Consumido","Processado"];
+  const exportPDF=()=>{const doc=new jsPDF({orientation:"landscape"});doc.setFontSize(14);doc.text("Movimentação de Ítens - Resumo",14,14);autoTable(doc,{startY:20,head:[["Item","Estoque","Qtde Estoque","Qtde Consumida","Qtde Solicitada"]],body:rows.map(r=>[r.item||"—",r.estoque||"—",r.qtdeEstoque??0,r.qtdeConsumida??0,r.qtdeSolicitada??0])});doc.save("mov-resumo.pdf");};
+  const exportExcel=()=>{const ws=XLSX.utils.json_to_sheet(rows.map(r=>({"Item":r.item||"","Estoque":r.estoque||"","Qtde Estoque":r.qtdeEstoque??0,"Qtde Consumida":r.qtdeConsumida??0,"Qtde Solicitada":r.qtdeSolicitada??0})));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Resumo");XLSX.writeFile(wb,"mov-resumo.xlsx");};
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>Movimentação de Ítens - Resumo</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportPDF} disabled={rows.length===0}>⬇ PDF</button><button style={S.btnSave} onClick={exportExcel} disabled={rows.length===0}>⬇ Excel</button></div></div>
+      <FiltroBar onFiltrar={load}>
+        <div><label style={S.label}>Data De</label><input type="date" style={S.input} value={f.dataInicio} onChange={e=>sf("dataInicio",e.target.value)}/></div>
+        <div><label style={S.label}>Data Até</label><input type="date" style={S.input} value={f.dataFim} onChange={e=>sf("dataFim",e.target.value)}/></div>
+        <div style={{minWidth:160}}><label style={S.label}>Item</label><select style={S.input} value={f.itemId} onChange={e=>sf("itemId",e.target.value)}><option value="">Todos</option>{sl.itens.map(i=><option key={i.id} value={i.id}>{i.item}</option>)}</select></div>
+        <div style={{minWidth:160}}><label style={S.label}>Estoque</label><select style={S.input} value={f.estoqueId} onChange={e=>sf("estoqueId",e.target.value)}><option value="">Todos</option>{sl.estoques.map(e=><option key={e.id} value={e.id}>{e.estoque}</option>)}</select></div>
+        <div style={{minWidth:140}}><label style={S.label}>Status</label><select style={S.input} value={f.status} onChange={e=>sf("status",e.target.value)}><option value="">Todos</option>{STATUSES.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+      </FiltroBar>
+      {loading?<Spinner/>:<RelTabela cols={["Item","Estoque","Qtde Estoque","Qtde Consumida","Qtde Solicitada"]} rows={rows} renderRow={(r,i)=>(
+        <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+          <td style={S.td}>{r.item||"—"}</td><td style={S.td}>{r.estoque||"—"}</td>
+          <td style={{...S.td,textAlign:"center"}}>{r.qtdeEstoque??0}</td>
+          <td style={{...S.td,textAlign:"center"}}>{r.qtdeConsumida??0}</td>
+          <td style={{...S.td,textAlign:"center"}}>{r.qtdeSolicitada??0}</td>
+        </tr>
+      )}/>}
+    </div>
+  );
+}
+
+// s55 — Relatório Entrega de Ítens
+function RelEntregaScreen({user}){
+  const sl=useRelatorioSelects();
+  const[f,setF]=useState({dataInicio:"",dataFim:"",itemId:"",estoqueId:"",ccustoConsumidorId:"",funcionarioId:""});
+  const[rows,setRows]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
+  const load=()=>{setLoading(true);const q=new URLSearchParams();Object.entries(f).forEach(([k,v])=>{if(v)q.set(k,v);});api.get(`/relatorio-consumo/entrega?${q}`).then(r=>setRows(Array.isArray(r)?r:[])).catch(()=>{}).finally(()=>setLoading(false));};
+  const sf=(k,v)=>setF(p=>({...p,[k]:v}));
+  const exportPDF=()=>{const doc=new jsPDF({orientation:"landscape"});doc.setFontSize(14);doc.text("Entrega de Ítens",14,14);autoTable(doc,{startY:20,head:[["Data","Item","Estoque","Qtde Entregue","CCusto Consumidor","Funcionário","Observação"]],body:rows.map(r=>[fmtDate(r.data),r.item||"—",r.estoque||"—",r.qtdeEntregue??0,r.ccustoConsumidor||"—",r.funcionario||"—",r.observacao||""])});doc.save("entrega-itens.pdf");};
+  const exportExcel=()=>{const ws=XLSX.utils.json_to_sheet(rows.map(r=>({"Data":fmtDate(r.data),"Item":r.item||"","Estoque":r.estoque||"","Qtde Entregue":r.qtdeEntregue??0,"CCusto Consumidor":r.ccustoConsumidor||"","Funcionário":r.funcionario||"","Observação":r.observacao||""})));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Entrega");XLSX.writeFile(wb,"entrega-itens.xlsx");};
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>Entrega de Ítens</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportPDF} disabled={rows.length===0}>⬇ PDF</button><button style={S.btnSave} onClick={exportExcel} disabled={rows.length===0}>⬇ Excel</button></div></div>
+      <FiltroBar onFiltrar={load}>
+        <div><label style={S.label}>Data De</label><input type="date" style={S.input} value={f.dataInicio} onChange={e=>sf("dataInicio",e.target.value)}/></div>
+        <div><label style={S.label}>Data Até</label><input type="date" style={S.input} value={f.dataFim} onChange={e=>sf("dataFim",e.target.value)}/></div>
+        <div style={{minWidth:160}}><label style={S.label}>Item</label><select style={S.input} value={f.itemId} onChange={e=>sf("itemId",e.target.value)}><option value="">Todos</option>{sl.itens.map(i=><option key={i.id} value={i.id}>{i.item}</option>)}</select></div>
+        <div style={{minWidth:160}}><label style={S.label}>Estoque</label><select style={S.input} value={f.estoqueId} onChange={e=>sf("estoqueId",e.target.value)}><option value="">Todos</option>{sl.estoques.map(e=><option key={e.id} value={e.id}>{e.estoque}</option>)}</select></div>
+        <div style={{minWidth:160}}><label style={S.label}>CCusto Consumidor</label><select style={S.input} value={f.ccustoConsumidorId} onChange={e=>sf("ccustoConsumidorId",e.target.value)}><option value="">Todos</option>{sl.ccustos.map(c=><option key={c.id} value={c.id}>{c.centroCusto}</option>)}</select></div>
+        <div style={{minWidth:160}}><label style={S.label}>Funcionário</label><select style={S.input} value={f.funcionarioId} onChange={e=>sf("funcionarioId",e.target.value)}><option value="">Todos</option>{sl.funcionarios.map(fn=><option key={fn.id} value={fn.id}>{fn.nome}</option>)}</select></div>
+      </FiltroBar>
+      {loading?<Spinner/>:<RelTabela cols={["Data","Item","Estoque","Qtde Entregue","CCusto Consumidor","Funcionário","Observação"]} rows={rows} renderRow={(r,i)=>(
+        <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+          <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(r.data)}</td>
+          <td style={S.td}>{r.item||"—"}</td><td style={S.td}>{r.estoque||"—"}</td>
+          <td style={{...S.td,textAlign:"center",fontVariantNumeric:"tabular-nums"}}>{r.qtdeEntregue??0}</td>
+          <td style={S.td}>{r.ccustoConsumidor||"—"}</td>
+          <td style={S.td}>{r.funcionario||"—"}</td>
+          <td style={S.td}>{r.observacao||"—"}</td>
+        </tr>
+      )}/>}
+    </div>
+  );
+}
+
+// s56 — Relatório Registros de Manutenção
+function RelManutencaoScreen({user}){
+  const sl=useRelatorioSelects();
+  const[f,setF]=useState({dataInicio:"",dataFim:"",ativoId:"",empresa:"",marca:"",modelo:"",serie:"",imei:"",funcionarioId:"",ccustoId:"",status:""});
+  const[rows,setRows]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
+  const load=()=>{setLoading(true);const q=new URLSearchParams();Object.entries(f).forEach(([k,v])=>{if(v)q.set(k,v);});api.get(`/relatorio-consumo/manutencao?${q}`).then(r=>setRows(Array.isArray(r)?r:[])).catch(()=>{}).finally(()=>setLoading(false));};
+  const sf=(k,v)=>setF(p=>({...p,[k]:v}));
+  const STATUSES=["Aguardando","Enviado","Disponível","Entregue","Condenado"];
+  const thSub={...S.th,background:"#e8f0fe",fontSize:12};
+  const exportPDF=()=>{
+    const doc=new jsPDF({orientation:"landscape"});doc.setFontSize(14);doc.text("Registros de Manutenção",14,14);
+    const body=[];
+    rows.forEach(reg=>{
+      if(reg.itens&&reg.itens.length>0){
+        reg.itens.forEach(it=>body.push([fmtDate(reg.data),reg.nomeAtivo||"—",reg.empresa||"—",reg.marca||"—",reg.modelo||"—",reg.numeroSerie||"—",reg.imeiSlot1||"—",reg.funcionario||"—",reg.ccusto||"—",reg.status||"—",fmtDate(it.data),it.tipo||"—",it.fornecedor||"—",it.funcionario||"—",it.status||"—"]));
+      }else{
+        body.push([fmtDate(reg.data),reg.nomeAtivo||"—",reg.empresa||"—",reg.marca||"—",reg.modelo||"—",reg.numeroSerie||"—",reg.imeiSlot1||"—",reg.funcionario||"—",reg.ccusto||"—",reg.status||"—","","","","",""]);
+      }
+    });
+    autoTable(doc,{startY:20,head:[["Data Registro","Ativo","Empresa","Marca","Modelo","Nº Série","IMEI","Funcionário","CCusto","Status Registro","Data Item","Tipo","Fornecedor","Funcionário Item","Status Item"]],body,styles:{fontSize:7}});
+    doc.save("registros-manutencao.pdf");
+  };
+  const exportExcel=()=>{
+    const wsData=[];
+    rows.forEach(reg=>{
+      if(reg.itens&&reg.itens.length>0){
+        reg.itens.forEach(it=>wsData.push({"Data Registro":fmtDate(reg.data),"Ativo":reg.nomeAtivo||"","Empresa":reg.empresa||"","Marca":reg.marca||"","Modelo":reg.modelo||"","Nº Série":reg.numeroSerie||"","IMEI":reg.imeiSlot1||"","Funcionário":reg.funcionario||"","CCusto":reg.ccusto||"","Status Registro":reg.status||"","Data Item":fmtDate(it.data),"Tipo":it.tipo||"","Fornecedor":it.fornecedor||"","Funcionário Item":it.funcionario||"","Status Item":it.status||""}));
+      }else{
+        wsData.push({"Data Registro":fmtDate(reg.data),"Ativo":reg.nomeAtivo||"","Empresa":reg.empresa||"","Marca":reg.marca||"","Modelo":reg.modelo||"","Nº Série":reg.numeroSerie||"","IMEI":reg.imeiSlot1||"","Funcionário":reg.funcionario||"","CCusto":reg.ccusto||"","Status Registro":reg.status||"","Data Item":"","Tipo":"","Fornecedor":"","Funcionário Item":"","Status Item":""});
+      }
+    });
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(wsData),"Manutenção");XLSX.writeFile(wb,"registros-manutencao.xlsx");
+  };
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>Registros de Manutenção</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportPDF} disabled={rows.length===0}>⬇ PDF</button><button style={S.btnSave} onClick={exportExcel} disabled={rows.length===0}>⬇ Excel</button></div></div>
+      <FiltroBar onFiltrar={load}>
+        <div><label style={S.label}>Data De</label><input type="date" style={S.input} value={f.dataInicio} onChange={e=>sf("dataInicio",e.target.value)}/></div>
+        <div><label style={S.label}>Data Até</label><input type="date" style={S.input} value={f.dataFim} onChange={e=>sf("dataFim",e.target.value)}/></div>
+        <div style={{minWidth:160}}><label style={S.label}>Nome do Ativo</label><select style={S.input} value={f.ativoId} onChange={e=>sf("ativoId",e.target.value)}><option value="">Todos</option>{sl.ativos.map(a=><option key={a.id} value={a.id}>{a.nome}</option>)}</select></div>
+        <div><label style={S.label}>Empresa</label><input style={S.input} value={f.empresa} onChange={e=>sf("empresa",e.target.value)} placeholder="Filtrar..."/></div>
+        <div><label style={S.label}>Marca</label><input style={S.input} value={f.marca} onChange={e=>sf("marca",e.target.value)} placeholder="Filtrar..."/></div>
+        <div><label style={S.label}>Modelo</label><input style={S.input} value={f.modelo} onChange={e=>sf("modelo",e.target.value)} placeholder="Filtrar..."/></div>
+        <div><label style={S.label}>Nº Série</label><input style={S.input} value={f.serie} onChange={e=>sf("serie",e.target.value)} placeholder="Filtrar..."/></div>
+        <div><label style={S.label}>IMEI</label><input style={S.input} value={f.imei} onChange={e=>sf("imei",e.target.value)} placeholder="Filtrar..."/></div>
+        <div style={{minWidth:160}}><label style={S.label}>Funcionário</label><select style={S.input} value={f.funcionarioId} onChange={e=>sf("funcionarioId",e.target.value)}><option value="">Todos</option>{sl.funcionarios.map(fn=><option key={fn.id} value={fn.id}>{fn.nome}</option>)}</select></div>
+        <div style={{minWidth:160}}><label style={S.label}>CCusto</label><select style={S.input} value={f.ccustoId} onChange={e=>sf("ccustoId",e.target.value)}><option value="">Todos</option>{sl.ccustos.map(c=><option key={c.id} value={c.id}>{c.centroCusto}</option>)}</select></div>
+        <div style={{minWidth:140}}><label style={S.label}>Status</label><select style={S.input} value={f.status} onChange={e=>sf("status",e.target.value)}><option value="">Todos</option>{STATUSES.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+      </FiltroBar>
+      {loading?<Spinner/>:rows.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📊</span>Nenhum dado encontrado</div>:(
+        <div style={{overflowX:"auto"}}>
+          {rows.map((reg,ri)=>(
+            <div key={reg.id||ri} style={{marginBottom:24,border:"2px solid #EA580C",borderRadius:8,overflow:"hidden"}}>
+              <table style={{...S.table,margin:0}}><thead><tr>
+                {["Data","Nome do Ativo","Empresa","Marca","Modelo","Nº Série","IMEI","Funcionário","CCusto","Observação","Status"].map(h=>(
+                  <th key={h} style={{...S.th,background:"#EA580C",color:"#fff",whiteSpace:"nowrap",borderBottom:"none"}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody><tr onMouseOver={e=>e.currentTarget.style.background="#FFF7ED"} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={{...S.td,whiteSpace:"nowrap",fontWeight:600}}>{fmtDate(reg.data)}</td>
+                <td style={{...S.td,fontWeight:600}}>{reg.nomeAtivo||"—"}</td>
+                <td style={S.td}>{reg.empresa||"—"}</td>
+                <td style={S.td}>{reg.marca||"—"}</td>
+                <td style={S.td}>{reg.modelo||"—"}</td>
+                <td style={S.td}>{reg.numeroSerie||"—"}</td>
+                <td style={S.td}>{reg.imeiSlot1||"—"}</td>
+                <td style={S.td}>{reg.funcionario||"—"}</td>
+                <td style={S.td}>{reg.ccusto||"—"}</td>
+                <td style={S.td}>{reg.observacao||"—"}</td>
+                <td style={S.td}>{reg.status||"—"}</td>
+              </tr></tbody></table>
+              {reg.itens&&reg.itens.length>0&&(
+                <table style={{...S.table,margin:0,borderTop:`1px solid #FDBA74`}}><thead><tr>
+                  {["Data","Tipo","Fornecedor","Funcionário","Observação","Status"].map(h=>(
+                    <th key={h} style={{...thSub,background:"#FEF3C7",color:"#92400E",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{reg.itens.map((it,ii)=>(
+                  <tr key={it.id||ii} onMouseOver={e=>e.currentTarget.style.background="#FFFBEB"} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                    <td style={{...S.td,whiteSpace:"nowrap",paddingLeft:32}}>{fmtDate(it.data)}</td>
+                    <td style={S.td}>{it.tipo||"—"}</td>
+                    <td style={S.td}>{it.fornecedor||"—"}</td>
+                    <td style={S.td}>{it.funcionario||"—"}</td>
+                    <td style={S.td}>{it.observacao||"—"}</td>
+                    <td style={S.td}>{it.status||"—"}</td>
+                  </tr>
+                ))}</tbody></table>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -9172,10 +9577,9 @@ function RecebimentoEstoqueScreen({user}){
   const[items,setItems]=useState([]);
   const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(false);
-  const[disponiveis,setDisponiveis]=useState([]);
-  const[search,setSearch]=useState("");
-  const[selected,setSelected]=useState([]);
+  const[linhas,setLinhas]=useState([]);
   const[saving,setSaving]=useState(false);
+  const[err,setErr]=useState("");
   const[delId,setDelId]=useState(null);
   const canI=act=>user.permissions?.s50?.[act];
   const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
@@ -9185,20 +9589,25 @@ function RecebimentoEstoqueScreen({user}){
   };
   useEffect(()=>{load();},[]);
   const openModal=()=>{
-    api.get("/consumo-recebimento/disponiveis").then(d=>{
-      setDisponiveis(Array.isArray(d)?d:[]);
-      setSearch("");setSelected([]);setModal(true);
+    setErr("");
+    api.get("/consumo-recebimento/disponiveis-agrupados").then(d=>{
+      setLinhas((Array.isArray(d)?d:[]).map(l=>({...l,qtdeRecebida:""})));
+      setModal(true);
     }).catch(()=>{});
   };
-  const toggle=id=>setSelected(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
+  const setQtde=(idx,val)=>{
+    setLinhas(ls=>ls.map((l,i)=>i!==idx?l:{...l,qtdeRecebida:val}));
+  };
   const save=()=>{
-    if(selected.length===0)return;
-    setSaving(true);
-    api.post("/consumo-recebimento",{movimentacaoIds:selected})
-      .then(()=>{setModal(false);load();}).catch(()=>{}).finally(()=>setSaving(false));
+    const itens=linhas.filter(l=>Number(l.qtdeRecebida)>0).map(l=>({itemId:l.itemId,estoqueId:l.estoqueId,qtdeRecebida:Number(l.qtdeRecebida)}));
+    if(itens.length===0){setErr("Informe a Qtde Recebida em ao menos um item.");return;}
+    const invalido=linhas.find(l=>l.qtdeRecebida!==""&&(Number(l.qtdeRecebida)<0||Number(l.qtdeRecebida)>l.qtdeSolicitada));
+    if(invalido){setErr(`Qtde Recebida não pode ser maior que Qtde Solicitada.`);return;}
+    setSaving(true);setErr("");
+    api.post("/consumo-recebimento",{itens})
+      .then(()=>{setModal(false);load();}).catch(e=>setErr(e?.error||"Erro ao salvar.")).finally(()=>setSaving(false));
   };
   const del=()=>api.delete(`/consumo-recebimento/${delId}`).then(()=>{setDelId(null);load();}).catch(()=>{});
-  const filtered=disponiveis.filter(d=>(d.label||"").toLowerCase().includes(search.toLowerCase()));
   return(
     <div style={S.card}>
       <div style={S.cardHeader}>
@@ -9223,23 +9632,32 @@ function RecebimentoEstoqueScreen({user}){
           ))}</tbody></table>
         </div>
       }
-      {modal&&<Modal title="Selecionar Itens para Recebimento" onClose={()=>setModal(false)}>
-        <Input label="Pesquisar" value={search} onChange={setSearch} placeholder="Digite para filtrar..."/>
-        <div style={{maxHeight:300,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:6,marginTop:8}}>
-          {filtered.length===0
-            ?<div style={{padding:16,color:C.textLight,textAlign:"center"}}>Nenhum item disponível</div>
-            :filtered.map(d=>(
-              <label key={d.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:selected.includes(d.id)?C.bg:C.white}}>
-                <input type="checkbox" checked={selected.includes(d.id)} onChange={()=>toggle(d.id)}/>
-                <span style={{fontSize:14}}>{d.label}</span>
-              </label>
-            ))
-          }
-        </div>
+      {modal&&<Modal title="Recebimento de Estoque" onClose={()=>setModal(false)} wide>
+        {linhas.length===0
+          ?<div style={{padding:16,color:C.textLight,textAlign:"center"}}>Nenhum item disponível para recebimento.</div>
+          :<div style={{overflowX:"auto"}}>
+            <table style={S.table}><thead><tr>
+              {["Item","Estoque","Qtde Solicitada","Qtde Recebida"].map(h=><th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>)}
+            </tr></thead>
+            <tbody>{linhas.map((l,idx)=>(
+              <tr key={`${l.itemId}-${l.estoqueId}`} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={S.td}><input value={l.item||""} readOnly style={{...S.input,background:C.bg,cursor:"not-allowed",opacity:0.8}}/></td>
+                <td style={S.td}><input value={l.estoque||""} readOnly style={{...S.input,background:C.bg,cursor:"not-allowed",opacity:0.8}}/></td>
+                <td style={{...S.td,textAlign:"center"}}><input value={l.qtdeSolicitada} readOnly style={{...S.input,background:C.bg,cursor:"not-allowed",opacity:0.8,textAlign:"center",width:80}}/></td>
+                <td style={{...S.td,textAlign:"center"}}>
+                  <input type="number" min="0" max={l.qtdeSolicitada} value={l.qtdeRecebida}
+                    onChange={e=>setQtde(idx,e.target.value)}
+                    style={{...S.input,textAlign:"center",width:80}}/>
+                </td>
+              </tr>
+            ))}</tbody></table>
+          </div>
+        }
+        {err&&<div style={{...S.errorMsg,textAlign:"left",marginTop:8}}>{err}</div>}
         <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:16}}>
           <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
-          <button style={{...S.btnSave,opacity:selected.length===0?0.5:1}} onClick={save} disabled={selected.length===0||saving}>
-            {saving?"Salvando...":`OK (${selected.length} selecionado${selected.length!==1?"s":""})`}
+          <button style={S.btnSave} onClick={save} disabled={saving||linhas.length===0}>
+            {saving?"Salvando...":"Salvar"}
           </button>
         </div>
       </Modal>}
@@ -9248,63 +9666,307 @@ function RecebimentoEstoqueScreen({user}){
   );
 }
 
+// ── REGISTROS DE MANUTENÇÃO (s51) ────────────────────────────
+function ManutencaoRegistrosScreen({user}){
+  const[items,setItems]=useState([]);
+  const[selects,setSelects]=useState({ativos:[],funcionarios:[],ccustos:[],fornecedores:[]});
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[modalAtivo,setModalAtivo]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[regRow,setRegRow]=useState(null);
+  const[itens,setItens]=useState([]);
+  const[itensLoading,setItensLoading]=useState(false);
+  const[itemModal,setItemModal]=useState(null);
+  const[delItemId,setDelItemId]=useState(null);
+  const[err,setErr]=useState("");
+  const[itemErr,setItemErr]=useState("");
+  const canI=act=>user.permissions?.s51?.[act];
+  const today=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
+  const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
+  const TIPO_STATUS={"Entrada do Equipamento":"Aguardando","Envio para Manutenção":"Enviado","Retorno de Manutenção":"Disponível","Entrega do Equipamento":"Entregue","Solicitação de Baixa":"Condenado"};
+  const TIPOS=Object.keys(TIPO_STATUS);
+  const tiposDisponiveis=(excludeId=null)=>{
+    const lista=excludeId?itens.filter(it=>it.id!==excludeId):itens;
+    const ultimo=lista.length>0?lista[lista.length-1].tipo:null;
+    if(!ultimo)return["Entrada do Equipamento"];
+    if(ultimo==="Entrada do Equipamento")return["Envio para Manutenção"];
+    if(ultimo==="Envio para Manutenção")return["Retorno de Manutenção"];
+    if(ultimo==="Retorno de Manutenção")return["Entrega do Equipamento","Solicitação de Baixa"];
+    return[];
+  };
+  const statusBadge=s=>{
+    if(!s)return<span style={{...S.badge,background:"#F3F4F6",color:"#6B7280"}}>—</span>;
+    const cfg={Aguardando:{bg:"#FEF3C7",color:"#D97706"},Enviado:{bg:"#DBEAFE",color:"#1D4ED8"},Disponível:{bg:"#D1FAE5",color:"#065F46"},Entregue:{bg:"#EDE9FE",color:"#5B21B6"},Condenado:{bg:"#FEE2E2",color:"#991B1B"}};
+    const c=cfg[s]||{bg:"#F3F4F6",color:"#374151"};
+    return<span style={{...S.badge,background:c.bg,color:c.color}}>{s}</span>;
+  };
+  const load=()=>{
+    setLoading(true);
+    Promise.all([api.get("/manutencao-registros"),api.get("/manutencao-registros/selects")])
+      .then(([r,sl])=>{setItems(Array.isArray(r)?r:[]);setSelects(sl&&typeof sl==="object"?sl:{ativos:[],funcionarios:[],ccustos:[],fornecedores:[]});})
+      .catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+  const onAtivoChange=v=>{
+    const a=selects.ativos.find(x=>x.id===v)||null;
+    setModalAtivo(a);
+    setModal(m=>({...m,ativoId:v,funcionarioId:a?.funcionarioId||""}));
+  };
+  const openNew=()=>{setErr("");setModalAtivo(null);setModal({data:today(),ativoId:"",funcionarioId:"",ccustoId:"",observacao:""});};
+  const openEdit=row=>{
+    setErr("");
+    // Tenta achar o ativo nos selects; se não estiver (já em uso), monta a partir dos dados da linha
+    const a=selects.ativos.find(x=>x.id===row.ativoId)||{
+      id:row.ativoId,
+      label:row.nomeAtivo||"",
+      empresa:row.empresa||"",
+      marca:row.marca||"",
+      modelo:row.modelo||"",
+      numeroSerie:row.numeroSerie||"",
+      imeiSlot1:row.imeiSlot1||"",
+      funcionarioId:row.funcionarioId||null,
+      funcionarioNome:row.funcionario||"",
+    };
+    setModalAtivo(a);
+    const dt=row.data?new Date(row.data):null;
+    const ds=dt?`${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,"0")}-${String(dt.getUTCDate()).padStart(2,"0")}`:"";
+    setModal({id:row.id,data:ds,ativoId:row.ativoId||"",funcionarioId:row.funcionarioId||"",ccustoId:row.ccustoId||"",observacao:row.observacao||""});
+  };
+  const save=async()=>{
+    if(!modal.data||!modal.ativoId){setErr("Data e Ativo são obrigatórios.");return;}
+    try{
+      const body={data:modal.data,ativoId:modal.ativoId,funcionarioId:modal.funcionarioId||null,ccustoId:modal.ccustoId||null,observacao:modal.observacao||null};
+      if(modal.id) await api.put(`/manutencao-registros/${modal.id}`,body);
+      else await api.post("/manutencao-registros",body);
+      setModal(null);load();
+    }catch(e){setErr(e?.error||e.message);}
+  };
+  const del=()=>api.delete(`/manutencao-registros/${delId}`).then(()=>{setDelId(null);load();}).catch(e=>alert(e?.error||e.message));
+  const openRegistros=row=>{
+    setRegRow(row);setItens([]);setItemModal(null);setItemErr("");
+    setItensLoading(true);
+    api.get(`/manutencao-registros/${row.id}/itens`).then(r=>setItens(Array.isArray(r)?r:[])).catch(()=>{}).finally(()=>setItensLoading(false));
+  };
+  const loadItens=id=>{
+    setItensLoading(true);
+    api.get(`/manutencao-registros/${id}/itens`).then(r=>{setItens(Array.isArray(r)?r:[]);load();}).catch(()=>{}).finally(()=>setItensLoading(false));
+  };
+  const openNewItem=()=>{setItemErr("");setItemModal({data:today(),tipo:"",fornecedorId:"",funcionarioId:"",observacao:""});};
+  const openEditItem=it=>{
+    setItemErr("");
+    const dt=it.data?new Date(it.data):null;
+    const ds=dt?`${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,"0")}-${String(dt.getUTCDate()).padStart(2,"0")}`:"";
+    setItemModal({id:it.id,data:ds,tipo:it.tipo||"",fornecedorId:it.fornecedorId||"",funcionarioId:it.funcionarioId||"",observacao:it.observacao||""});
+  };
+  const saveItem=async()=>{
+    if(!itemModal.data||!itemModal.tipo){setItemErr("Data e Tipo são obrigatórios.");return;}
+    try{
+      const body={data:itemModal.data,tipo:itemModal.tipo,fornecedorId:itemModal.fornecedorId||null,funcionarioId:itemModal.funcionarioId||null,observacao:itemModal.observacao||null};
+      if(itemModal.id) await api.put(`/manutencao-registros/itens/${itemModal.id}`,body);
+      else await api.post(`/manutencao-registros/${regRow.id}/itens`,body);
+      setItemModal(null);loadItens(regRow.id);
+    }catch(e){setItemErr(e?.error||e.message);}
+  };
+  const delItem=()=>api.delete(`/manutencao-registros/itens/${delItemId}`).then(()=>{setDelItemId(null);loadItens(regRow.id);}).catch(e=>alert(e?.error||e.message));
+  const COLS=["Data","Nome do Ativo","Empresa","Marca","Modelo","Nº Série","IMEI","Funcionário","Ccusto","Observação","Status","Ações"];
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>Registros de Manutenção</span>
+        {canI("insert")&&<button style={S.btnAdd} onClick={openNew}>+ Novo Registro</button>}
+      </div>
+      {loading?<Spinner/>:items.length===0
+        ?<div style={S.emptyState}><span style={S.emptyIcon}>🔧</span>Nenhum registro de manutenção</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {COLS.map(h=><th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>)}
+          </tr></thead>
+          <tbody>{items.map(i=>(
+            <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(i.data)}</td>
+              <td style={S.td}>{i.nomeAtivo||"—"}</td>
+              <td style={S.td}>{i.empresa||"—"}</td>
+              <td style={S.td}>{i.marca||"—"}</td>
+              <td style={S.td}>{i.modelo||"—"}</td>
+              <td style={S.td}>{i.numeroSerie||"—"}</td>
+              <td style={S.td}>{i.imeiSlot1||"—"}</td>
+              <td style={S.td}>{i.funcionario||"—"}</td>
+              <td style={S.td}>{i.ccusto||"—"}</td>
+              <td style={S.td}>{i.observacao||"—"}</td>
+              <td style={S.td}>{statusBadge(i.status)}</td>
+              <td style={{...S.td,whiteSpace:"nowrap"}}>
+                {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(i)}>Editar</button>}
+                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(i.id)}>Excluir</button>}
+                {canI("view")&&<button style={{...S.actionBtn,background:"#E0E7FF",color:"#3730A3"}} onClick={()=>openRegistros(i)}>Registros</button>}
+              </td>
+            </tr>
+          ))}</tbody></table>
+        </div>
+      }
+      {modal&&<Modal title={modal.id?"Editar Registro de Manutenção":"Novo Registro de Manutenção"} onClose={()=>setModal(null)}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+          <div style={S.formRow}>
+            <label style={S.label}>Data *</label>
+            <input type="date" value={modal.data} onChange={e=>setModal(m=>({...m,data:e.target.value}))} style={S.input}/>
+          </div>
+        </div>
+        <SelectField label="Nome do Ativo *" value={modal.ativoId} onChange={onAtivoChange} required
+          options={[{value:"",label:"Selecione..."},...(modal.ativoId&&!selects.ativos.find(a=>a.id===modal.ativoId)&&modalAtivo?[{value:modal.ativoId,label:modalAtivo.label||modalAtivo.nomeAtivo||""}]:[]),...selects.ativos.map(a=>({value:a.id,label:a.label}))]}/>
+        {modalAtivo&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px",marginBottom:8}}>
+          {[["Empresa",modalAtivo.empresa],["Marca",modalAtivo.marca],["Modelo",modalAtivo.modelo],["Nº Série",modalAtivo.numeroSerie],["IMEI",modalAtivo.imeiSlot1]].map(([lbl,val])=>(
+            <div key={lbl} style={S.formRow}>
+              <label style={S.label}>{lbl}</label>
+              <input value={val||""} readOnly style={{...S.input,background:C.bg,color:C.textLight}}/>
+            </div>
+          ))}
+        </div>}
+        <div style={S.formRow}>
+          <label style={S.label}>Funcionário</label>
+          <input value={modalAtivo?.funcionarioNome||"—"} readOnly style={{...S.input,background:C.bg,color:C.textLight}}/>
+        </div>
+        <SelectField label="Ccusto" value={modal.ccustoId} onChange={v=>setModal(m=>({...m,ccustoId:v}))}
+          options={[{value:"",label:"Selecione..."},...selects.ccustos.map(c=>({value:c.id,label:c.centroCusto}))]}/>
+        <div style={S.formRow}>
+          <label style={S.label}>Observação</label>
+          <textarea value={modal.observacao||""} onChange={e=>setModal(m=>({...m,observacao:e.target.value}))} style={{...S.input,height:72,resize:"vertical"}}/>
+        </div>
+        {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+          <button style={S.btnSave} onClick={save}>Salvar</button>
+        </div>
+      </Modal>}
+      {regRow&&<Modal title={`Registros — ${regRow.nomeAtivo||"Ativo"}`} onClose={()=>setRegRow(null)} extraWide>
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
+          {canI("insert")&&tiposDisponiveis().length>0&&<button style={S.btnAdd} onClick={openNewItem}>+ Novo Registro</button>}
+        </div>
+        {itensLoading?<Spinner/>:itens.length===0
+          ?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum registro lançado</div>
+          :<div style={{overflowX:"auto"}}>
+            <table style={S.table}><thead><tr>
+              {["Data","Tipo","Fornecedor","Funcionário","Observação","Status","Ações"].map(h=><th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>)}
+            </tr></thead>
+            <tbody>{itens.map(it=>(
+              <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(it.data)}</td>
+                <td style={S.td}>{it.tipo||"—"}</td>
+                <td style={S.td}>{it.fornecedor||"—"}</td>
+                <td style={S.td}>{it.funcionario||"—"}</td>
+                <td style={S.td}>{it.observacao||"—"}</td>
+                <td style={S.td}>{statusBadge(it.status)}</td>
+                <td style={{...S.td,whiteSpace:"nowrap"}}>
+                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEditItem(it)}>Editar</button>}
+                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelItemId(it.id)}>Excluir</button>}
+                </td>
+              </tr>
+            ))}</tbody></table>
+          </div>
+        }
+      </Modal>}
+      {itemModal&&<Modal title={itemModal.id?"Editar Registro":"Novo Registro"} onClose={()=>setItemModal(null)}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+          <div style={S.formRow}>
+            <label style={S.label}>Data *</label>
+            <input type="date" value={itemModal.data} onChange={e=>setItemModal(m=>({...m,data:e.target.value}))} style={S.input}/>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Status</label>
+            <input value={TIPO_STATUS[itemModal.tipo]||"—"} readOnly style={{...S.input,background:C.bg,color:C.textLight}}/>
+          </div>
+        </div>
+        <SelectField label="Tipo *" value={itemModal.tipo} onChange={v=>{
+          const fornecOk=v==="Envio para Manutenção";
+          const funcOk=v==="Entrada do Equipamento"||v==="Entrega do Equipamento";
+          setItemModal(m=>({...m,tipo:v,fornecedorId:fornecOk?m.fornecedorId:"",funcionarioId:funcOk?m.funcionarioId:""}));
+        }} required options={[{value:"",label:"Selecione..."},...tiposDisponiveis(itemModal.id||null).map(t=>({value:t,label:t}))]}/>
+        <SelectField label="Fornecedor" value={itemModal.fornecedorId}
+          onChange={v=>setItemModal(m=>({...m,fornecedorId:v}))}
+          disabled={itemModal.tipo!=="Envio para Manutenção"}
+          options={[{value:"",label:itemModal.tipo!=="Envio para Manutenção"?"Não aplicável":"Selecione..."},...selects.fornecedores.map(f=>({value:f.id,label:f.name}))]}/>
+        <SelectField label="Funcionário" value={itemModal.funcionarioId}
+          onChange={v=>setItemModal(m=>({...m,funcionarioId:v}))}
+          disabled={itemModal.tipo!=="Entrada do Equipamento"&&itemModal.tipo!=="Entrega do Equipamento"}
+          options={[{value:"",label:(itemModal.tipo!=="Entrada do Equipamento"&&itemModal.tipo!=="Entrega do Equipamento")?"Não aplicável":"Selecione..."},...selects.funcionarios.map(f=>({value:f.id,label:f.nome}))]}/>
+        <div style={S.formRow}>
+          <label style={S.label}>Observação</label>
+          <textarea value={itemModal.observacao||""} onChange={e=>setItemModal(m=>({...m,observacao:e.target.value}))} style={{...S.input,height:72,resize:"vertical"}}/>
+        </div>
+        {itemErr&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{itemErr}</div>}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button style={S.btnCancel} onClick={()=>setItemModal(null)}>Cancelar</button>
+          <button style={S.btnSave} onClick={saveItem}>Salvar</button>
+        </div>
+      </Modal>}
+      {delId&&<ConfirmModal msg="Excluir este registro de manutenção e todos os seus registros?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+      {delItemId&&<ConfirmModal msg="Excluir este registro?" onConfirm={delItem} onCancel={()=>setDelItemId(null)}/>}
+    </div>
+  );
+}
+
 // ── SIDEBAR ───────────────────────────────────────────────────
 const navConfig=[
   {id:"cadastros",label:"Cadastros",icon:"folder",children:[
-    {id:"s1",label:"Perfis",                      icon:"user"},
-    {id:"s2",label:"Usuários",                    icon:"users"},
-    {id:"s3",label:"Empresas",                    icon:"building"},
-    {id:"s4",label:"Equipes",                     icon:"team"},
-    {id:"s8",label:"Tipo de Veículo",             icon:"car"},
-    {id:"s9",label:"Valor do km",                 icon:"coin"},
-    {id:"s12",label:"Fornecedores",               icon:"factory"},
-    {id:"s16",label:"Operadoras",                 icon:"satellite"},
-    {id:"s17",label:"Linhas Faturadas",           icon:"phone"},
-    {id:"s18",label:"Tipo de Ativo",              icon:"archive"},
-    {id:"s20",label:"Ativos",                     icon:"package"},
+    {id:"s1", label:"Perfis",                      icon:"user"},
+    {id:"s2", label:"Usuários",                    icon:"users"},
+    {id:"s3", label:"Empresas",                    icon:"building"},
     {id:"s22",label:"Funcionários",               icon:"user"},
-    {id:"s23",label:"Modelos de Contrato",        icon:"clipboard"},
-    {id:"s28",label:"Configuração de E-mail",     icon:"mail"},
-    {id:"s33",label:"Configuração de Inventário", icon:"wrench"},
+    {id:"s12",label:"Fornecedores",               icon:"factory"},
     {id:"s39",label:"Filiais",                    icon:"building"},
+    {id:"s4", label:"Equipes",                     icon:"team"},
     {id:"s44",label:"CCusto",                     icon:"coin"},
     {id:"s45",label:"Ítens",                      icon:"package"},
     {id:"s46",label:"Estoque",                    icon:"archive"},
+    {id:"s8", label:"Tipo de Veículo",             icon:"car"},
+    {id:"s9", label:"Valor do km",                 icon:"coin"},
+    {id:"s16",label:"Operadoras",                 icon:"satellite"},
+    {id:"s17",label:"Linhas Faturadas",           icon:"phone"},
+    {id:"s23",label:"Modelos de Contrato",        icon:"clipboard"},
+    {id:"s18",label:"Tipo de Ativo",              icon:"archive"},
+    {id:"s20",label:"Ativos",                     icon:"package"},
+    {id:"s28",label:"Configuração de E-mail",     icon:"mail"},
+    {id:"s33",label:"Configuração de Inventário", icon:"wrench"},
   ]},
   {id:"movimentacoes",label:"Movimentações",icon:"refresh",children:[
     {id:"s5", label:"Sobreaviso/Extra",           icon:"clock"},
     {id:"s7", label:"Extra Avulso",               icon:"zap"},
     {id:"s10",label:"Registro de Km",             icon:"route"},
+    {id:"s35",label:"Controle de Folgas",         icon:"folgas"},
+    {id:"s30",label:"Férias",                     icon:"vacation"},
     {id:"s13",label:"Contratos",                  icon:"contracts"},
+    {id:"s37",label:"Políticas de TI",            icon:"policy"},
     {id:"s19",label:"Linhas Disponíveis",         icon:"signal"},
     {id:"s21",label:"Controle de Ativos",         icon:"monitor"},
     {id:"s29",label:"Histórico de Movimentações", icon:"history"},
-    {id:"s30",label:"Férias",                     icon:"vacation"},
-    {id:"s34",label:"Inventário de Rede",         icon:"network"},
     {id:"s38",label:"Endereços de Rede",          icon:"satellite"},
     {id:"s40",label:"Links",                      icon:"link"},
     {id:"s41",label:"Firewall",                   icon:"monitor"},
-    {id:"s35",label:"Controle de Folgas",         icon:"folgas"},
-    {id:"s37",label:"Políticas de TI",            icon:"policy"},
+    {id:"s34",label:"Inventário de Rede",         icon:"network"},
     {id:"s47",label:"Movimentação de Ítens",      icon:"refresh"},
     {id:"s48",label:"Solicitação de Ítens",       icon:"clipboard"},
     {id:"s49",label:"Entrega de Ítens",           icon:"package"},
     {id:"s50",label:"Recebimento de Estoque",     icon:"inbox"},
+    {id:"s51",label:"Registros de Manutenção",    icon:"build"},
   ]},
   {id:"relatorios",label:"Relatórios",icon:"chart",children:[
     {id:"s6", label:"Relatório de Horas",         icon:"clock"},
-    {id:"s11",label:"Controle de Km",             icon:"route"},
-    {id:"s14",label:"Relatório de Contratos",     icon:"file"},
     {id:"s15",label:"Relatório de Escala",        icon:"calendar"},
+    {id:"s11",label:"Controle de Km",             icon:"route"},
+    {id:"s36",label:"Controle de Folgas",         icon:"calendar"},
+    {id:"s31",label:"Relatório de Férias",        icon:"vacation"},
+    {id:"s32",label:"Composição de Equipe",       icon:"users"},
+    {id:"s14",label:"Relatório de Contratos",     icon:"file"},
     {id:"s24",label:"Análise de Linhas",          icon:"trending"},
     {id:"s25",label:"Resumo de Linhas",           icon:"signal"},
     {id:"s26",label:"Resumo de Ativos",           icon:"package"},
     {id:"s27",label:"Inventário de Ativos",       icon:"archive"},
-    {id:"s31",label:"Relatório de Férias",        icon:"vacation"},
-    {id:"s32",label:"Composição de Equipe",       icon:"users"},
-    {id:"s36",label:"Controle de Folgas",         icon:"calendar"},
-    {id:"s43",label:"Links",                      icon:"link"},
-    {id:"s42",label:"Firewall",                   icon:"monitor"},
+    {id:"s42",label:"Firewall",                               icon:"monitor"},
+    {id:"s43",label:"Links",                                  icon:"link"},
+    {id:"s52",label:"Movimentação de Ítens - Detalhado",      icon:"file"},
+    {id:"s53",label:"Movimentação de Ítens - Agr Sol",        icon:"file"},
+    {id:"s54",label:"Movimentação de Ítens - Resumo",         icon:"file"},
+    {id:"s55",label:"Entrega de Ítens",                       icon:"file"},
+    {id:"s56",label:"Registros de Manutenção",                icon:"file"},
   ]},
 ];
 function Sidebar({user,currentScreen,onNavigate,onLogout,onClose,isMobile}){
@@ -9410,6 +10072,12 @@ const screenTitles={
   s48:"Movimentações › Solicitação de Ítens",
   s49:"Movimentações › Entrega de Ítens",
   s50:"Movimentações › Recebimento de Estoque",
+  s51:"Movimentações › Registros de Manutenção",
+  s52:"Relatórios › Movimentação de Ítens - Detalhado",
+  s53:"Relatórios › Movimentação de Ítens - Agr Sol",
+  s54:"Relatórios › Movimentação de Ítens - Resumo",
+  s55:"Relatórios › Entrega de Ítens",
+  s56:"Relatórios › Registros de Manutenção",
   s35:"Movimentações › Controle de Folgas",
   s36:"Relatórios › Controle de Folgas",
   s37:"Movimentações › Políticas de TI",
@@ -9488,6 +10156,12 @@ export default function App(){
     s48:<SolicitacaoItensScreen user={user}/>,
     s49:<EntregaItensScreen user={user}/>,
     s50:<RecebimentoEstoqueScreen user={user}/>,
+    s51:<ManutencaoRegistrosScreen user={user}/>,
+    s52:<RelMovDetalhadoScreen user={user}/>,
+    s53:<RelMovAgrSolScreen user={user}/>,
+    s54:<RelMovResumoScreen user={user}/>,
+    s55:<RelEntregaScreen user={user}/>,
+    s56:<RelManutencaoScreen user={user}/>,
   };
 
   const UserAvatar=({size=32,style:st={}})=>(
