@@ -3383,7 +3383,7 @@ function AtivosScreen({user}){
     setCsvImpBusy(true);
     try{
       const res=await api.post("/ativos/importar",{linhas:csvImpRows});
-      alert(`✅ Importação concluída!\nInseridos: ${res.inseridos}${res.erros?.length?"\nErros: "+res.erros.join(", "):""}`);
+      alert(`✅ Importação concluída!\nInseridos: ${res.inseridos}\nIgnorados (duplicados): ${res.ignorados||0}${res.erros?.length?"\nErros: "+res.erros.join(", "):""}`);
       setCsvImpModal(false);setCsvImpRows(null);load();
     }catch(e){alert("❌ "+(e?.error||e.message));}
     setCsvImpBusy(false);
