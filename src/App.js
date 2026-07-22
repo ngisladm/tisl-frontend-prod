@@ -34,6 +34,16 @@ const api = {
   put:    (path, body) => api.request("PUT",    path, body),
   patch:  (path, body) => api.request("PATCH",  path, body),
   delete: (path)       => api.request("DELETE", path),
+  async upload(path, formData) {
+    const res  = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: api.token ? { Authorization: `Bearer ${api.token}` } : {},
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Erro no upload.");
+    return data;
+  },
 };
 
 const C = {
@@ -222,7 +232,15 @@ function SelectField({label,value,onChange,options=[],required,disabled}){
     if(disabled)return;
     if(triggerRef.current){
       const r=triggerRef.current.getBoundingClientRect();
-      setDropPos({top:r.bottom+4,left:r.left,width:r.width});
+      const spaceBelow=window.innerHeight-r.bottom-8;
+      const spaceAbove=r.top-8;
+      const openUp=spaceBelow<260&&spaceAbove>spaceBelow;
+      setDropPos({
+        top:openUp?undefined:r.bottom+4,
+        bottom:openUp?window.innerHeight-r.top+4:undefined,
+        maxH:openUp?spaceAbove:spaceBelow,
+        left:r.left,width:r.width,openUp
+      });
     }
     setOpen(o=>!o);
     setSearch("");
@@ -237,13 +255,14 @@ function SelectField({label,value,onChange,options=[],required,disabled}){
           <span style={{marginLeft:6,fontSize:10,color:C.textLight,flexShrink:0}}>{open?"▲":"▼"}</span>
         </div>
         {open&&(
-          <div style={{position:"fixed",top:dropPos.top,left:dropPos.left,width:Math.max(dropPos.width,320),zIndex:9999,
-            background:C.white,border:`1px solid ${C.border}`,borderRadius:4,boxShadow:"0 6px 24px rgba(0,0,0,.22)",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"6px 8px",borderBottom:`1px solid ${C.border}`}}>
+          <div style={{position:"fixed",top:dropPos.top,bottom:dropPos.bottom,left:dropPos.left,width:Math.max(dropPos.width,320),zIndex:9999,
+            maxHeight:dropPos.maxH||360,
+            background:C.white,border:`1px solid ${C.border}`,borderRadius:4,boxShadow:"0 6px 24px rgba(0,0,0,.22)",display:"flex",flexDirection:dropPos.openUp?"column-reverse":"column"}}>
+            <div style={{padding:"6px 8px",borderTop:dropPos.openUp?`1px solid ${C.border}`:"none",borderBottom:dropPos.openUp?"none":`1px solid ${C.border}`,flexShrink:0}}>
               <input autoFocus value={search} onChange={e=>setSearch(e.target.value)}
                 placeholder="Pesquisar..." style={{...S.input,margin:0,padding:"4px 8px",fontSize:12,width:"100%",boxSizing:"border-box"}}/>
             </div>
-            <div style={{overflowY:"auto",maxHeight:360}}>
+            <div style={{overflowY:"auto",flex:1}}>
               <div style={{padding:"8px 12px",cursor:"pointer",color:C.textLight,fontSize:13}}
                 onMouseDown={()=>{onChange("");setOpen(false);}}>Selecione...</div>
               {filtered.length===0
@@ -2530,6 +2549,23 @@ function OperadorasScreen({user}){
   );
 }
 
+// Parser genérico de CSV com cabeçalho — retorna array de objetos {header: valor}
+function parseCSVGeneric(text){
+  // remove BOM que o Excel adiciona em arquivos UTF-8
+  const clean=text.replace(/^﻿/,"");
+  const lines=clean.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2)return{headers:[],rows:[]};
+  const sep=(lines[0].split(";").length>=lines[0].split(",").length)?";":","
+  const headers=lines[0].split(sep).map(h=>h.trim().replace(/^"|"$/g,""));
+  const rows=lines.slice(1).map(l=>{
+    const cols=l.split(sep).map(c=>c.trim().replace(/^"|"$/g,""));
+    const obj={};
+    headers.forEach((h,i)=>obj[h]=cols[i]||"");
+    return obj;
+  }).filter(r=>Object.values(r).some(v=>v));
+  return{headers,rows};
+}
+
 // ── LINHAS FATURADAS (s17) ────────────────────────────────────
 function parseCSV(text){
   const lines=text.split(/\r?\n/).filter(l=>l.trim());
@@ -2553,6 +2589,7 @@ function LinhasFaturadasScreen({user}){
   const[csvPreview,setCsvPreview]=useState(null);   // parsed rows before processing
   const[csvFile,setCsvFile]=useState(null);
   const[importing,setImporting]=useState(false);
+  const[operadoraDetectada,setOperadoraDetectada]=useState(null);
   const[delId,setDelId]=useState(null);
   const[err,setErr]=useState("");
   const[filterItensLinha,setFilterItensLinha]=useState("");
@@ -2585,16 +2622,31 @@ function LinhasFaturadasScreen({user}){
     catch(e){alert(e.message);}
   };
 
-  const handleFileChange=e=>{
+  const handleFileChange=async e=>{
     const file=e.target.files[0];
     if(!file)return;
     setCsvFile(file);
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      const rows=parseCSV(ev.target.result);
-      setCsvPreview(rows);
-    };
-    reader.readAsText(file,"UTF-8");
+    setCsvPreview(null);
+    setOperadoraDetectada(null);
+    const ext=file.name.split(".").pop().toLowerCase();
+    if(ext==="csv"){
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        const rows=parseCSV(ev.target.result);
+        setCsvPreview(rows);
+      };
+      reader.readAsText(file,"UTF-8");
+    }else{
+      setImporting(true);
+      try{
+        const fd=new FormData();
+        fd.append("arquivo",file);
+        const res=await api.upload(`/linhas-faturadas/${importModal.id}/itens/parsear-arquivo`,fd);
+        setCsvPreview(res.itens);
+        setOperadoraDetectada(res.operadoraDetectada);
+      }catch(e){alert("❌ "+e.message);setCsvFile(null);}
+      setImporting(false);
+    }
   };
 
   const processar=async()=>{
@@ -2602,7 +2654,7 @@ function LinhasFaturadasScreen({user}){
     setImporting(true);
     try{
       await api.post(`/linhas-faturadas/${importModal.id}/itens/importar`,{itens:csvPreview});
-      setImportModal(null);setCsvPreview(null);setCsvFile(null);load();
+      setImportModal(null);setCsvPreview(null);setCsvFile(null);setOperadoraDetectada(null);load();
     }catch(e){alert(e.message);}
     setImporting(false);
   };
@@ -2700,7 +2752,7 @@ function LinhasFaturadasScreen({user}){
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",paddingTop:8,borderTop:`1px solid ${C.border}`}}>
                   {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,operadoraId:item.operadoraId,companyId:item.companyId||"",mesAno:item.mesAno,fatura:item.fatura||""});}}>Editar</button>}
                   {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
-                  {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F8F5",color:"#1E8449"}} onClick={()=>{setCsvPreview(null);setCsvFile(null);setImportModal(item);}}>📥 Importar</button>}
+                  {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F8F5",color:"#1E8449"}} onClick={()=>{setCsvPreview(null);setCsvFile(null);setOperadoraDetectada(null);setImportModal(item);}}>📥 Importar</button>}
                   <button style={{...S.actionBtn,background:"#EBF5FB",color:"#2980B9"}} onClick={()=>verItens(item)}>📋 Itens ({item.totalItens})</button>
                   {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F0FF",color:"#4A235A"}} onClick={()=>gerarLinhasDisponiveis(item)}>📶 Gerar</button>}
                 </div>
@@ -2721,7 +2773,7 @@ function LinhasFaturadasScreen({user}){
                   <td style={S.td}>
                     {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,operadoraId:item.operadoraId,companyId:item.companyId||"",mesAno:item.mesAno,fatura:item.fatura||""});}}>Editar</button>}
                     {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
-                    {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F8F5",color:"#1E8449"}} onClick={()=>{setCsvPreview(null);setCsvFile(null);setImportModal(item);}}>📥 Importar CSV</button>}
+                    {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F8F5",color:"#1E8449"}} onClick={()=>{setCsvPreview(null);setCsvFile(null);setOperadoraDetectada(null);setImportModal(item);}}>📥 Importar</button>}
                     <button style={{...S.actionBtn,background:"#EBF5FB",color:"#2980B9"}} onClick={()=>verItens(item)}>📋 Ver Itens ({item.totalItens})</button>
                     {canI("insert")&&<button style={{...S.actionBtn,background:"#E8F0FF",color:"#4A235A"}} onClick={()=>gerarLinhasDisponiveis(item)}>📶 Gerar Linhas</button>}
                   </td>
@@ -2751,20 +2803,23 @@ function LinhasFaturadasScreen({user}){
 
       {/* Import CSV modal */}
       {importModal&&(
-        <Modal title={`Importar CSV — ${importModal.operadoraName} ${importModal.mesAno}`} onClose={()=>{setImportModal(null);setCsvPreview(null);setCsvFile(null);}}>
+        <Modal title={`Importar — ${importModal.operadoraName} ${importModal.mesAno}`} onClose={()=>{setImportModal(null);setCsvPreview(null);setCsvFile(null);setOperadoraDetectada(null);}}>
           {importModal.totalItens>0&&(
             <div style={{background:"#FFF3CD",border:"1px solid #F0A500",borderRadius:6,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#7D5A00"}}>
               ⚠️ Esta linha já possui <strong>{importModal.totalItens} itens</strong> importados. Ao processar, eles serão <strong>substituídos</strong> pelos dados do novo arquivo.
             </div>
           )}
           <div style={S.formRow}>
-            <label style={S.label}>Arquivo CSV *</label>
-            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <label style={S.label}>Arquivo *</label>
+            <div style={{fontSize:11,color:C.textLight,marginBottom:6}}>Aceita CSV ou arquivos brutos de operadora: TIM (.txt), Claro (FEBRABAN V3) e Vivo (SL_VIVO).</div>
+            <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
               <label style={{...S.btnAdd,display:"inline-block",cursor:"pointer",fontSize:12,padding:"8px 16px"}}>
                 📂 Selecionar arquivo
-                <input type="file" accept=".csv,text/csv" onChange={handleFileChange} style={{display:"none"}}/>
+                <input type="file" accept=".csv,.txt,.TXT,text/plain,text/csv" onChange={handleFileChange} style={{display:"none"}}/>
               </label>
               {csvFile&&<span style={{fontSize:12,color:C.textLight}}>{csvFile.name}</span>}
+              {operadoraDetectada&&<span style={{fontSize:11,fontWeight:700,background:"#E8F8F5",color:"#1E8449",borderRadius:4,padding:"3px 8px"}}>🔍 {operadoraDetectada} detectada</span>}
+              {importing&&!csvPreview&&<span style={{fontSize:12,color:C.textLight}}>Processando...</span>}
             </div>
           </div>
           {csvPreview&&(
@@ -2919,6 +2974,9 @@ function LinhasDisponiveisScreen({user}){
   const[err,setErr]=useState("");
   const[filter,setFilter]=useState({status:"",operadora:"",empresa:"",numeroLinha:""});
   const[cargaModal,setCargaModal]=useState(null);
+  const[csvImpModal,setCsvImpModal]=useState(false);
+  const[csvImpRows,setCsvImpRows]=useState(null);
+  const[csvImpBusy,setCsvImpBusy]=useState(false);
   const isMobile=useIsMobile();
 
   const load=()=>{
@@ -2963,6 +3021,22 @@ function LinhasDisponiveisScreen({user}){
     catch(e){alert(e.message);}
   };
   const canI=act=>user.permissions?.s19?.[act];
+  const handleCsvImpFile=e=>{
+    const f=e.target.files[0]; e.target.value=""; if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>{const{rows}=parseCSVGeneric(ev.target.result);setCsvImpRows(rows);};
+    r.readAsText(f,"UTF-8");
+  };
+  const processarCsvImp=async()=>{
+    if(!csvImpRows?.length){alert("Nenhum dado válido no arquivo.");return;}
+    setCsvImpBusy(true);
+    try{
+      const res=await api.post("/linhas-disponiveis/importar",{linhas:csvImpRows});
+      alert(`✅ Importação concluída!\nAtualizados: ${res.atualizados}\nNão encontrados: ${res.naoEncontrados}${res.naoEncontradosList?.length?"\n"+res.naoEncontradosList.join(", "):""}`);
+      setCsvImpModal(false);setCsvImpRows(null);load();
+    }catch(e){alert("❌ "+(e?.error||e.message));}
+    setCsvImpBusy(false);
+  };
 
   const filtered=items.filter(i=>{
     if(filter.status&&i.status!==filter.status)return false;
@@ -2985,6 +3059,7 @@ function LinhasDisponiveisScreen({user}){
         <div style={S.cardHeader}>
           <span style={S.cardTitle}>📶 Linhas Disponíveis</span>
           <div style={{display:"flex",gap:8}}>
+            {canI("edit")&&<button style={{...S.btnAdd,background:"#5DADE2"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
             {user.isMaster&&<button style={{...S.btnAdd,background:"#7B68EE"}} onClick={()=>setCargaModal({file:null,skipHeader:true,processing:false,result:null})}>📥 Carga Inicial</button>}
             {canI("insert")&&<button style={S.btnAdd} onClick={openNew}>+ Nova Linha</button>}
           </div>
@@ -3086,6 +3161,23 @@ function LinhasDisponiveisScreen({user}){
         </Modal>
       )}
       {delId&&<ConfirmModal msg="Excluir esta linha disponível?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+
+      {csvImpModal&&(
+        <Modal title="Importar — Linhas Disponíveis" onClose={()=>{setCsvImpModal(false);setCsvImpRows(null);}}>
+          <p style={{fontSize:12,color:C.textLight,marginBottom:12}}>CSV com colunas: <strong>Empresa</strong>, <strong>Operadora</strong>, <strong>Tipo de Ativo</strong>, <strong>Número Linha</strong>, <strong>Acesso</strong>, <strong>Estrutura</strong>, <strong>ICCID</strong>, <strong>Tipo Pacote</strong>, <strong>Status</strong><br/>Localiza a linha pelos campos de identificação e atualiza os demais.</p>
+          <label style={{...S.btnAdd,cursor:"pointer",display:"inline-block",marginBottom:12}}>
+            📂 Selecionar arquivo CSV
+            <input type="file" accept=".csv" style={{display:"none"}} onChange={handleCsvImpFile}/>
+          </label>
+          {csvImpRows&&<div style={{fontSize:12,color:C.success,fontWeight:600,marginBottom:12}}>✅ {csvImpRows.length} linha(s) prontas para importar</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>{setCsvImpModal(false);setCsvImpRows(null);}}>Cancelar</button>
+            <button style={{...S.btnSave,background:C.success}} onClick={processarCsvImp} disabled={!csvImpRows||csvImpBusy}>
+              {csvImpBusy?"Processando...":"⚙️ Processar"}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {cargaModal&&(
         <Modal title="Carga Inicial — Linhas Disponíveis" onClose={()=>setCargaModal(null)}>
@@ -3244,12 +3336,15 @@ function AtivosScreen({user}){
   const[modal,setModal]=useState(null);
   const[delId,setDelId]=useState(null);
   const[err,setErr]=useState("");
+  const[csvImpModal,setCsvImpModal]=useState(false);
+  const[csvImpRows,setCsvImpRows]=useState(null);
+  const[csvImpBusy,setCsvImpBusy]=useState(false);
   const isMobile=useIsMobile();
 
   const blankAtivo=()=>({nome:"",tipoAtivoId:"",companyId:"",marca:"",modelo:"",
     numeroSerie:"",sistemaOperacional:"",versao:"",processador:"",memoria:"",hd:"",
     patrimonio:"",numeroDocumento:"",valor:"",dataAquisicao:"",condicao:"",
-    acessorios:"",imeiSlot1:"",imeiSlot2:""});
+    acessorios:"",imeiSlot1:"",imeiSlot2:"",observacao:""});
 
   const load=()=>{
     setLoading(true);
@@ -3277,6 +3372,22 @@ function AtivosScreen({user}){
     catch(e){alert(e.message);}
   };
   const canI=act=>user.permissions?.s20?.[act];
+  const handleCsvImpFile=e=>{
+    const f=e.target.files[0]; e.target.value=""; if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>{const{rows}=parseCSVGeneric(ev.target.result);setCsvImpRows(rows);};
+    r.readAsText(f,"UTF-8");
+  };
+  const processarCsvImp=async()=>{
+    if(!csvImpRows?.length){alert("Nenhum dado válido no arquivo.");return;}
+    setCsvImpBusy(true);
+    try{
+      const res=await api.post("/ativos/importar",{linhas:csvImpRows});
+      alert(`✅ Importação concluída!\nInseridos: ${res.inseridos}${res.erros?.length?"\nErros: "+res.erros.join(", "):""}`);
+      setCsvImpModal(false);setCsvImpRows(null);load();
+    }catch(e){alert("❌ "+(e?.error||e.message));}
+    setCsvImpBusy(false);
+  };
   const F=(label,key,type="text")=>(
     <div style={S.formRow}>
       <label style={S.label}>{label}</label>
@@ -3296,7 +3407,10 @@ function AtivosScreen({user}){
     <div style={S.card}>
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>📦 Ativos</span>
-        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal(blankAtivo());}}>+ Novo Ativo</button>}
+        <div style={{display:"flex",gap:8}}>
+          {canI("edit")&&<button style={{...S.btnAdd,background:"#5DADE2"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
+          {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal(blankAtivo());}}>+ Novo Ativo</button>}
+        </div>
       </div>
       {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum ativo cadastrado</div>:(
         <div style={{overflowX:"auto"}}>
@@ -3368,6 +3482,11 @@ function AtivosScreen({user}){
             <textarea value={modal.acessorios||""} onChange={e=>setModal(m=>({...m,acessorios:e.target.value}))}
               style={{...S.input,height:60,resize:"vertical"}}/>
           </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Observação</label>
+            <textarea value={modal.observacao||""} onChange={e=>setModal(m=>({...m,observacao:e.target.value}))}
+              style={{...S.input,height:60,resize:"vertical"}}/>
+          </div>
           {modal.id&&(
             <div style={S.formRow}>
               <label style={S.label}>Status</label>
@@ -3383,6 +3502,22 @@ function AtivosScreen({user}){
         </Modal>
       )}
       {delId&&<ConfirmModal msg="Excluir este ativo?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+      {csvImpModal&&(
+        <Modal title="Importar Ativos via CSV" onClose={()=>{setCsvImpModal(false);setCsvImpRows(null);}}>
+          <p style={{fontSize:12,color:C.textLight,marginBottom:12}}>CSV com colunas: <strong>Nome do Ativo</strong>, <strong>Tipo de Ativo</strong>, <strong>Empresa</strong>, Marca, Modelo, Nº de Série, Sistema Operacional, Versão, Processador, Memória, HD, Patrimônio, Nº Documento, Valor, Data Aquisição, Condição, IMEI Slot 1, IMEI Slot 2, Acessórios</p>
+          <label style={{...S.btnAdd,cursor:"pointer",display:"inline-block",marginBottom:12}}>
+            📂 Selecionar arquivo CSV
+            <input type="file" accept=".csv" style={{display:"none"}} onChange={handleCsvImpFile}/>
+          </label>
+          {csvImpRows&&<div style={{fontSize:12,color:C.success,fontWeight:600,marginBottom:12}}>✅ {csvImpRows.length} ativo(s) prontos para importar</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>{setCsvImpModal(false);setCsvImpRows(null);}}>Cancelar</button>
+            <button style={{...S.btnSave,background:C.success}} onClick={processarCsvImp} disabled={!csvImpRows||csvImpBusy}>
+              {csvImpBusy?"Processando...":"⚙️ Processar"}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -3859,6 +3994,12 @@ function ControleAtivosScreen({user}){
   const[movModal,setMovModal]=useState(null); // {item, controleId}
   const[cargaModal,setCargaModal]=useState(null);
   const[sendingEmail,setSendingEmail]=useState(false);
+  const[csvImpModal,setCsvImpModal]=useState(false);
+  const[csvImpRows,setCsvImpRows]=useState(null);
+  const[csvImpBusy,setCsvImpBusy]=useState(false);
+  const[csvImpItensModal,setCsvImpItensModal]=useState(false);
+  const[csvImpItensRows,setCsvImpItensRows]=useState(null);
+  const[csvImpItensBusy,setCsvImpItensBusy]=useState(false);
   const isMobile=useIsMobile();
 
   const load=()=>{
@@ -4115,6 +4256,40 @@ function ControleAtivosScreen({user}){
 
 
   const canI=act=>user.permissions?.s21?.[act];
+  const handleCsvImpFile=e=>{
+    const f=e.target.files[0]; e.target.value=""; if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>{const{rows}=parseCSVGeneric(ev.target.result);setCsvImpRows(rows);};
+    r.readAsText(f,"UTF-8");
+  };
+  const processarCsvImp=async()=>{
+    if(!csvImpRows?.length){alert("Nenhum dado válido.");return;}
+    setCsvImpBusy(true);
+    try{
+      const res=await api.post("/controle-ativos/importar-cabecalho",{linhas:csvImpRows});
+      alert(`✅ Importação concluída!\nInseridos: ${res.inseridos}\nIgnorados (já existentes): ${res.ignorados}`);
+      setCsvImpModal(false);setCsvImpRows(null);load();
+    }catch(e){alert("❌ "+(e?.error||e.message));}
+    setCsvImpBusy(false);
+  };
+  const handleCsvImpItensFile=e=>{
+    const f=e.target.files[0]; e.target.value=""; if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>{const{rows}=parseCSVGeneric(ev.target.result);setCsvImpItensRows(rows);};
+    r.readAsText(f,"UTF-8");
+  };
+  const processarCsvImpItens=async()=>{
+    if(!csvImpItensRows?.length){alert("Nenhum dado válido.");return;}
+    setCsvImpItensBusy(true);
+    try{
+      const res=await api.post("/controle-ativos/importar-itens",{linhas:csvImpItensRows});
+      alert(`✅ Importação concluída!\nInseridos: ${res.inseridos}\nAtualizados: ${res.atualizados}\nNão encontrados: ${res.naoEncontrados}${res.erros?.length?"\nErros: "+res.erros.join("\n"):""}`);
+      setCsvImpItensModal(false);setCsvImpItensRows(null);
+      if(itensModal){const itens=await api.get(`/controle-ativos/${itensModal.controle.id}/itens`).catch(()=>[]);setItensModal(m=>({...m,itens}));}
+      load();
+    }catch(e){alert("❌ "+(e?.error||e.message));}
+    setCsvImpItensBusy(false);
+  };
   const MASK_CPF="999.999.999-99";
   const MASK_DATA="99/99/9999";
 
@@ -4166,6 +4341,8 @@ function ControleAtivosScreen({user}){
         <div style={S.cardHeader}>
           <span style={S.cardTitle}>🖥️ Controle de Ativos</span>
           <div style={{display:"flex",gap:8}}>
+            {canI("edit")&&<button style={{...S.btnAdd,background:"#5DADE2"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
+            {canI("edit")&&<button style={{...S.btnAdd,background:"#27AE60"}} onClick={()=>{setCsvImpItensRows(null);setCsvImpItensModal(true);}}>📥 Importar Itens</button>}
             {user.isMaster&&<button style={{...S.btnAdd,background:"#7B68EE"}} onClick={()=>setCargaModal({file:null,skipHeader:true,processing:false,result:null})}>📥 Carga Inicial</button>}
             {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({funcionarioId:""});}}>+ Novo Registro</button>}
           </div>
@@ -4256,7 +4433,9 @@ function ControleAtivosScreen({user}){
         <Modal title={`Itens — ${itensModal.controle.nomeFuncionario}`} onClose={()=>setItensModal(null)} extraWide>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <span style={{fontSize:12,color:C.textLight}}>{itensModal.itens.length} item(ns)</span>
-            {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErrItem("");setItemForm(blankItem());}}>+ Novo Item</button>}
+            <div style={{display:"flex",gap:8}}>
+              {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErrItem("");setItemForm(blankItem());}}>+ Novo Item</button>}
+            </div>
           </div>
           {itensModal.itens.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum item cadastrado</div>:(
             <div style={{overflowX:"auto",maxHeight:"55vh",overflowY:"auto"}}>
@@ -4455,6 +4634,40 @@ function ControleAtivosScreen({user}){
           itensModal={itensModal} funcionarios={funcionarios}
           onDone={()=>{setMovModal(null);reloadItens();}}
         />
+      )}
+
+      {csvImpModal&&(
+        <Modal title="Importar Controle de Ativos via CSV" onClose={()=>{setCsvImpModal(false);setCsvImpRows(null);}}>
+          <p style={{fontSize:12,color:C.textLight,marginBottom:12}}>CSV com coluna: <strong>Nome do Funcionário</strong><br/>Registros já existentes serão ignorados.</p>
+          <label style={{...S.btnAdd,cursor:"pointer",display:"inline-block",marginBottom:12}}>
+            📂 Selecionar arquivo CSV
+            <input type="file" accept=".csv" style={{display:"none"}} onChange={handleCsvImpFile}/>
+          </label>
+          {csvImpRows&&<div style={{fontSize:12,color:C.success,fontWeight:600,marginBottom:12}}>✅ {csvImpRows.length} registro(s) prontos para importar</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>{setCsvImpModal(false);setCsvImpRows(null);}}>Cancelar</button>
+            <button style={{...S.btnSave,background:C.success}} onClick={processarCsvImp} disabled={!csvImpRows||csvImpBusy}>
+              {csvImpBusy?"Processando...":"⚙️ Processar"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {csvImpItensModal&&(
+        <Modal title="Importar Itens de Controle via CSV" onClose={()=>{setCsvImpItensModal(false);setCsvImpItensRows(null);}}>
+          <p style={{fontSize:12,color:C.textLight,marginBottom:12}}>CSV com colunas: <strong>Funcionário</strong>, <strong>Tipo de Ativo</strong>, <strong>Empresa</strong><br/>Para <strong>Telefonia</strong>: + <strong>Número Linha</strong><br/>Para demais tipos: + <strong>Nº de Série</strong> e/ou <strong>Imei(Slot1)</strong></p>
+          <label style={{...S.btnAdd,cursor:"pointer",display:"inline-block",marginBottom:12}}>
+            📂 Selecionar arquivo CSV
+            <input type="file" accept=".csv" style={{display:"none"}} onChange={handleCsvImpItensFile}/>
+          </label>
+          {csvImpItensRows&&<div style={{fontSize:12,color:C.success,fontWeight:600,marginBottom:12}}>✅ {csvImpItensRows.length} item(ns) prontos para importar</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>{setCsvImpItensModal(false);setCsvImpItensRows(null);}}>Cancelar</button>
+            <button style={{...S.btnSave,background:C.success}} onClick={processarCsvImpItens} disabled={!csvImpItensRows||csvImpItensBusy}>
+              {csvImpItensBusy?"Processando...":"⚙️ Processar"}
+            </button>
+          </div>
+        </Modal>
       )}
 
       {cargaModal&&(
@@ -8923,6 +9136,9 @@ function CcustoConsumoScreen({user}){
   const[modal,setModal]=useState(null);
   const[delId,setDelId]=useState(null);
   const[err,setErr]=useState("");
+  const[csvImpModal,setCsvImpModal]=useState(false);
+  const[csvImpRows,setCsvImpRows]=useState(null);
+  const[csvImpBusy,setCsvImpBusy]=useState(false);
   const isMobile=useIsMobile();
   const load=()=>api.get("/consumo-ccusto").then(setItems).catch(()=>{}).finally(()=>setLoading(false));
   useEffect(()=>{load();},[]);
@@ -8939,11 +9155,30 @@ function CcustoConsumoScreen({user}){
     catch(e){alert(e?.error||e.message);}
   };
   const canI=act=>user.permissions?.s44?.[act];
+  const handleCsvImpFile=e=>{
+    const f=e.target.files[0]; e.target.value=""; if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>{const{rows}=parseCSVGeneric(ev.target.result);setCsvImpRows(rows);};
+    r.readAsText(f,"UTF-8");
+  };
+  const processarCsvImp=async()=>{
+    if(!csvImpRows?.length){alert("Nenhum dado válido no arquivo.");return;}
+    setCsvImpBusy(true);
+    try{
+      const res=await api.post("/consumo-ccusto/importar",{linhas:csvImpRows});
+      alert(`✅ Importação concluída!\nInseridos: ${res.inseridos}\nIgnorados (duplicados): ${res.ignorados}`);
+      setCsvImpModal(false);setCsvImpRows(null);load();
+    }catch(e){alert("❌ "+( e?.error||e.message));}
+    setCsvImpBusy(false);
+  };
   return(
     <div style={S.card}>
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>Cadastro de CCusto</span>
-        {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({centroCusto:"",descricao:""});}}>+ Novo CCusto</button>}
+        <div style={{display:"flex",gap:8}}>
+          {canI("insert")&&<button style={{...S.btnAdd,background:"#7B68EE"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
+          {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({centroCusto:"",descricao:""});}}>+ Novo CCusto</button>}
+        </div>
       </div>
       {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>💰</span>Nenhum CCusto cadastrado</div>:(
         isMobile
@@ -8977,6 +9212,22 @@ function CcustoConsumoScreen({user}){
         </div>
       </Modal>}
       {delId&&<ConfirmModal msg="Excluir este CCusto?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+      {csvImpModal&&(
+        <Modal title="Importar CCustos via CSV" onClose={()=>{setCsvImpModal(false);setCsvImpRows(null);}}>
+          <p style={{fontSize:12,color:C.textLight,marginBottom:12}}>CSV com colunas: <strong>Centro de Custo</strong>, <strong>Descrição Ccusto</strong></p>
+          <label style={{...S.btnAdd,cursor:"pointer",display:"inline-block",marginBottom:12}}>
+            📂 Selecionar arquivo CSV
+            <input type="file" accept=".csv" style={{display:"none"}} onChange={handleCsvImpFile}/>
+          </label>
+          {csvImpRows&&<div style={{fontSize:12,color:C.success,fontWeight:600,marginBottom:12}}>✅ {csvImpRows.length} linha(s) prontas para importar</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>{setCsvImpModal(false);setCsvImpRows(null);}}>Cancelar</button>
+            <button style={{...S.btnSave,background:C.success}} onClick={processarCsvImp} disabled={!csvImpRows||csvImpBusy}>
+              {csvImpBusy?"Processando...":"⚙️ Processar"}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
