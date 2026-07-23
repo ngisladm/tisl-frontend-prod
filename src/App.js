@@ -4329,10 +4329,7 @@ function ControleAtivosScreen({user}){
     return true;
   });
   const hasAnyFilter=Object.values(filterCA).some(v=>v);
-  const TxtFilter=({label,fkey})=>(
-    <input placeholder={label} value={filterCA[fkey]} onChange={e=>setFilterCA(f=>({...f,[fkey]:e.target.value}))}
-      style={{...S.input,width:"auto",flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
-  );
+  const caFilterStyle={...S.input,width:"auto",flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13};
 
   return(
     <div>
@@ -4350,8 +4347,8 @@ function ControleAtivosScreen({user}){
 
         {/* Filtros */}
         <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
-          <TxtFilter label="Nome do Funcionário" fkey="funcionario"/>
-          <TxtFilter label="CPF" fkey="cpf"/>
+          <input placeholder="Nome do Funcionário" value={filterCA.funcionario} onChange={e=>setFilterCA(f=>({...f,funcionario:e.target.value}))} style={caFilterStyle}/>
+          <input placeholder="CPF" value={filterCA.cpf} onChange={e=>setFilterCA(f=>({...f,cpf:e.target.value}))} style={caFilterStyle}/>
           <select value={filterCA.empresa} onChange={e=>setFilterCA(f=>({...f,empresa:e.target.value}))}
             style={{...S.select,width:"auto",flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13}}>
             <option value="">Todas as empresas</option>
@@ -4362,12 +4359,12 @@ function ControleAtivosScreen({user}){
             <option value="">Todas as operadoras</option>
             {operadoras.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
           </select>
-          <TxtFilter label="Número Linha" fkey="numeroLinha"/>
-          <TxtFilter label="Data Aquisição (DD/MM/AAAA)" fkey="dataAquisicao"/>
-          <TxtFilter label="Número de Série" fkey="numeroSerie"/>
-          <TxtFilter label="Número do Documento" fkey="numeroDocumento"/>
-          <TxtFilter label="Patrimônio" fkey="patrimonio"/>
-          <TxtFilter label="IMEI Slot 1" fkey="imeiSlot1"/>
+          <input placeholder="Número Linha" value={filterCA.numeroLinha} onChange={e=>setFilterCA(f=>({...f,numeroLinha:e.target.value}))} style={caFilterStyle}/>
+          <input placeholder="Data Aquisição (DD/MM/AAAA)" value={filterCA.dataAquisicao} onChange={e=>setFilterCA(f=>({...f,dataAquisicao:e.target.value}))} style={caFilterStyle}/>
+          <input placeholder="Número de Série" value={filterCA.numeroSerie} onChange={e=>setFilterCA(f=>({...f,numeroSerie:e.target.value}))} style={caFilterStyle}/>
+          <input placeholder="Número do Documento" value={filterCA.numeroDocumento} onChange={e=>setFilterCA(f=>({...f,numeroDocumento:e.target.value}))} style={caFilterStyle}/>
+          <input placeholder="Patrimônio" value={filterCA.patrimonio} onChange={e=>setFilterCA(f=>({...f,patrimonio:e.target.value}))} style={caFilterStyle}/>
+          <input placeholder="IMEI Slot 1" value={filterCA.imeiSlot1} onChange={e=>setFilterCA(f=>({...f,imeiSlot1:e.target.value}))} style={caFilterStyle}/>
           {hasAnyFilter&&<button style={{...S.btnCancel,whiteSpace:"nowrap"}} onClick={()=>setFilterCA({empresa:"",funcionario:"",cpf:"",operadora:"",numeroLinha:"",dataAquisicao:"",numeroSerie:"",numeroDocumento:"",patrimonio:"",imeiSlot1:""})}>Limpar</button>}
         </div>
 
