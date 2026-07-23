@@ -782,15 +782,29 @@ function UsersScreen({user}){
     setSaving(true);try{if(form.id){const u=await api.put(`/users/${form.id}`,form);setUsers(us=>us.map(x=>x.id===u.id?{...x,...u,funcionarioNome:funcionarios.find(f=>f.id===form.funcionarioId)?.nome||x.funcionarioNome}:x));}else{const c=await api.post("/users",form);setUsers(us=>[...us,{...c,funcionarioNome:funcionarios.find(f=>f.id===form.funcionarioId)?.nome}]);}setModal(false);}catch(e){alert(e.message);}finally{setSaving(false);}
   };
   const del=async()=>{try{await api.delete(`/users/${delId}`);setUsers(us=>us.filter(u=>u.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+  const[filterU,setFilterU]=useState({nome:"",email:"",funcionario:"",empresa:"",perfil:"",master:""});
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
+  const fltU=users.filter(u=>(!filterU.nome||(u.name||"").toLowerCase().includes(filterU.nome.toLowerCase()))&&(!filterU.email||(u.email||"").toLowerCase().includes(filterU.email.toLowerCase()))&&(!filterU.funcionario||(u.funcionarioNome||"").toLowerCase().includes(filterU.funcionario.toLowerCase()))&&(!filterU.empresa||(u.companyName||"").toLowerCase().includes(filterU.empresa.toLowerCase()))&&(!filterU.perfil||(u.profileName||"").toLowerCase().includes(filterU.perfil.toLowerCase()))&&(filterU.master===""||String(!!u.isMaster)===(filterU.master==="sim"?"true":"false")));
   return(
     <div style={S.card}>
       <div style={S.cardHeader}><span style={S.cardTitle}>👥 Usuários</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Usuário</button>}</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <input placeholder="Nome" value={filterU.nome} onChange={e=>setFilterU(f=>({...f,nome:e.target.value}))} style={{...S.input,flex:"1 1 150px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="E-mail" value={filterU.email} onChange={e=>setFilterU(f=>({...f,email:e.target.value}))} style={{...S.input,flex:"1 1 170px",minWidth:140,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Funcionário Vinculado" value={filterU.funcionario} onChange={e=>setFilterU(f=>({...f,funcionario:e.target.value}))} style={{...S.input,flex:"1 1 180px",minWidth:150,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Empresa" value={filterU.empresa} onChange={e=>setFilterU(f=>({...f,empresa:e.target.value}))} style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Perfil" value={filterU.perfil} onChange={e=>setFilterU(f=>({...f,perfil:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <select value={filterU.master} onChange={e=>setFilterU(f=>({...f,master:e.target.value}))} style={{...S.input,flex:"1 1 120px",minWidth:100,padding:"6px 10px",fontSize:13}}>
+          <option value="">Master: Todos</option>
+          <option value="sim">Master: Sim</option>
+          <option value="nao">Master: Não</option>
+        </select>
+      </div>
       {users.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>👤</span>Nenhum usuário.</div>:(
         <table style={S.table}><thead><tr>
           {["Nome","E-mail","Funcionário Vinculado","Empresa","Perfil","Master","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
-        </tr></thead><tbody>{users.map(u=>(
+        </tr></thead><tbody>{fltU.map(u=>(
           <tr key={u.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}><strong>{u.name}</strong></td><td style={S.td}>{u.email}</td>
             <td style={S.td}>{u.funcionarioNome||"—"}</td>
@@ -1383,7 +1397,8 @@ function ExtraAvulsoScreen({user}){
 // ── RELATÓRIO DE HORAS ────────────────────────────────────────
 function RelatorioHorasScreen({user}){
   const[companies,setCompanies]=useState([]);const[teams,setTeams]=useState([]);const[users,setUsers]=useState([]);
-  const[filters,setFilters]=useState({dataInicio:"",dataFim:"",funcionarioId:"",teamId:"",companyId:""});
+  const[filters,setFilters]=useState({dataInicio:"",dataFim:"",funcionarioId:"",teamIds:[],companyId:""});
+  const[teamOpen,setTeamOpen]=useState(false);
   const[result,setResult]=useState(null);const[loading,setLoading]=useState(false);const[loaded,setLoaded]=useState(false);
   const p=user.permissions?.s6;
   useEffect(()=>{
@@ -1392,12 +1407,13 @@ function RelatorioHorasScreen({user}){
       .then(([c,t,u])=>{setCompanies(c);setTeams(t);setUsers(u);}).catch(e=>alert(e.message));
   },[]);
   const buscar=async()=>{
-    if(!filters.dataInicio||!filters.dataFim)return alert("Informe o período.");
     setLoading(true);setLoaded(false);
     try{
-      const params=new URLSearchParams({dataInicio:filters.dataInicio,dataFim:filters.dataFim});
+      const params=new URLSearchParams();
+      if(filters.dataInicio)params.append("dataInicio",filters.dataInicio);
+      if(filters.dataFim)params.append("dataFim",filters.dataFim);
       if(filters.funcionarioId)params.append("funcionarioId",filters.funcionarioId);
-      if(filters.teamId)params.append("teamId",filters.teamId);
+      if(filters.teamIds.length)params.append("teamIds",filters.teamIds.join(","));
       if(filters.companyId)params.append("companyId",filters.companyId);
       const data=await api.get(`/escalas/relatorio/horas?${params}`);
       setResult(data);setLoaded(true);
@@ -1425,6 +1441,8 @@ function RelatorioHorasScreen({user}){
     });
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(wsData),"Horas");XLSX.writeFile(wb,"relatorio-horas.xlsx");
   };
+  const toggleTeamHoras=id=>setFilters(f=>({...f,teamIds:f.teamIds.includes(id)?f.teamIds.filter(x=>x!==id):[...f.teamIds,id]}));
+  const teamsLabelHoras=filters.teamIds.length===0?"Todas":filters.teamIds.length===1?(teams.find(t=>t.id===filters.teamIds[0])?.name||"1 equipe"):`${filters.teamIds.length} equipes`;
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   return(
     <div>
@@ -1432,10 +1450,31 @@ function RelatorioHorasScreen({user}){
       <div style={{...S.card,marginBottom:20}}>
         <div style={{...S.cardHeader,marginBottom:16}}><span style={S.cardTitle}>📊 Relatório de Horas de Sobreaviso</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportHorasPDF} disabled={!result||!result.length}>⬇ PDF</button><button style={S.btnSave} onClick={exportHorasExcel} disabled={!result||!result.length}>⬇ Excel</button></div></div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12,marginBottom:16}}>
-          <MaskedInput label="Período Inicial" mask={MASK_DATE} value={filters.dataInicio} onChange={v=>setFilters(f=>({...f,dataInicio:v}))} placeholder="01/01/2025" required/>
-          <MaskedInput label="Período Final"   mask={MASK_DATE} value={filters.dataFim}    onChange={v=>setFilters(f=>({...f,dataFim:v}))}    placeholder="31/01/2025" required/>
+          <MaskedInput label="Período Inicial" mask={MASK_DATE} value={filters.dataInicio} onChange={v=>setFilters(f=>({...f,dataInicio:v}))} placeholder="01/01/2025"/>
+          <MaskedInput label="Período Final"   mask={MASK_DATE} value={filters.dataFim}    onChange={v=>setFilters(f=>({...f,dataFim:v}))}    placeholder="31/01/2025"/>
           <SelectField label="Empresa" value={filters.companyId} onChange={v=>setFilters(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))}/>
-          <SelectField label="Equipe"  value={filters.teamId}    onChange={v=>setFilters(f=>({...f,teamId:v}))}    options={teams.map(t=>({value:t.id,label:t.name}))}/>
+          <div style={{flex:1,minWidth:160,position:"relative"}}>
+            <label style={S.label}>Equipe</label>
+            <button onClick={()=>setTeamOpen(o=>!o)}
+              style={{...S.select,textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",background:C.white,width:"100%"}}>
+              <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{teamsLabelHoras}</span>
+              <span style={{marginLeft:6,fontSize:10}}>{teamOpen?"▲":"▼"}</span>
+            </button>
+            {teamOpen&&(
+              <div style={{position:"absolute",zIndex:200,top:"100%",left:0,right:0,background:C.white,
+                border:`1px solid ${C.border}`,borderRadius:6,boxShadow:"0 4px 12px rgba(0,0,0,.12)",
+                maxHeight:220,overflowY:"auto",padding:"6px 0"}}>
+                {teams.map(t=>(
+                  <label key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 12px",cursor:"pointer",
+                    background:filters.teamIds.includes(t.id)?"#EFF6FF":C.white}}>
+                    <input type="checkbox" checked={filters.teamIds.includes(t.id)} onChange={()=>toggleTeamHoras(t.id)}/>
+                    <span style={{fontSize:13}}>{t.name}</span>
+                  </label>
+                ))}
+                {teams.length===0&&<div style={{padding:"8px 12px",fontSize:12,color:C.textLight}}>Sem equipes</div>}
+              </div>
+            )}
+          </div>
           <SelectField label="Funcionário" value={filters.funcionarioId} onChange={v=>setFilters(f=>({...f,funcionarioId:v}))} options={users.filter(u=>u.funcionarioId).map(u=>({value:u.funcionarioId,label:u.name}))}/>
         </div>
         <div style={{display:"flex",justifyContent:"flex-end"}}>
@@ -1530,16 +1569,23 @@ function EmpresasScreen({user}){
     try{await api.put(`/companies/${logoModal.id}/logo`,{logo:logoModal.logo||null});setLogoModal(null);}
     catch(e){alert(e.message);}finally{setSavingLogo(false);}
   };
+  const[filterE,setFilterE]=useState({razaoSocial:"",fantasia:"",cnpj:""});
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
+  const fltE=items.filter(it=>(!filterE.razaoSocial||(it.razaoSocial||"").toLowerCase().includes(filterE.razaoSocial.toLowerCase()))&&(!filterE.fantasia||(it.name||"").toLowerCase().includes(filterE.fantasia.toLowerCase()))&&(!filterE.cnpj||(it.cnpj||"").toLowerCase().includes(filterE.cnpj.toLowerCase())));
   return(
     <div style={S.card}>
       <div style={S.cardHeader}><span style={S.cardTitle}>🏢 Empresas</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Nova Empresa</button>}</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <input placeholder="Razão Social" value={filterE.razaoSocial} onChange={e=>setFilterE(f=>({...f,razaoSocial:e.target.value}))} style={{...S.input,flex:"1 1 200px",minWidth:160,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Fantasia" value={filterE.fantasia} onChange={e=>setFilterE(f=>({...f,fantasia:e.target.value}))} style={{...S.input,flex:"1 1 180px",minWidth:150,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="CNPJ" value={filterE.cnpj} onChange={e=>setFilterE(f=>({...f,cnpj:e.target.value}))} style={{...S.input,flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+      </div>
       {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏢</span>Nenhuma empresa.</div>:(
         <table style={S.table}><thead><tr>
           {["Razão Social","Fantasia","CNPJ","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
-        <tbody>{items.map(it=>(
+        <tbody>{fltE.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}>{it.razaoSocial||"—"}</td>
             <td style={S.td}><strong>{it.name}</strong></td>
@@ -2014,6 +2060,7 @@ function FornecedoresScreen({user}){
   const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
+  const[filterF,setFilterF]=useState({razaoSocial:"",fantasia:"",cnpj:""});
   // Autocomplete "Fornecedor Base"
   const[baseQuery,setBaseQuery]=useState("");
   const[baseResults,setBaseResults]=useState([]);
@@ -2080,15 +2127,21 @@ function FornecedoresScreen({user}){
 
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
+  const fltF=items.filter(it=>(!filterF.razaoSocial||(it.razaoSocial||"").toLowerCase().includes(filterF.razaoSocial.toLowerCase()))&&(!filterF.fantasia||(it.name||"").toLowerCase().includes(filterF.fantasia.toLowerCase()))&&(!filterF.cnpj||(it.cnpj||"").toLowerCase().includes(filterF.cnpj.toLowerCase())));
   return(
     <div style={S.card}>
       <div style={S.cardHeader}><span style={S.cardTitle}>🏭 Fornecedores</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Fornecedor</button>}</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <input placeholder="Razão Social" value={filterF.razaoSocial} onChange={e=>setFilterF(f=>({...f,razaoSocial:e.target.value}))} style={{...S.input,flex:"1 1 180px",minWidth:140,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Fantasia" value={filterF.fantasia} onChange={e=>setFilterF(f=>({...f,fantasia:e.target.value}))} style={{...S.input,flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="CNPJ/CPF" value={filterF.cnpj} onChange={e=>setFilterF(f=>({...f,cnpj:e.target.value}))} style={{...S.input,flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+      </div>
       {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏭</span>Nenhum fornecedor.</div>:(
         <div style={{overflowX:"auto"}}>
         <table style={S.table}><thead><tr>
           {["Razão Social","Fantasia","Tipo","CNPJ/CPF","Contato","Fone","E-mail","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
-        <tbody>{items.map(it=>(
+        <tbody>{fltF.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}>{it.razaoSocial||"—"}</td>
             <td style={S.td}><strong>{it.name}</strong></td>
@@ -3339,6 +3392,7 @@ function AtivosScreen({user}){
   const[csvImpModal,setCsvImpModal]=useState(false);
   const[csvImpRows,setCsvImpRows]=useState(null);
   const[csvImpBusy,setCsvImpBusy]=useState(false);
+  const[filterA,setFilterA]=useState({nome:"",tipoAtivo:"",empresa:"",marca:"",modelo:"",numeroSerie:"",imei:"",status:""});
   const isMobile=useIsMobile();
 
   const blankAtivo=()=>({nome:"",tipoAtivoId:"",companyId:"",marca:"",modelo:"",
@@ -3412,12 +3466,29 @@ function AtivosScreen({user}){
           {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal(blankAtivo());}}>+ Novo Ativo</button>}
         </div>
       </div>
-      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum ativo cadastrado</div>:(
+      {!loading&&items.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <input placeholder="Nome do Ativo" value={filterA.nome} onChange={e=>setFilterA(f=>({...f,nome:e.target.value}))} style={{...S.input,flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Tipo de Ativo" value={filterA.tipoAtivo} onChange={e=>setFilterA(f=>({...f,tipoAtivo:e.target.value}))} style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Empresa" value={filterA.empresa} onChange={e=>setFilterA(f=>({...f,empresa:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Marca" value={filterA.marca} onChange={e=>setFilterA(f=>({...f,marca:e.target.value}))} style={{...S.input,flex:"1 1 120px",minWidth:100,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Modelo" value={filterA.modelo} onChange={e=>setFilterA(f=>({...f,modelo:e.target.value}))} style={{...S.input,flex:"1 1 120px",minWidth:100,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Nº Série" value={filterA.numeroSerie} onChange={e=>setFilterA(f=>({...f,numeroSerie:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="IMEI Slot 1" value={filterA.imei} onChange={e=>setFilterA(f=>({...f,imei:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <select value={filterA.status} onChange={e=>setFilterA(f=>({...f,status:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}>
+          <option value="">Todos os Status</option>
+          <option value="Em Estoque">Em Estoque</option>
+          <option value="Em uso">Em uso</option>
+          <option value="Baixado">Baixado</option>
+        </select>
+      </div>}
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum ativo cadastrado</div>:(()=>{
+        const fltA=items.filter(item=>(!filterA.nome||(item.nome||"").toLowerCase().includes(filterA.nome.toLowerCase()))&&(!filterA.tipoAtivo||(item.tipoAtivoName||"").toLowerCase().includes(filterA.tipoAtivo.toLowerCase()))&&(!filterA.empresa||(item.companyName||"").toLowerCase().includes(filterA.empresa.toLowerCase()))&&(!filterA.marca||(item.marca||"").toLowerCase().includes(filterA.marca.toLowerCase()))&&(!filterA.modelo||(item.modelo||"").toLowerCase().includes(filterA.modelo.toLowerCase()))&&(!filterA.numeroSerie||(item.numeroSerie||"").toLowerCase().includes(filterA.numeroSerie.toLowerCase()))&&(!filterA.imei||(item.imeiSlot1||"").toLowerCase().includes(filterA.imei.toLowerCase()))&&(!filterA.status||item.status===filterA.status||(filterA.status==="Em Estoque"&&!item.status)));
+        return(
         <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
             {["Nome do Ativo","Tipo de Ativo","Empresa","Marca","Modelo","Nº Série","IMEI Slot 1","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
-          <tbody>{items.map(item=>(
+          <tbody>{fltA.map(item=>(
             <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={{...S.td,fontWeight:600}}>{item.nome}</td>
               <td style={S.td}>{item.tipoAtivoName||"—"}</td>
@@ -3435,7 +3506,8 @@ function AtivosScreen({user}){
             </tr>
           ))}</tbody></table>
         </div>
-      )}
+        );
+      })()}
       {modal&&(
         <Modal title={modal.id?"Editar Ativo":"Novo Ativo"} onClose={()=>setModal(null)} extraWide>
           <div style={g2}>
@@ -3774,6 +3846,7 @@ function ModelosContratoScreen({user}){
   const[form,setForm]=useState({id:null,nome:"",tipoAtivoId:"",empresaId:""});
   const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
+  const[filterMC,setFilterMC]=useState({nome:"",tipoAtivo:"",empresa:""});
   const[modeloEditor,setModeloEditor]=useState(null);
   const[savingModelo,setSavingModelo]=useState(false);
   const editorRef=useRef(null);
@@ -3844,11 +3917,16 @@ function ModelosContratoScreen({user}){
         <span style={S.cardTitle}>📋 Modelos de Contrato</span>
         {p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Modelo</button>}
       </div>
-      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum modelo cadastrado.</div>:(
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <input placeholder="Modelo" value={filterMC.nome} onChange={e=>setFilterMC(f=>({...f,nome:e.target.value}))} style={{...S.input,flex:"1 1 180px",minWidth:140,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Tipo de Ativo" value={filterMC.tipoAtivo} onChange={e=>setFilterMC(f=>({...f,tipoAtivo:e.target.value}))} style={{...S.input,flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Empresa" value={filterMC.empresa} onChange={e=>setFilterMC(f=>({...f,empresa:e.target.value}))} style={{...S.input,flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+      </div>
+      {(()=>{const fltMC=items.filter(it=>(!filterMC.nome||(it.nome||"").toLowerCase().includes(filterMC.nome.toLowerCase()))&&(!filterMC.tipoAtivo||(it.tipoAtivoName||"").toLowerCase().includes(filterMC.tipoAtivo.toLowerCase()))&&(!filterMC.empresa||(it.empresaName||"").toLowerCase().includes(filterMC.empresa.toLowerCase())));return fltMC.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum modelo cadastrado.</div>:(
         <table style={S.table}><thead><tr>
           {["Modelo","Tipo de Ativo","Empresa","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
-        <tbody>{items.map(it=>(
+        <tbody>{fltMC.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}><strong>{it.nome}</strong></td>
             <td style={S.td}>{it.tipoAtivoName||"—"}</td>
@@ -3860,7 +3938,7 @@ function ModelosContratoScreen({user}){
             </td>
           </tr>
         ))}</tbody></table>
-      )}
+      );})()}
       {modal&&(
         <Modal title={form.id?"Editar Modelo":"Novo Modelo de Contrato"} onClose={()=>setModal(false)}>
           <Input label="Nome do Modelo" value={form.nome} onChange={v=>setForm(f=>({...f,nome:v}))} required/>
@@ -7059,6 +7137,7 @@ function InventarioRedeScreen({user}){
   const[detailLoading,setDetailLoading]=useState(false);
   const pollRef=useRef(null);
 
+  const[filterInv,setFilterInv]=useState({dataInicio:"",dataFim:""});
   // Filtros aba Dispositivos
   const[devFilters,setDevFilters]=useState({ip:"",mac:"",hostname:"",os:"",cpu:"",ram:""});
   // Filtros aba M365
@@ -7267,14 +7346,19 @@ function InventarioRedeScreen({user}){
         <span style={S.cardTitle}>🔍 Inventário de Rede</span>
         {p?.insert&&<button style={S.btnAdd} onClick={()=>setForm({data:"",tipo:TIPOS[0]})}>+ Nova Coleta</button>}
       </div>
-
-      {items.length===0
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,alignItems:"center"}}>
+        <label style={{fontSize:13,color:C.text}}>Data início:</label>
+        <input type="date" value={filterInv.dataInicio} onChange={e=>setFilterInv(f=>({...f,dataInicio:e.target.value}))} style={{...S.input,flex:"1 1 150px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+        <label style={{fontSize:13,color:C.text}}>Data fim:</label>
+        <input type="date" value={filterInv.dataFim} onChange={e=>setFilterInv(f=>({...f,dataFim:e.target.value}))} style={{...S.input,flex:"1 1 150px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+      </div>
+      {(()=>{const fltInv=items.filter(it=>{const p2=((it.data||"").split("/"));const iso=p2.length===3?`${p2[2]}-${p2[1]}-${p2[0]}`:"";return(!filterInv.dataInicio||iso>=filterInv.dataInicio)&&(!filterInv.dataFim||iso<=filterInv.dataFim);});return fltInv.length===0
         ?<div style={S.emptyState}><span style={S.emptyIcon}>🔍</span>Nenhuma coleta registrada.</div>
         :<div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
             {["Data","Tipo","Status","Dispositivos","Licenças M365","Início","Fim","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
-          <tbody>{items.map(it=>(
+          <tbody>{fltInv.map(it=>(
             <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={{...S.td,fontWeight:600}}>{it.data}</td>
               <td style={S.td}>{it.tipo}</td>
@@ -7301,7 +7385,7 @@ function InventarioRedeScreen({user}){
             </tr>
           ))}</tbody></table>
         </div>
-      }
+      ;})()}
 
       {/* Modal nova coleta */}
       {form&&(
@@ -9136,6 +9220,7 @@ function CcustoConsumoScreen({user}){
   const[csvImpModal,setCsvImpModal]=useState(false);
   const[csvImpRows,setCsvImpRows]=useState(null);
   const[csvImpBusy,setCsvImpBusy]=useState(false);
+  const[filterCC,setFilterCC]=useState({centroCusto:"",descricao:""});
   const isMobile=useIsMobile();
   const load=()=>api.get("/consumo-ccusto").then(setItems).catch(()=>{}).finally(()=>setLoading(false));
   useEffect(()=>{load();},[]);
@@ -9177,9 +9262,14 @@ function CcustoConsumoScreen({user}){
           {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({centroCusto:"",descricao:""});}}>+ Novo CCusto</button>}
         </div>
       </div>
-      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>💰</span>Nenhum CCusto cadastrado</div>:(
-        isMobile
-          ?<MobileCardList items={items} columns={[{key:"centroCusto",label:"Centro de Custo"},{key:"descricao",label:"Descrição Ccusto"}]} actions={item=>(
+      {!loading&&items.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <input placeholder="Centro de Custo" value={filterCC.centroCusto} onChange={e=>setFilterCC(f=>({...f,centroCusto:e.target.value}))} style={{...S.input,flex:"1 1 180px",minWidth:140,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Descrição Ccusto" value={filterCC.descricao} onChange={e=>setFilterCC(f=>({...f,descricao:e.target.value}))} style={{...S.input,flex:"1 1 180px",minWidth:140,padding:"6px 10px",fontSize:13}}/>
+      </div>}
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>💰</span>Nenhum CCusto cadastrado</div>:(()=>{
+        const fltCC=items.filter(item=>(!filterCC.centroCusto||(item.centroCusto||"").toLowerCase().includes(filterCC.centroCusto.toLowerCase()))&&(!filterCC.descricao||(item.descricao||"").toLowerCase().includes(filterCC.descricao.toLowerCase())));
+        return isMobile
+          ?<MobileCardList items={fltCC} columns={[{key:"centroCusto",label:"Centro de Custo"},{key:"descricao",label:"Descrição Ccusto"}]} actions={item=>(
             <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:item.id,centroCusto:item.centroCusto,descricao:item.descricao||""});}}>Editar</button>}
               {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}</>
           )}/>
@@ -9188,7 +9278,7 @@ function CcustoConsumoScreen({user}){
             <th style={S.th}>Descrição Ccusto</th>
             <th style={{...S.th,width:140}}>Ações</th>
           </tr></thead>
-          <tbody>{items.map(item=>(
+          <tbody>{fltCC.map(item=>(
             <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={S.td}>{item.centroCusto}</td>
               <td style={S.td}>{item.descricao||"—"}</td>
@@ -9198,7 +9288,7 @@ function CcustoConsumoScreen({user}){
               </td>
             </tr>
           ))}</tbody></table>
-      )}
+      ;})()}
       {modal&&<Modal title={modal.id?"Editar CCusto":"Novo CCusto"} onClose={()=>setModal(null)}>
         <Input label="Centro de Custo" value={modal.centroCusto} onChange={v=>setModal(m=>({...m,centroCusto:v}))} required/>
         <Input label="Descrição Ccusto" value={modal.descricao||""} onChange={v=>setModal(m=>({...m,descricao:v}))}/>
@@ -9251,6 +9341,7 @@ function ItensConsumoScreen({user}){
     try{await api.delete(`/consumo-itens/${delId}`);setDelId(null);load();}
     catch(e){alert(e?.error||e.message);}
   };
+  const[filterIt,setFilterIt]=useState({item:""});
   const canI=act=>user.permissions?.s45?.[act];
   return(
     <div style={S.card}>
@@ -9258,9 +9349,13 @@ function ItensConsumoScreen({user}){
         <span style={S.cardTitle}>Cadastro de Ítens</span>
         {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({item:""});}}>+ Novo Item</button>}
       </div>
-      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum item cadastrado</div>:(
-        isMobile
-          ?<MobileCardList items={items} columns={[{key:"item",label:"Item"}]} actions={i=>(
+      {!loading&&items.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <input placeholder="Item" value={filterIt.item} onChange={e=>setFilterIt(f=>({...f,item:e.target.value}))} style={{...S.input,flex:"1 1 220px",minWidth:180,padding:"6px 10px",fontSize:13}}/>
+      </div>}
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum item cadastrado</div>:(()=>{
+        const fltIt=items.filter(i=>!filterIt.item||(i.item||"").toLowerCase().includes(filterIt.item.toLowerCase()));
+        return isMobile
+          ?<MobileCardList items={fltIt} columns={[{key:"item",label:"Item"}]} actions={i=>(
             <>{canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({id:i.id,item:i.item});}}>Editar</button>}
               {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(i.id)}>Excluir</button>}</>
           )}/>
@@ -9268,7 +9363,7 @@ function ItensConsumoScreen({user}){
             <th style={S.th}>Item</th>
             <th style={{...S.th,width:140}}>Ações</th>
           </tr></thead>
-          <tbody>{items.map(i=>(
+          <tbody>{fltIt.map(i=>(
             <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={S.td}>{i.item}</td>
               <td style={S.td}>
@@ -9277,7 +9372,7 @@ function ItensConsumoScreen({user}){
               </td>
             </tr>
           ))}</tbody></table>
-      )}
+      ;})()}
       {modal&&<Modal title={modal.id?"Editar Item":"Novo Item"} onClose={()=>setModal(null)}>
         <Input label="Item" value={modal.item} onChange={v=>setModal(m=>({...m,item:v}))} required/>
         {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
@@ -9369,6 +9464,7 @@ function MovimentacaoItensScreen({user}){
   const[items,setItems]=useState([]);
   const[loading,setLoading]=useState(true);
   const[filterStatus,setFilterStatus]=useState("");
+  const[filterMov,setFilterMov]=useState({numSol:"",dataInicio:"",dataFim:"",item:"",estoque:"",ccustoDespesa:""});
   const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
   const load=()=>{
     setLoading(true);
@@ -9388,8 +9484,8 @@ function MovimentacaoItensScreen({user}){
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>Movimentação de Ítens</span>
       </div>
-      <div style={{display:"flex",gap:12,alignItems:"flex-end",flexWrap:"wrap",marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
-        <div style={{flex:"1 1 200px"}}>
+      <div style={{display:"flex",gap:8,alignItems:"flex-end",flexWrap:"wrap",marginBottom:8,paddingBottom:12,borderBottom:`1px solid ${C.border}`}}>
+        <div style={{flex:"1 1 160px"}}>
           <SelectField label="Status" value={filterStatus} onChange={setFilterStatus}
             options={[{value:"",label:"Todos"},{value:"Não Processado",label:"Não Processado"},{value:"Aguardando Compra",label:"Aguardando Compra"},{value:"Em Estoque",label:"Em Estoque"},{value:"Consumido",label:"Consumido"},{value:"Processado",label:"Processado"}]}/>
         </div>
@@ -9397,14 +9493,24 @@ function MovimentacaoItensScreen({user}){
           <button style={S.btnSave} onClick={load}>Filtrar</button>
         </div>
       </div>
-      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhuma movimentação encontrada</div>:(
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <input placeholder="Num Sol." value={filterMov.numSol} onChange={e=>setFilterMov(f=>({...f,numSol:e.target.value}))} style={{...S.input,flex:"1 1 100px",minWidth:90,padding:"6px 10px",fontSize:13}}/>
+        <input type="date" value={filterMov.dataInicio} onChange={e=>setFilterMov(f=>({...f,dataInicio:e.target.value}))} title="Data início" style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input type="date" value={filterMov.dataFim} onChange={e=>setFilterMov(f=>({...f,dataFim:e.target.value}))} title="Data fim" style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Item" value={filterMov.item} onChange={e=>setFilterMov(f=>({...f,item:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Estoque" value={filterMov.estoque} onChange={e=>setFilterMov(f=>({...f,estoque:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="CCusto Despesa" value={filterMov.ccustoDespesa} onChange={e=>setFilterMov(f=>({...f,ccustoDespesa:e.target.value}))} style={{...S.input,flex:"1 1 150px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhuma movimentação encontrada</div>:(()=>{
+        const fltMov=items.filter(i=>{const d=(i.data||"").slice(0,10);return(!filterMov.numSol||String(i.numSolicitacao||"").includes(filterMov.numSol))&&(!filterMov.dataInicio||d>=filterMov.dataInicio)&&(!filterMov.dataFim||d<=filterMov.dataFim)&&(!filterMov.item||(i.item||"").toLowerCase().includes(filterMov.item.toLowerCase()))&&(!filterMov.estoque||(i.estoque||"").toLowerCase().includes(filterMov.estoque.toLowerCase()))&&(!filterMov.ccustoDespesa||(i.ccustoDespesa||"").toLowerCase().includes(filterMov.ccustoDespesa.toLowerCase()));});
+        return(
         <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
             {["Num Sol.","Data","Item","Estoque","CCusto Despesa","Desc Ccusto Despesa","Qtde Estoque","CCusto Consumidor","Desc Ccusto Consumidor","Qtde Consumida","Qtde Solicitada","Status"].map(h=>(
               <th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>
             ))}
           </tr></thead>
-          <tbody>{items.map(i=>(
+          <tbody>{fltMov.map(i=>(
             <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={{...S.td,textAlign:"center",fontVariantNumeric:"tabular-nums"}}>{i.numSolicitacao||"—"}</td>
               <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(i.data)}</td>
@@ -9421,7 +9527,8 @@ function MovimentacaoItensScreen({user}){
             </tr>
           ))}</tbody></table>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -9453,6 +9560,7 @@ function SolicitacaoItensScreen({user}){
     }catch(e){setErr(e?.error||e.message);}
   };
   const del=()=>api.delete(`/consumo-solicitacao/${delId}`).then(()=>{setDelId(null);load();}).catch(e=>alert(e?.error||e.message));
+  const[filterSol,setFilterSol]=useState({numSol:"",dataInicio:"",dataFim:"",item:"",estoque:"",ccustoDespesa:""});
   const canI=act=>user.permissions?.s48?.[act];
   return(
     <div style={S.card}>
@@ -9460,14 +9568,24 @@ function SolicitacaoItensScreen({user}){
         <span style={S.cardTitle}>Solicitação de Ítens</span>
         {canI("insert")&&<button style={S.btnAdd} onClick={openNew}>+ Nova Solicitação</button>}
       </div>
-      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhuma solicitação cadastrada</div>:(
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <input placeholder="Num Solicitação" value={filterSol.numSol} onChange={e=>setFilterSol(f=>({...f,numSol:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input type="date" value={filterSol.dataInicio} onChange={e=>setFilterSol(f=>({...f,dataInicio:e.target.value}))} title="Data início" style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input type="date" value={filterSol.dataFim} onChange={e=>setFilterSol(f=>({...f,dataFim:e.target.value}))} title="Data fim" style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Item" value={filterSol.item} onChange={e=>setFilterSol(f=>({...f,item:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Estoque" value={filterSol.estoque} onChange={e=>setFilterSol(f=>({...f,estoque:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="CCusto Despesa" value={filterSol.ccustoDespesa} onChange={e=>setFilterSol(f=>({...f,ccustoDespesa:e.target.value}))} style={{...S.input,flex:"1 1 150px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhuma solicitação cadastrada</div>:(()=>{
+        const fltSol=items.filter(i=>{const d=(i.data||"").slice(0,10);return(!filterSol.numSol||String(i.numero||"").includes(filterSol.numSol))&&(!filterSol.dataInicio||d>=filterSol.dataInicio)&&(!filterSol.dataFim||d<=filterSol.dataFim)&&(!filterSol.item||(i.item||"").toLowerCase().includes(filterSol.item.toLowerCase()))&&(!filterSol.estoque||(i.estoque||"").toLowerCase().includes(filterSol.estoque.toLowerCase()))&&(!filterSol.ccustoDespesa||(i.ccustoDespesa||"").toLowerCase().includes(filterSol.ccustoDespesa.toLowerCase()));});
+        return(
         <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
             {["Num Solicitação","Data","Item","Estoque","Qtde Solicitada","Qtde Atendida","Status","Ações"].map(h=>(
               <th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>
             ))}
           </tr></thead>
-          <tbody>{items.map(i=>(
+          <tbody>{fltSol.map(i=>(
             <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={{...S.td,textAlign:"center",fontVariantNumeric:"tabular-nums"}}>{i.numero||"—"}</td>
               <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(i.data)}</td>
@@ -9484,7 +9602,8 @@ function SolicitacaoItensScreen({user}){
             </tr>
           ))}</tbody></table>
         </div>
-      )}
+        );
+      })()}
       {modal&&<Modal title="Nova Solicitação" onClose={()=>setModal(null)}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
           <div style={S.formRow}>
@@ -9554,6 +9673,7 @@ function EntregaItensScreen({user}){
     try{await api.delete(`/consumo-entrega/${delId}`);setDelId(null);load();}
     catch(e){alert(e?.error||e.message);}
   };
+  const[filterEnt,setFilterEnt]=useState({dataInicio:"",dataFim:"",item:"",estoque:"",ccustoConsumidor:"",funcionario:""});
   const canI=act=>user.permissions?.s49?.[act];
   const inputRO={...S.input,background:C.bg,cursor:"not-allowed",opacity:0.8};
   return(
@@ -9562,7 +9682,17 @@ function EntregaItensScreen({user}){
         <span style={S.cardTitle}>Entrega de Ítens</span>
         {canI("insert")&&<button style={S.btnAdd} onClick={openNew}>+ Nova Entrega</button>}
       </div>
-      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📤</span>Nenhuma entrega registrada</div>:(
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <input type="date" value={filterEnt.dataInicio} onChange={e=>setFilterEnt(f=>({...f,dataInicio:e.target.value}))} title="Data início" style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input type="date" value={filterEnt.dataFim} onChange={e=>setFilterEnt(f=>({...f,dataFim:e.target.value}))} title="Data fim" style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Item" value={filterEnt.item} onChange={e=>setFilterEnt(f=>({...f,item:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Estoque" value={filterEnt.estoque} onChange={e=>setFilterEnt(f=>({...f,estoque:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="CCusto Consumidor" value={filterEnt.ccustoConsumidor} onChange={e=>setFilterEnt(f=>({...f,ccustoConsumidor:e.target.value}))} style={{...S.input,flex:"1 1 160px",minWidth:140,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Funcionário" value={filterEnt.funcionario} onChange={e=>setFilterEnt(f=>({...f,funcionario:e.target.value}))} style={{...S.input,flex:"1 1 150px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📤</span>Nenhuma entrega registrada</div>:(()=>{
+        const fltEnt=items.filter(i=>{const d=(i.data||"").slice(0,10);return(!filterEnt.dataInicio||d>=filterEnt.dataInicio)&&(!filterEnt.dataFim||d<=filterEnt.dataFim)&&(!filterEnt.item||(i.item||"").toLowerCase().includes(filterEnt.item.toLowerCase()))&&(!filterEnt.estoque||(i.estoque||"").toLowerCase().includes(filterEnt.estoque.toLowerCase()))&&(!filterEnt.ccustoConsumidor||(i.ccustoConsumidor||"").toLowerCase().includes(filterEnt.ccustoConsumidor.toLowerCase()))&&(!filterEnt.funcionario||(i.funcionario||"").toLowerCase().includes(filterEnt.funcionario.toLowerCase()));});
+        return(
         <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
             <th style={S.th}>Data</th>
@@ -9574,7 +9704,7 @@ function EntregaItensScreen({user}){
             <th style={S.th}>Observação</th>
             <th style={{...S.th,width:100}}>Ações</th>
           </tr></thead>
-          <tbody>{items.map(i=>(
+          <tbody>{fltEnt.map(i=>(
             <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(i.data)}</td>
               <td style={S.td}>{i.item||"—"}</td>
@@ -9589,7 +9719,8 @@ function EntregaItensScreen({user}){
             </tr>
           ))}</tbody></table>
         </div>
-      )}
+        );
+      })()}
       {modal&&<Modal title="Entrega de Ítens" onClose={()=>setModal(false)} extraWide>
         {linhas.length===0
           ?<div style={{padding:16,color:C.textLight,textAlign:"center"}}>Nenhum item disponível para entrega.</div>
@@ -9930,6 +10061,7 @@ function RecebimentoEstoqueScreen({user}){
   const[saving,setSaving]=useState(false);
   const[err,setErr]=useState("");
   const[delId,setDelId]=useState(null);
+  const[filterRec,setFilterRec]=useState({dataInicio:"",dataFim:"",item:"",estoque:""});
   const canI=act=>user.permissions?.s50?.[act];
   const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
   const load=()=>{
@@ -9963,13 +10095,20 @@ function RecebimentoEstoqueScreen({user}){
         <span style={S.cardTitle}>Recebimento de Estoque</span>
         {canI("insert")&&<button style={S.btnAdd} onClick={openModal}>+ Inserir</button>}
       </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <input type="date" value={filterRec.dataInicio} onChange={e=>setFilterRec(f=>({...f,dataInicio:e.target.value}))} title="Data início" style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input type="date" value={filterRec.dataFim} onChange={e=>setFilterRec(f=>({...f,dataFim:e.target.value}))} title="Data fim" style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Item" value={filterRec.item} onChange={e=>setFilterRec(f=>({...f,item:e.target.value}))} style={{...S.input,flex:"1 1 150px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Estoque" value={filterRec.estoque} onChange={e=>setFilterRec(f=>({...f,estoque:e.target.value}))} style={{...S.input,flex:"1 1 150px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+      </div>
       {loading?<Spinner/>:items.length===0
         ?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum recebimento encontrado</div>
-        :<div style={{overflowX:"auto"}}>
+        :(()=>{const fltRec=items.filter(i=>{const d=(i.data||"").slice(0,10);return(!filterRec.dataInicio||d>=filterRec.dataInicio)&&(!filterRec.dataFim||d<=filterRec.dataFim)&&(!filterRec.item||(i.item||"").toLowerCase().includes(filterRec.item.toLowerCase()))&&(!filterRec.estoque||(i.estoque||"").toLowerCase().includes(filterRec.estoque.toLowerCase()));});return(
+        <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
             {["Data","Item","Estoque","Ações"].map(h=><th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>)}
           </tr></thead>
-          <tbody>{items.map(i=>(
+          <tbody>{fltRec.map(i=>(
             <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(i.data)}</td>
               <td style={S.td}>{i.item||"—"}</td>
@@ -9980,7 +10119,7 @@ function RecebimentoEstoqueScreen({user}){
             </tr>
           ))}</tbody></table>
         </div>
-      }
+        );})()}
       {modal&&<Modal title="Recebimento de Estoque" onClose={()=>setModal(false)} wide>
         {linhas.length===0
           ?<div style={{padding:16,color:C.textLight,textAlign:"center"}}>Nenhum item disponível para recebimento.</div>
@@ -10030,6 +10169,7 @@ function ManutencaoRegistrosScreen({user}){
   const[delItemId,setDelItemId]=useState(null);
   const[err,setErr]=useState("");
   const[itemErr,setItemErr]=useState("");
+  const[filterManu,setFilterManu]=useState({dataInicio:"",dataFim:"",nomeAtivo:"",empresa:"",numeroSerie:"",imei:"",funcionario:""});
   const canI=act=>user.permissions?.s51?.[act];
   const today=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
   const fmtDate=d=>{if(!d)return"—";const dt=new Date(d);return`${String(dt.getUTCDate()).padStart(2,"0")}/${String(dt.getUTCMonth()+1).padStart(2,"0")}/${dt.getUTCFullYear()}`;};
@@ -10125,13 +10265,23 @@ function ManutencaoRegistrosScreen({user}){
         <span style={S.cardTitle}>Registros de Manutenção</span>
         {canI("insert")&&<button style={S.btnAdd} onClick={openNew}>+ Novo Registro</button>}
       </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        <input type="date" value={filterManu.dataInicio} onChange={e=>setFilterManu(f=>({...f,dataInicio:e.target.value}))} title="Data início" style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input type="date" value={filterManu.dataFim} onChange={e=>setFilterManu(f=>({...f,dataFim:e.target.value}))} title="Data fim" style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Nome do Ativo" value={filterManu.nomeAtivo} onChange={e=>setFilterManu(f=>({...f,nomeAtivo:e.target.value}))} style={{...S.input,flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Empresa" value={filterManu.empresa} onChange={e=>setFilterManu(f=>({...f,empresa:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Nº Série" value={filterManu.numeroSerie} onChange={e=>setFilterManu(f=>({...f,numeroSerie:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="IMEI" value={filterManu.imei} onChange={e=>setFilterManu(f=>({...f,imei:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Funcionário" value={filterManu.funcionario} onChange={e=>setFilterManu(f=>({...f,funcionario:e.target.value}))} style={{...S.input,flex:"1 1 150px",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+      </div>
       {loading?<Spinner/>:items.length===0
         ?<div style={S.emptyState}><span style={S.emptyIcon}>🔧</span>Nenhum registro de manutenção</div>
-        :<div style={{overflowX:"auto"}}>
+        :(()=>{const fltManu=items.filter(i=>{const d=(i.data||"").slice(0,10);return(!filterManu.dataInicio||d>=filterManu.dataInicio)&&(!filterManu.dataFim||d<=filterManu.dataFim)&&(!filterManu.nomeAtivo||(i.nomeAtivo||"").toLowerCase().includes(filterManu.nomeAtivo.toLowerCase()))&&(!filterManu.empresa||(i.empresa||"").toLowerCase().includes(filterManu.empresa.toLowerCase()))&&(!filterManu.numeroSerie||(i.numeroSerie||"").toLowerCase().includes(filterManu.numeroSerie.toLowerCase()))&&(!filterManu.imei||(i.imeiSlot1||"").toLowerCase().includes(filterManu.imei.toLowerCase()))&&(!filterManu.funcionario||(i.funcionario||"").toLowerCase().includes(filterManu.funcionario.toLowerCase()));});return(
+        <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
             {COLS.map(h=><th key={h} style={{...S.th,whiteSpace:"nowrap"}}>{h}</th>)}
           </tr></thead>
-          <tbody>{items.map(i=>(
+          <tbody>{fltManu.map(i=>(
             <tr key={i.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
               <td style={{...S.td,whiteSpace:"nowrap"}}>{fmtDate(i.data)}</td>
               <td style={S.td}>{i.nomeAtivo||"—"}</td>
@@ -10153,7 +10303,7 @@ function ManutencaoRegistrosScreen({user}){
             </tr>
           ))}</tbody></table>
         </div>
-      }
+        );})()}
       {modal&&<Modal title={modal.id?"Editar Registro de Manutenção":"Novo Registro de Manutenção"} onClose={()=>setModal(null)}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
           <div style={S.formRow}>
