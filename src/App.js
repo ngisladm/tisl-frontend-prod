@@ -3112,8 +3112,7 @@ function LinhasDisponiveisScreen({user}){
         <div style={S.cardHeader}>
           <span style={S.cardTitle}>📶 Linhas Disponíveis</span>
           <div style={{display:"flex",gap:8}}>
-            {canI("edit")&&<button style={{...S.btnAdd,background:"#5DADE2"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
-            {user.isMaster&&<button style={{...S.btnAdd,background:"#7B68EE"}} onClick={()=>setCargaModal({file:null,skipHeader:true,processing:false,result:null})}>📥 Carga Inicial</button>}
+            {user.isMaster&&<button style={{...S.btnAdd,background:"#5DADE2"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
             {canI("insert")&&<button style={S.btnAdd} onClick={openNew}>+ Nova Linha</button>}
           </div>
         </div>
@@ -3311,6 +3310,7 @@ function LiberacaoLinhasEstoqueScreen({user}){
     }catch(e){setErr(er=>({...er,[item.id]:e?.error||"Erro ao atualizar status."}));}
   };
   const filtered=items.filter(i=>{
+    if(i.status!=="Em análise")return false;
     if(filter.empresa&&i.companyId!==filter.empresa)return false;
     if(filter.operadora&&i.operadoraId!==filter.operadora)return false;
     if(filter.numeroLinha&&!(i.numeroLinha||"").toLowerCase().includes(filter.numeroLinha.toLowerCase()))return false;
@@ -3462,7 +3462,7 @@ function AtivosScreen({user}){
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>📦 Ativos</span>
         <div style={{display:"flex",gap:8}}>
-          {canI("edit")&&<button style={{...S.btnAdd,background:"#5DADE2"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
+          {user.isMaster&&<button style={{...S.btnAdd,background:"#5DADE2"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
           {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal(blankAtivo());}}>+ Novo Ativo</button>}
         </div>
       </div>
@@ -3685,7 +3685,7 @@ function FuncionariosScreen({user}){
             {canI("edit")&&<button style={{...S.btnAdd,background:"#2E86C1"}} onClick={runSync} disabled={syncing}>
               {syncing?"⏳ Sincronizando...":"🔄 Sincronizar"}
             </button>}
-            {canI("insert")&&<button style={{...S.btnAdd,background:"#7D3C98"}} onClick={()=>setImportModal({file:null,processing:false,result:null})}>📥 Importação</button>}
+            {user.isMaster&&<button style={{...S.btnAdd,background:"#7D3C98"}} onClick={()=>setImportModal({file:null,processing:false,result:null})}>📥 Importação</button>}
             {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal(blankFunc());}}>+ Novo Funcionário</button>}
           </div>
         </div>
@@ -4464,10 +4464,9 @@ function ControleAtivosScreen({user}){
         <div style={S.cardHeader}>
           <span style={S.cardTitle}>🖥️ Controle de Ativos</span>
           <div style={{display:"flex",gap:8}}>
-            {canI("edit")&&<button style={{...S.btnAdd,background:"#5DADE2"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
-            {canI("edit")&&<button style={{...S.btnAdd,background:"#27AE60"}} onClick={()=>{setCsvImpItensRows(null);setCsvImpItensModal(true);}}>📥 Importar Itens</button>}
-            {user.isMaster&&<button style={{...S.btnAdd,background:"#7B68EE"}} onClick={()=>setCargaModal({file:null,skipHeader:true,processing:false,result:null})}>📥 Carga Inicial</button>}
-            {canI("edit")&&<button style={{...S.btnAdd,background:"#E67E22"}} disabled={vinculando} onClick={async()=>{
+            {user.isMaster&&<button style={{...S.btnAdd,background:"#5DADE2"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
+            {user.isMaster&&<button style={{...S.btnAdd,background:"#27AE60"}} onClick={()=>{setCsvImpItensRows(null);setCsvImpItensModal(true);}}>📥 Importar Itens</button>}
+            {user.isMaster&&<button style={{...S.btnAdd,background:"#E67E22"}} disabled={vinculando} onClick={async()=>{
               setVinculando(true);
               try{
                 const r=await api.post("/controle-ativos/vincular-funcionarios",{});
@@ -8128,7 +8127,7 @@ function LinksScreen({user}){
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>🔗 Links</span>
         <div style={{display:"flex",gap:8}}>
-          <button style={{...S.btnAdd,background:"#1565C0"}} onClick={()=>{setCsvText("");setCsvResult(null);setCsvModal(true);}}>📥 Importar CSV</button>
+          {user.isMaster&&<button style={{...S.btnAdd,background:"#1565C0"}} onClick={()=>{setCsvText("");setCsvResult(null);setCsvModal(true);}}>📥 Importar CSV</button>}
           {p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Link</button>}
         </div>
       </div>
@@ -9315,7 +9314,7 @@ function CcustoConsumoScreen({user}){
       <div style={S.cardHeader}>
         <span style={S.cardTitle}>Cadastro de CCusto</span>
         <div style={{display:"flex",gap:8}}>
-          {canI("insert")&&<button style={{...S.btnAdd,background:"#7B68EE"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
+          {user.isMaster&&<button style={{...S.btnAdd,background:"#7B68EE"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
           {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({centroCusto:"",descricao:""});}}>+ Novo CCusto</button>}
         </div>
       </div>
