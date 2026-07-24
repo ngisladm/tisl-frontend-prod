@@ -3607,6 +3607,7 @@ function FuncionariosScreen({user}){
   const[filter,setFilter]=useState({nome:"",cpf:"",situacao:"",coligada:""});
   const[syncing,setSyncing]=useState(false);
   const[syncMsg,setSyncMsg]=useState("");
+  const[importModal,setImportModal]=useState(null);
   const isMobile=useIsMobile();
 
   const blankFunc=()=>({
@@ -3684,6 +3685,7 @@ function FuncionariosScreen({user}){
             {canI("edit")&&<button style={{...S.btnAdd,background:"#2E86C1"}} onClick={runSync} disabled={syncing}>
               {syncing?"⏳ Sincronizando...":"🔄 Sincronizar"}
             </button>}
+            {canI("insert")&&<button style={{...S.btnAdd,background:"#7D3C98"}} onClick={()=>setImportModal({file:null,processing:false,result:null})}>📥 Importação</button>}
             {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal(blankFunc());}}>+ Novo Funcionário</button>}
           </div>
         </div>
@@ -3806,6 +3808,51 @@ function FuncionariosScreen({user}){
       )}
 
       {delId&&<ConfirmModal msg="Excluir este funcionário?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+
+      {importModal&&(
+        <Modal title="Importação de Funcionários" onClose={()=>setImportModal(null)}>
+          <div style={{marginBottom:12,padding:12,background:"#F4ECF7",borderRadius:8,fontSize:12,color:C.text}}>
+            <strong>Colunas esperadas no CSV (com cabeçalho):</strong><br/>
+            Nome do Funcionário · Matrícula · Centro de Custo · Cargo · CPF · RG · E-mail · Fone · Logradouro · Número · Complemento · Bairro · Cidade · CEP · Estado · Situação · Coligada · Observação<br/>
+            <span style={{color:C.textLight}}>Linhas com mesmo CPF e Matrícula serão ignoradas (duplicatas).</span>
+          </div>
+          <div style={S.formRow}>
+            <label style={S.label}>Arquivo CSV</label>
+            <input type="file" accept=".csv,text/csv" style={{...S.input,padding:"6px"}}
+              onChange={e=>setImportModal(m=>({...m,file:e.target.files[0]||null,result:null}))}/>
+          </div>
+          {importModal.result&&(
+            <div style={{marginBottom:12,padding:12,background:importModal.result.erros?.length?"#FFF8DC":"#F0FFF0",borderRadius:8,fontSize:12}}>
+              <div>✅ <strong>{importModal.result.inseridos}</strong> inserido(s) · ⏭️ <strong>{importModal.result.ignorados||0}</strong> ignorado(s)</div>
+              {importModal.result.erros?.length>0&&(
+                <div style={{marginTop:8,maxHeight:120,overflowY:"auto"}}>
+                  {importModal.result.erros.map((e,i)=>(
+                    <div key={i} style={{color:C.danger,fontSize:11}}>Linha {e.linha}: {e.msg}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setImportModal(null)}>Fechar</button>
+            <button style={{...S.btnSave,background:"#7D3C98",opacity:importModal.processing||!importModal.file?0.6:1}}
+              disabled={importModal.processing||!importModal.file}
+              onClick={async()=>{
+                if(!importModal.file)return;
+                setImportModal(m=>({...m,processing:true,result:null}));
+                try{
+                  const text=await importModal.file.text();
+                  const{rows}=parseCSVGeneric(text);
+                  const result=await api.post("/funcionarios/importacao",{rows});
+                  setImportModal(m=>({...m,processing:false,result}));
+                  load();
+                }catch(e){alert("Erro: "+e.message);setImportModal(m=>({...m,processing:false}));}
+              }}>
+              {importModal.processing?"Processando...":"⚙️ Processar"}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
