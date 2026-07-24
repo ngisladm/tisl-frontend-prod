@@ -4125,6 +4125,7 @@ function ControleAtivosScreen({user}){
   const[csvImpItensModal,setCsvImpItensModal]=useState(false);
   const[csvImpItensRows,setCsvImpItensRows]=useState(null);
   const[csvImpItensBusy,setCsvImpItensBusy]=useState(false);
+  const[vinculando,setVinculando]=useState(false);
   const isMobile=useIsMobile();
 
   const load=()=>{
@@ -4466,6 +4467,15 @@ function ControleAtivosScreen({user}){
             {canI("edit")&&<button style={{...S.btnAdd,background:"#5DADE2"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importar</button>}
             {canI("edit")&&<button style={{...S.btnAdd,background:"#27AE60"}} onClick={()=>{setCsvImpItensRows(null);setCsvImpItensModal(true);}}>📥 Importar Itens</button>}
             {user.isMaster&&<button style={{...S.btnAdd,background:"#7B68EE"}} onClick={()=>setCargaModal({file:null,skipHeader:true,processing:false,result:null})}>📥 Carga Inicial</button>}
+            {canI("edit")&&<button style={{...S.btnAdd,background:"#E67E22"}} disabled={vinculando} onClick={async()=>{
+              setVinculando(true);
+              try{
+                const r=await api.post("/controle-ativos/vincular-funcionarios",{});
+                alert(`✅ Vínculo concluído!\nVinculados: ${r.vinculados}\nNão encontrados: ${r.naoEncontrados}`);
+                if(r.vinculados>0)load();
+              }catch(e){alert("Erro: "+e.message);}
+              finally{setVinculando(false);}
+            }}>{vinculando?"⏳ Vinculando...":"🔗 Vincular Funcionários"}</button>}
             {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({funcionarioId:""});}}>+ Novo Registro</button>}
           </div>
         </div>
