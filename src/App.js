@@ -285,6 +285,81 @@ function SelectField({label,value,onChange,options=[],required,disabled}){
     </div>
   );
 }
+function MultiSelectField({label,value=[],onChange,options=[],placeholder="Selecione...",required,disabled}){
+  const[open,setOpen]=useState(false);
+  const[search,setSearch]=useState("");
+  const[dropPos,setDropPos]=useState({top:0,left:0,width:200});
+  const triggerRef=useRef(null);
+  const filtered=options.filter(o=>(o.label||"").toLowerCase().includes(search.toLowerCase()));
+  const selectedLabel=value.length===0?placeholder:(value.length===1?(options.find(o=>String(o.value)===String(value[0]))||{}).label||String(value[0]):`${value.length} selecionados`);
+  useEffect(()=>{
+    if(!open)return;
+    const h=e=>{if(triggerRef.current&&!triggerRef.current.contains(e.target))setOpen(false);};
+    document.addEventListener("mousedown",h);
+    return()=>document.removeEventListener("mousedown",h);
+  },[open]);
+  const handleOpen=()=>{
+    if(disabled)return;
+    if(triggerRef.current){
+      const r=triggerRef.current.getBoundingClientRect();
+      const spaceBelow=window.innerHeight-r.bottom-8;
+      const spaceAbove=r.top-8;
+      const openUp=spaceBelow<260&&spaceAbove>spaceBelow;
+      setDropPos({
+        top:openUp?undefined:r.bottom+4,
+        bottom:openUp?window.innerHeight-r.top+4:undefined,
+        maxH:openUp?spaceAbove:spaceBelow,
+        left:r.left,width:r.width,openUp
+      });
+    }
+    setOpen(o=>!o);
+    setSearch("");
+  };
+  const toggle=v=>{
+    const has=value.some(x=>String(x)===String(v));
+    onChange(has?value.filter(x=>String(x)!==String(v)):[...value,v]);
+  };
+  return(
+    <div style={S.formRow}>
+      <label style={S.label}>{label}{required&&" *"}</label>
+      <div ref={triggerRef} style={{position:"relative"}}>
+        <div onClick={handleOpen}
+          style={{...S.select,cursor:disabled?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",userSelect:"none",minHeight:36,padding:"0 10px",background:disabled?C.bg:C.white,opacity:disabled?0.7:1}}>
+          <span style={{color:value.length?C.text:C.textLight,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,fontSize:13}}>{selectedLabel}</span>
+          <span style={{marginLeft:6,fontSize:10,color:C.textLight,flexShrink:0}}>{open?"▲":"▼"}</span>
+        </div>
+        {open&&(
+          <div style={{position:"fixed",top:dropPos.top,bottom:dropPos.bottom,left:dropPos.left,width:Math.max(dropPos.width,260),zIndex:9999,
+            maxHeight:dropPos.maxH||360,
+            background:C.white,border:`1px solid ${C.border}`,borderRadius:4,boxShadow:"0 6px 24px rgba(0,0,0,.22)",display:"flex",flexDirection:dropPos.openUp?"column-reverse":"column"}}>
+            <div style={{padding:"6px 8px",borderTop:dropPos.openUp?`1px solid ${C.border}`:"none",borderBottom:dropPos.openUp?"none":`1px solid ${C.border}`,flexShrink:0}}>
+              <input autoFocus value={search} onChange={e=>setSearch(e.target.value)}
+                placeholder="Pesquisar..." style={{...S.input,margin:0,padding:"4px 8px",fontSize:12,width:"100%",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{overflowY:"auto",flex:1}}>
+              {filtered.length===0
+                ?<div style={{padding:"10px 12px",color:C.textLight,fontSize:13}}>Nenhum resultado</div>
+                :filtered.map(o=>{
+                  const checked=value.some(x=>String(x)===String(o.value));
+                  return(
+                    <div key={o.value} onMouseDown={e=>{e.preventDefault();toggle(o.value);}}
+                      style={{padding:"8px 12px",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",gap:8,
+                        background:checked?"#EBF5FB":"none"}}
+                      onMouseOver={e=>e.currentTarget.style.background="#f0f4f8"}
+                      onMouseOut={e=>e.currentTarget.style.background=checked?"#EBF5FB":"none"}>
+                      <input type="checkbox" checked={checked} readOnly style={{accentColor:C.primary,pointerEvents:"none"}}/>
+                      <span style={{fontWeight:checked?600:400}}>{o.label}</span>
+                    </div>
+                  );
+                })
+              }
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 // mask: '9' = dígito, qualquer outro char = literal
 function applyMask(raw,mask){
   const digits=(raw||"").replace(/\D/g,"");
@@ -483,15 +558,16 @@ function EquipeItensModal({equipe,user,onClose}){
     ]).then(([it,fn])=>{setItens(it);setFuncionarios(fn);}).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
 
-  const openAdd=()=>{setErr("");setForm({id:null,funcionarioId:""});};
-  const openEdit=it=>{setErr("");setForm({id:it.id,funcionarioId:it.funcionarioId});};
+  const openAdd=()=>{setErr("");setForm({id:null,funcionarioId:"",papel:"",atribuicoes:""});};
+  const openEdit=it=>{setErr("");setForm({id:it.id,funcionarioId:it.funcionarioId,papel:it.papel||"",atribuicoes:it.atribuicoes||""});};
 
   const save=async()=>{
     if(!form.funcionarioId){setErr("Selecione um funcionário.");return;}
     setSaving(true);setErr("");
+    const body={funcionarioId:form.funcionarioId,papel:form.papel,atribuicoes:form.atribuicoes};
     try{
-      if(form.id) await api.put(`/teams/${equipe.id}/itens/${form.id}`,{funcionarioId:form.funcionarioId});
-      else        await api.post(`/teams/${equipe.id}/itens`,{funcionarioId:form.funcionarioId});
+      if(form.id) await api.put(`/teams/${equipe.id}/itens/${form.id}`,body);
+      else        await api.post(`/teams/${equipe.id}/itens`,body);
       setForm(null);load();
     }catch(e){setErr(e.message);}
     setSaving(false);
@@ -526,12 +602,14 @@ function EquipeItensModal({equipe,user,onClose}){
               :(
                 <div style={{overflowX:"auto"}}>
                   <table style={S.table}><thead><tr>
-                    {["Funcionário","Cargo","Centro de Custo","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+                    {["Funcionário","Cargo","Papel","Atribuições","Centro de Custo","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
                   </tr></thead>
                   <tbody>{itens.map(it=>(
                     <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                       <td style={{...S.td,fontWeight:600}}>{it.funcionarioNome||"—"}</td>
                       <td style={S.td}>{it.cargo||"—"}</td>
+                      <td style={S.td}>{it.papel||"—"}</td>
+                      <td style={S.td}>{it.atribuicoes||"—"}</td>
                       <td style={S.td}>{it.centroCusto||"—"}</td>
                       <td style={S.td}>
                         {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
@@ -552,6 +630,12 @@ function EquipeItensModal({equipe,user,onClose}){
           <SelectField label="Funcionário *" value={form.funcionarioId}
             onChange={v=>setForm(f=>({...f,funcionarioId:v}))}
             options={disponiveis.map(f=>({value:f.id,label:f.nome}))}/>
+          <Input label="Papel" value={form.papel} onChange={v=>setForm(f=>({...f,papel:v}))} placeholder="ex: Responsável por Backup e Redes"/>
+          <div style={S.formRow}>
+            <label style={S.label}>Atribuições</label>
+            <textarea value={form.atribuicoes} onChange={e=>setForm(f=>({...f,atribuicoes:e.target.value}))} rows={3}
+              style={{...S.input,resize:"vertical"}} placeholder="O que esta pessoa faz nesta equipe..."/>
+          </div>
           {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
           <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
             <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
@@ -570,7 +654,7 @@ function EquipesScreen({user}){
   const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
-  const[form,setForm]=useState({id:null,name:"",active:true,parentId:""});
+  const[form,setForm]=useState({id:null,name:"",active:true,parentId:"",atribuicoes:""});
   const[itensModal,setItensModal]=useState(null);
   const[expanded,setExpanded]=useState(new Set());
   const p=user.permissions?.s4;
@@ -581,7 +665,7 @@ function EquipesScreen({user}){
   };
   useEffect(()=>{if(!p?.view)return;reload();},[]);
 
-  const openAdd=()=>{setForm({id:null,name:"",active:true,parentId:""});setModal(true);};
+  const openAdd=()=>{setForm({id:null,name:"",active:true,parentId:"",atribuicoes:""});setModal(true);};
   const openEdit=i=>{setForm({...i,parentId:i.parentId||""});setModal(true);};
   const save=async()=>{
     if(!form.name.trim())return alert("Nome é obrigatório.");
@@ -684,6 +768,11 @@ function EquipesScreen({user}){
             onChange={v=>setForm(f=>({...f,parentId:v}))}
             options={items.filter(t=>t.id!==form.id).map(t=>({value:t.id,label:t.name}))}
             placeholder="Nenhuma (nó raiz)"/>
+          <div style={S.formRow}>
+            <label style={S.label}>Atribuições</label>
+            <textarea value={form.atribuicoes||""} onChange={e=>setForm(f=>({...f,atribuicoes:e.target.value}))} rows={3}
+              style={{...S.input,resize:"vertical"}} placeholder="O que esta equipe é responsável por fazer..."/>
+          </div>
           <div style={S.formRow}><label style={S.label}>STATUS</label>
             <div style={{display:"flex",gap:16}}>
               {[{v:true,l:"Ativo"},{v:false,l:"Inativo"}].map(o=>(
@@ -1774,6 +1863,128 @@ function ValorKmScreen({user}){
   );
 }
 
+// ── LANÇAMENTO DE INDICADOR (s59) ──────────────────────────────
+function LancamentoIndicadorScreen({user}){
+  const[rows,setRows]=useState([]);
+  const[teams,setTeams]=useState([]);
+  const[indicadores,setIndicadores]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const[modal,setModal]=useState(false);
+  const[delId,setDelId]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const[filters,setFilters]=useState({dateFrom:"",dateTo:"",teamId:"",indicadorId:""});
+  const emptyForm={id:null,teamId:"",indicadorId:"",dataReferencia:"",valorRealizado:"",observacao:""};
+  const[form,setForm]=useState(emptyForm);
+  const p=user.permissions?.s59;
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/teams"),api.get("/indicadores")])
+      .then(([t,i])=>{setTeams(t);setIndicadores(i);})
+      .catch(e=>alert(e.message));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  const search=async()=>{
+    setLoading(true);
+    const q=new URLSearchParams();
+    Object.entries(filters).forEach(([k,v])=>{if(v)q.set(k,v);});
+    try{const r=await api.get(`/indicadores/lancamentos?${q}`);setRows(r);}
+    catch(e){alert(e.message);}finally{setLoading(false);}
+  };
+
+  const openAdd=()=>{setForm(emptyForm);setModal(true);};
+  const openEdit=it=>{setForm({id:it.id,teamId:it.teamId,indicadorId:it.indicadorId,dataReferencia:it.dataReferencia,valorRealizado:it.valorRealizado,observacao:it.observacao||""});setModal(true);};
+
+  const save=async()=>{
+    if(!form.indicadorId)return alert("Indicador é obrigatório.");
+    if(!form.dataReferencia)return alert("Data de Referência é obrigatória.");
+    if(form.valorRealizado==="")return alert("Valor Realizado é obrigatório.");
+    setSaving(true);
+    try{
+      if(form.id) await api.put(`/indicadores/lancamentos/${form.id}`,form);
+      else        await api.post("/indicadores/lancamentos",form);
+      setModal(false);search();
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/indicadores/lancamentos/${delId}`);setDelId(null);search();}
+    catch(e){alert(e.message);}
+  };
+
+  const indicadoresDaEquipe=indicadores.filter(i=>!form.teamId||i.teamId===form.teamId);
+  const pct=(valor,meta,direcao,limiteMaximo)=>pctIndicador(valor,meta,direcao,limiteMaximo);
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📝 Lançamento de Indicador</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Lançamento</button>}</div>
+      <div style={{background:C.bg,borderRadius:8,padding:16,marginBottom:20,border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,letterSpacing:.5}}>FILTROS</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12}}>
+          <MaskedInput label="Data De"  mask={MASK_DATE} value={filters.dateFrom} onChange={v=>setFilters(f=>({...f,dateFrom:v}))} placeholder="01/01/2025"/>
+          <MaskedInput label="Data Até" mask={MASK_DATE} value={filters.dateTo}   onChange={v=>setFilters(f=>({...f,dateTo:v}))}   placeholder="31/12/2025"/>
+          <SelectField label="Equipe"     value={filters.teamId}      onChange={v=>setFilters(f=>({...f,teamId:v}))}      options={teams.map(t=>({value:t.id,label:t.name}))}/>
+          <SelectField label="Indicador"  value={filters.indicadorId} onChange={v=>setFilters(f=>({...f,indicadorId:v}))} options={indicadores.map(i=>({value:i.id,label:`${i.nome} ${setaDirecao(i.direcao)}`}))}/>
+        </div>
+        <div style={{marginTop:12,display:"flex",gap:10}}>
+          <button style={S.btnAdd} onClick={search}><Icon name="search" size={13}/> Pesquisar</button>
+          <button style={S.btnCancel} onClick={()=>{setFilters({dateFrom:"",dateTo:"",teamId:"",indicadorId:""});setRows([]);}}>Limpar</button>
+        </div>
+      </div>
+      {loading?<Spinner/>:rows.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📝</span>Nenhum lançamento encontrado.</div>:(
+        <div style={{overflowX:"auto"}}>
+        <table style={S.table}><thead><tr>
+          {["Data","Equipe","Indicador","Meta","Valor Realizado","% Atingimento","Observação","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+        </tr></thead>
+        <tbody>{rows.map(r=>{
+          const rp=pct(r.valorRealizado,r.meta,r.direcao,r.limiteMaximo);
+          const corStatus=rp==null?C.text:(rp>=100?C.success:C.danger);
+          return(
+          <tr key={r.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={S.td}>{r.dataReferencia}</td>
+            <td style={S.td}>{r.teamName}</td>
+            <td style={{...S.td,fontWeight:600}}>{r.indicadorNome} <span title={r.direcao==="Menor"?"Menor é melhor":"Maior é melhor"}>{setaDirecao(r.direcao)}</span></td>
+            <td style={S.td}>{metaPrefixo(r.direcao)}{r.meta??"—"}</td>
+            <td style={{...S.td,fontWeight:700,color:corStatus}}>{r.valorRealizado}</td>
+            <td style={{...S.td,fontWeight:700,color:corStatus}}>{fmtPctIndicador(rp)}</td>
+            <td style={{...S.td,color:C.textLight}}>{r.observacao||"—"}</td>
+            <td style={S.td}>
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(r)}><Icon name="edit" size={13}/> Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(r.id)}><Icon name="trash" size={13}/> Excluir</button>}
+            </td>
+          </tr>
+          );
+        })}</tbody></table>
+        </div>
+      )}
+      {modal&&(
+        <Modal title={form.id?"Editar Lançamento":"Novo Lançamento"} onClose={()=>setModal(false)}>
+          <SelectField label="Equipe" value={form.teamId}
+            onChange={v=>setForm(f=>({...f,teamId:v,indicadorId:""}))}
+            options={teams.map(t=>({value:t.id,label:t.name}))} required/>
+          <SelectField label="Indicador" value={form.indicadorId}
+            onChange={v=>setForm(f=>({...f,indicadorId:v}))}
+            options={indicadoresDaEquipe.map(i=>({value:i.id,label:`${i.nome} ${setaDirecao(i.direcao)}`}))} required/>
+          <MaskedInput label="Data de Referência" mask={MASK_DATE} value={form.dataReferencia} onChange={v=>setForm(f=>({...f,dataReferencia:v}))} placeholder="01/07/2026" required/>
+          <Input label="Valor Realizado" type="number" value={form.valorRealizado} onChange={v=>setForm(f=>({...f,valorRealizado:v}))} required/>
+          <div style={S.formRow}>
+            <label style={S.label}>Observação</label>
+            <textarea value={form.observacao} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))} rows={3}
+              style={{...S.input,resize:"vertical"}} placeholder="Observações..."/>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Deseja excluir este lançamento?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
 // ── REGISTRO DE KILOMETRAGEM (s10) ────────────────────────────
 function RegistroKmScreen({user}){
   const[items,setItems]=useState([]);const[companies,setCompanies]=useState([]);
@@ -2049,6 +2260,446 @@ function RelatorioKmScreen({user}){
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── PAINEL DE INDICADORES (s60) ────────────────────────────────
+function PainelIndicadoresScreen({user}){
+  const[rows,setRows]=useState([]);
+  const[teams,setTeams]=useState([]);
+  const[indicadoresAll,setIndicadoresAll]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const[filters,setFilters]=useState({dateFrom:"",dateTo:"",teamId:"",indicadorId:""});
+  const p=user.permissions?.s60;
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/teams"),api.get("/indicadores")])
+      .then(([t,i])=>{setTeams(t);setIndicadoresAll(i);})
+      .catch(e=>alert(e.message));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  const search=async()=>{
+    setLoading(true);
+    const q=new URLSearchParams();
+    Object.entries(filters).forEach(([k,v])=>{if(v)q.set(k,v);});
+    try{const r=await api.get(`/indicadores/report?${q}`);setRows(r);}
+    catch(e){alert(e.message);}finally{setLoading(false);}
+  };
+
+  const pct=(valor,meta,direcao,limiteMaximo)=>pctIndicador(valor,meta,direcao,limiteMaximo);
+  const fmtPct=fmtPctIndicador;
+  const mesAnoOf=dataReferencia=>dataReferencia.slice(3); // "DD/MM/YYYY" -> "MM/YYYY"
+
+  // Agrupar por equipe
+  const groups=rows.reduce((acc,r)=>{
+    const key=r.teamId;
+    if(!acc[key])acc[key]={teamName:r.teamName,rows:[],pctSum:0,pctCount:0};
+    acc[key].rows.push(r);
+    const p2=pct(r.valorRealizado,r.meta,r.direcao,r.limiteMaximo);
+    if(p2!=null){acc[key].pctSum+=p2;acc[key].pctCount++;}
+    return acc;
+  },{});
+  const grandPct=(()=>{
+    const withPct=rows.map(r=>pct(r.valorRealizado,r.meta,r.direcao,r.limiteMaximo)).filter(v=>v!=null);
+    return withPct.length?withPct.reduce((s,v)=>s+v,0)/withPct.length:null;
+  })();
+
+  const exportPDF=()=>{
+    const doc=new jsPDF({orientation:"landscape"});
+    doc.setFontSize(14);doc.text("Painel de Indicadores",14,14);
+    const body=[];
+    Object.values(groups).forEach(g=>{
+      body.push([{content:`Equipe: ${g.teamName}`,colSpan:5,styles:{fillColor:[240,165,0],textColor:[255,255,255],fontStyle:"bold",fontSize:10}}]);
+      g.rows.forEach(r=>body.push([`${r.indicadorNome} ${setaDirecao(r.direcao)}`,`${metaPrefixo(r.direcao)}${r.meta??"—"}`,mesAnoOf(r.dataReferencia),r.valorRealizado,fmtPct(pct(r.valorRealizado,r.meta,r.direcao,r.limiteMaximo))]));
+      const gAvg=g.pctCount?g.pctSum/g.pctCount:null;
+      body.push([{content:`Média ${g.teamName}`,colSpan:4,styles:{fillColor:[255,248,225],fontStyle:"bold"}},{content:fmtPct(gAvg),styles:{fillColor:[255,248,225],fontStyle:"bold"}}]);
+    });
+    body.push([{content:"MÉDIA GERAL",colSpan:4,styles:{fillColor:[45,45,45],textColor:[255,255,255],fontStyle:"bold"}},{content:fmtPct(grandPct),styles:{fillColor:[240,165,0],fontStyle:"bold"}}]);
+    autoTable(doc,{startY:20,head:[["Indicador","Meta","Mês/Ano","Realizado","% Atingimento"]],body,styles:{fontSize:9,halign:"center"},headStyles:{fillColor:[97,97,97],halign:"center"},columnStyles:{0:{halign:"left"}}});
+    doc.save("painel-indicadores.pdf");
+  };
+
+  const exportExcel=()=>{
+    const ws=[["Equipe","Indicador","Meta","Mês/Ano","Realizado","% Atingimento"]];
+    Object.values(groups).forEach(g=>{
+      g.rows.forEach(r=>ws.push([g.teamName,`${r.indicadorNome} ${setaDirecao(r.direcao)}`,`${metaPrefixo(r.direcao)}${r.meta??""}`,mesAnoOf(r.dataReferencia),r.valorRealizado,fmtPct(pct(r.valorRealizado,r.meta,r.direcao,r.limiteMaximo))]));
+    });
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ws),"Painel de Indicadores");
+    XLSX.writeFile(wb,"painel-indicadores.xlsx");
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📊 Painel de Indicadores</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportPDF} disabled={rows.length===0}>⬇ PDF</button><button style={S.btnSave} onClick={exportExcel} disabled={rows.length===0}>⬇ Excel</button></div></div>
+      <div style={{background:C.bg,borderRadius:8,padding:16,marginBottom:20,border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,letterSpacing:.5}}>FILTROS</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12}}>
+          <MaskedInput label="Data De"  mask={MASK_DATE} value={filters.dateFrom} onChange={v=>setFilters(f=>({...f,dateFrom:v}))} placeholder="01/01/2025"/>
+          <MaskedInput label="Data Até" mask={MASK_DATE} value={filters.dateTo}   onChange={v=>setFilters(f=>({...f,dateTo:v}))}   placeholder="31/12/2025"/>
+          <SelectField label="Equipe"     value={filters.teamId}      onChange={v=>setFilters(f=>({...f,teamId:v}))}      options={teams.map(t=>({value:t.id,label:t.name}))}/>
+          <SelectField label="Indicador"  value={filters.indicadorId} onChange={v=>setFilters(f=>({...f,indicadorId:v}))} options={indicadoresAll.map(i=>({value:i.id,label:`${i.nome} ${setaDirecao(i.direcao)}`}))}/>
+        </div>
+        <div style={{marginTop:12,display:"flex",gap:10}}>
+          <button style={S.btnAdd} onClick={search}><Icon name="search" size={13}/> Pesquisar</button>
+          <button style={S.btnCancel} onClick={()=>{setFilters({dateFrom:"",dateTo:"",teamId:"",indicadorId:""});setRows([]);}}>Limpar</button>
+        </div>
+      </div>
+      {loading?<Spinner/>:rows.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📊</span>Nenhum resultado.</div>:(
+        <div>
+          {Object.values(groups).map(g=>{
+            const gAvg=g.pctCount?g.pctSum/g.pctCount:null;
+            return(
+            <div key={g.teamName} style={{marginBottom:24}}>
+              <div style={{background:C.primary,color:C.white,padding:"8px 14px",borderRadius:"6px 6px 0 0",fontWeight:700,fontSize:13}}>
+                👥 {g.teamName}
+              </div>
+              <div style={{overflowX:"auto"}}>
+              <table style={{...S.table,tableLayout:"fixed",width:"100%"}}><thead><tr>
+                <th style={S.th}>Indicador</th>
+                <th style={{...S.th,width:"90px",textAlign:"center"}}>Meta</th>
+                <th style={{...S.th,width:"120px",textAlign:"center"}}>Mês/Ano</th>
+                <th style={{...S.th,width:"120px",textAlign:"center"}}>Realizado</th>
+                <th style={{...S.th,width:"130px",textAlign:"center"}}>% Atingimento</th>
+              </tr></thead>
+              <tbody>
+                {g.rows.map((r,i)=>{
+                  const rp=pct(r.valorRealizado,r.meta,r.direcao,r.limiteMaximo);
+                  return(
+                  <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                    <td style={{...S.td,fontSize:12}}>{r.indicadorNome} <span title={r.direcao==="Menor"?"Menor é melhor":"Maior é melhor"}>{setaDirecao(r.direcao)}</span></td>
+                    <td style={{...S.td,textAlign:"center",fontSize:12}}>{metaPrefixo(r.direcao)}{r.meta??"—"}</td>
+                    <td style={{...S.td,textAlign:"center",fontSize:12}}>{mesAnoOf(r.dataReferencia)}</td>
+                    <td style={{...S.td,textAlign:"center",fontWeight:700,fontSize:12}}>{r.valorRealizado}</td>
+                    <td style={{...S.td,textAlign:"center",fontWeight:700,fontSize:12}}><PctDot v={rp}/>{fmtPct(rp)}</td>
+                  </tr>
+                  );
+                })}
+                <tr style={{background:"#FFF8E1"}}>
+                  <td colSpan={4} style={{...S.td,fontWeight:700,color:C.accent,fontSize:12}}>MÉDIA {g.teamName.toUpperCase()}</td>
+                  <td style={{...S.td,textAlign:"center",fontWeight:700,color:C.primary,fontSize:12}}>{fmtPct(gAvg)}</td>
+                </tr>
+              </tbody></table>
+              </div>
+            </div>
+          );})}
+          <div style={{background:C.dark,color:C.white,padding:"12px 16px",borderRadius:6,display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:14,fontWeight:700}}>
+            <span>MÉDIA GERAL</span>
+            <span style={{color:C.primary,fontSize:16}}>{fmtPct(grandPct)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── COMPARATIVO DE INDICADORES (s62) ───────────────────────────
+function ComparativoIndicadoresScreen({user}){
+  const[rows,setRows]=useState([]);
+  const[teams,setTeams]=useState([]);
+  const[indicadoresAll,setIndicadoresAll]=useState([]);
+  const[loading,setLoading]=useState(false);
+  const[filters,setFilters]=useState({teamId:"",indicadorId:""});
+  const[mesesDisponiveis,setMesesDisponiveis]=useState([]);
+  const[months,setMonths]=useState([]); // ["2026-06","2026-07",...]
+  const p=user.permissions?.s62;
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/teams"),api.get("/indicadores")])
+      .then(([t,i])=>{setTeams(t);setIndicadoresAll(i);})
+      .catch(e=>alert(e.message));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  const monthLabel=key=>{const[y,m]=key.split("-");return `${m}/${y}`;};
+
+  // Meses disponíveis nos lançamentos, filtrados por Equipe/Indicador selecionados (cascata)
+  useEffect(()=>{
+    if(!p?.view)return;
+    const q=new URLSearchParams();
+    if(filters.teamId)q.set("teamId",filters.teamId);
+    if(filters.indicadorId)q.set("indicadorId",filters.indicadorId);
+    api.get(`/indicadores/meses-disponiveis?${q}`)
+      .then(meses=>{
+        setMesesDisponiveis(meses);
+        setMonths(ms=>ms.filter(m=>meses.includes(m)));
+      })
+      .catch(e=>alert(e.message));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[filters.teamId,filters.indicadorId]);
+
+  const search=async()=>{
+    if(months.length===0)return alert("Selecione ao menos um mês para comparar.");
+    setLoading(true);
+    const q=new URLSearchParams();
+    if(filters.teamId)q.set("teamId",filters.teamId);
+    if(filters.indicadorId)q.set("indicadorId",filters.indicadorId);
+    q.set("months",months.join(","));
+    try{const r=await api.get(`/indicadores/comparativo?${q}`);setRows(r);}
+    catch(e){alert(e.message);}finally{setLoading(false);}
+  };
+
+  const pct=(valor,meta,direcao,limiteMaximo)=>pctIndicador(valor,meta,direcao,limiteMaximo);
+  const fmtPct=fmtPctIndicador;
+  const monthKeyOf=dataReferencia=>{const[,mm,yyyy]=dataReferencia.split("/");return `${yyyy}-${mm}`;};
+
+  // Agrupar por indicador, com valores por mês
+  const porIndicador={};
+  rows.forEach(r=>{
+    if(!porIndicador[r.indicadorId])porIndicador[r.indicadorId]={indicadorNome:r.indicadorNome,direcao:r.direcao,limiteMaximo:r.limiteMaximo,teamId:r.teamId,teamName:r.teamName,porMes:{}};
+    porIndicador[r.indicadorId].porMes[monthKeyOf(r.dataReferencia)]={valorRealizado:r.valorRealizado,meta:r.meta};
+  });
+  const grupos={};
+  Object.values(porIndicador).forEach(ind=>{
+    if(!grupos[ind.teamId])grupos[ind.teamId]={teamName:ind.teamName,indicadores:[]};
+    grupos[ind.teamId].indicadores.push(ind);
+  });
+  Object.values(grupos).forEach(g=>g.indicadores.sort((a,b)=>a.indicadorNome.localeCompare(b.indicadorNome,"pt")));
+
+  const exportPDF=()=>{
+    const doc=new jsPDF({orientation:"landscape"});
+    doc.setFontSize(14);doc.text("Comparativo de Indicadores",14,14);
+    const head=[["Indicador",...months.flatMap(mk=>[`${monthLabel(mk)} Meta`,`${monthLabel(mk)} Realizado`,`${monthLabel(mk)} %`])]];
+    const body=[];
+    Object.values(grupos).forEach(g=>{
+      body.push([{content:`Equipe: ${g.teamName}`,colSpan:1+months.length*3,styles:{fillColor:[240,165,0],textColor:[255,255,255],fontStyle:"bold",fontSize:10}}]);
+      g.indicadores.forEach(ind=>{
+        const line=[`${ind.indicadorNome} ${setaDirecao(ind.direcao)}`];
+        months.forEach(mk=>{
+          const v=ind.porMes[mk];
+          line.push(v?`${metaPrefixo(ind.direcao)}${v.meta??"—"}`:"—",v?.valorRealizado??"—",fmtPct(v?pct(v.valorRealizado,v.meta,ind.direcao,ind.limiteMaximo):null));
+        });
+        body.push(line);
+      });
+    });
+    autoTable(doc,{startY:20,head,body,styles:{fontSize:8,halign:"center"},headStyles:{fillColor:[97,97,97],halign:"center"},columnStyles:{0:{halign:"left"}}});
+    doc.save("comparativo-indicadores.pdf");
+  };
+
+  const exportExcel=()=>{
+    const header=["Equipe","Indicador",...months.flatMap(mk=>[`${monthLabel(mk)} Meta`,`${monthLabel(mk)} Realizado`,`${monthLabel(mk)} %`])];
+    const ws=[header];
+    Object.values(grupos).forEach(g=>{
+      g.indicadores.forEach(ind=>{
+        const line=[g.teamName,`${ind.indicadorNome} ${setaDirecao(ind.direcao)}`];
+        months.forEach(mk=>{
+          const v=ind.porMes[mk];
+          line.push(v?`${metaPrefixo(ind.direcao)}${v.meta??""}`:"",v?.valorRealizado??"",fmtPct(v?pct(v.valorRealizado,v.meta,ind.direcao,ind.limiteMaximo):null));
+        });
+        ws.push(line);
+      });
+    });
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ws),"Comparativo");
+    XLSX.writeFile(wb,"comparativo-indicadores.xlsx");
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📐 Comparativo de Indicadores</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportPDF} disabled={rows.length===0}>⬇ PDF</button><button style={S.btnSave} onClick={exportExcel} disabled={rows.length===0}>⬇ Excel</button></div></div>
+      <div style={{background:C.bg,borderRadius:8,padding:16,marginBottom:20,border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,letterSpacing:.5}}>FILTROS</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12}}>
+          <SelectField label="Equipe"     value={filters.teamId}      onChange={v=>setFilters(f=>({...f,teamId:v}))}      options={teams.map(t=>({value:t.id,label:t.name}))}/>
+          <SelectField label="Indicador"  value={filters.indicadorId} onChange={v=>setFilters(f=>({...f,indicadorId:v}))} options={indicadoresAll.map(i=>({value:i.id,label:`${i.nome} ${setaDirecao(i.direcao)}`}))}/>
+          <MultiSelectField label="Meses" value={months} onChange={v=>setMonths([...v].sort())}
+            options={mesesDisponiveis.map(mk=>({value:mk,label:monthLabel(mk)}))}
+            placeholder="Selecione os meses..."/>
+        </div>
+        <div style={{marginTop:12,display:"flex",gap:10}}>
+          <button style={S.btnAdd} onClick={search}><Icon name="search" size={13}/> Pesquisar</button>
+          <button style={S.btnCancel} onClick={()=>{setFilters({teamId:"",indicadorId:""});setMonths([]);setRows([]);}}>Limpar</button>
+        </div>
+      </div>
+      {loading?<Spinner/>:rows.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📐</span>Nenhum resultado. Selecione os meses e clique em Pesquisar.</div>:(
+        <div>
+          {Object.values(grupos).map(g=>(
+            <div key={g.teamName} style={{marginBottom:24}}>
+              <div style={{background:C.primary,color:C.white,padding:"8px 14px",borderRadius:"6px 6px 0 0",fontWeight:700,fontSize:13}}>
+                👥 {g.teamName}
+              </div>
+              <div style={{overflowX:"auto"}}>
+              <table style={S.table}><thead>
+                <tr>
+                  <th style={{...S.th,verticalAlign:"bottom"}} rowSpan={2}>Indicador</th>
+                  {months.map(mk=>(
+                    <th key={mk} colSpan={3} style={{...S.th,textAlign:"center",borderLeft:`2px solid ${C.border}`}}>{monthLabel(mk)}</th>
+                  ))}
+                </tr>
+                <tr>
+                  {months.map(mk=>(
+                    <Fragment key={mk}>
+                      <th style={{...S.th,textAlign:"center",borderLeft:`2px solid ${C.border}`}}>Meta</th>
+                      <th style={{...S.th,textAlign:"center"}}>Realizado</th>
+                      <th style={{...S.th,textAlign:"center"}}>%</th>
+                    </Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {g.indicadores.map((ind,i)=>(
+                  <tr key={i} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                    <td style={{...S.td,fontWeight:600,fontSize:12}}>{ind.indicadorNome} <span title={ind.direcao==="Menor"?"Menor é melhor":"Maior é melhor"}>{setaDirecao(ind.direcao)}</span></td>
+                    {months.map(mk=>{
+                      const v=ind.porMes[mk];
+                      const rp=v?pct(v.valorRealizado,v.meta,ind.direcao,ind.limiteMaximo):null;
+                      return(
+                        <Fragment key={mk}>
+                          <td style={{...S.td,textAlign:"center",fontSize:12,borderLeft:`2px solid ${C.border}`}}>{v?metaPrefixo(ind.direcao):""}{v?.meta??"—"}</td>
+                          <td style={{...S.td,textAlign:"center",fontWeight:700,fontSize:12}}>{v?.valorRealizado??"—"}</td>
+                          <td style={{...S.td,textAlign:"center",fontWeight:700,fontSize:12}}><PctDot v={rp}/>{fmtPct(rp)}</td>
+                        </Fragment>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody></table>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── INDICADORES (s58) ────────────────────────────────────────
+const PERIODICIDADES=[{value:"Mensal",label:"Mensal"},{value:"Trimestral",label:"Trimestral"},{value:"Semestral",label:"Semestral"},{value:"Anual",label:"Anual"}];
+const ORIGENS_INDICADOR=[{value:"Manual",label:"Manual"},{value:"Integração",label:"Integração"}];
+const DIRECOES_INDICADOR=[{value:"Maior",label:"Maior é melhor ▲"},{value:"Menor",label:"Menor é melhor ▼"}];
+const setaDirecao=direcao=>direcao==="Menor"?"▼":"▲";
+// Símbolo que acompanha a Meta: "Maior é melhor" = atingir ou superar (≥), "Menor é melhor" = atingir ou ficar abaixo (≤)
+const metaPrefixo=direcao=>direcao==="Menor"?"≤":"≥";
+// % de atingimento sensível à direção: "Menor é melhor" inverte a razão (Meta ÷ Realizado) para manter ≥100% sempre bom,
+// com limite máximo configurável por indicador para evitar percentuais exagerados
+const pctIndicador=(valor,meta,direcao,limiteMaximo)=>{
+  if(meta==null||Number(meta)===0)return null;
+  if(direcao==="Menor"){
+    if(Number(valor)===0)return null;
+    let p=(Number(meta)/Number(valor))*100;
+    if(limiteMaximo!=null&&p>Number(limiteMaximo))p=Number(limiteMaximo);
+    return p;
+  }
+  return (Number(valor)/Number(meta))*100;
+};
+const fmtPctIndicador=v=>{
+  if(v==null)return "—";
+  if(!isFinite(v))return "≥999%";
+  return `${v.toFixed(1)}%`;
+};
+// Cor da "bolinha" de status do % Atingimento: verde >100%, amarelo =100%, vermelho <100%
+const corPctDot=v=>{
+  if(v==null)return C.textLight;
+  const r=Math.round(v*10)/10;
+  if(r>100)return C.success;
+  if(r===100)return "#F1C40F";
+  return C.danger;
+};
+function PctDot({v}){
+  return <span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:corPctDot(v),marginRight:6,flexShrink:0}}/>;
+}
+function IndicadoresScreen({user}){
+  const[items,setItems]=useState([]);
+  const[teams,setTeams]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(false);
+  const[delId,setDelId]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const emptyForm={id:null,teamId:"",nome:"",unidade:"",meta:"",periodicidade:"Mensal",origem:"Manual",direcao:"Maior",limiteMaximo:"",ativo:true};
+  const[form,setForm]=useState(emptyForm);
+  const p=user.permissions?.s58;
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    Promise.all([api.get("/indicadores"),api.get("/teams")])
+      .then(([i,t])=>{setItems(i);setTeams(t);})
+      .catch(e=>alert(e.message))
+      .finally(()=>setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  const openAdd=()=>{setForm(emptyForm);setModal(true);};
+  const openEdit=i=>{setForm({...emptyForm,...i});setModal(true);};
+
+  const save=async()=>{
+    if(!form.teamId)return alert("Equipe é obrigatória.");
+    if(!form.nome.trim())return alert("Nome é obrigatório.");
+    setSaving(true);
+    try{
+      if(form.id){const u=await api.put(`/indicadores/${form.id}`,form);setItems(is=>is.map(i=>i.id===u.id?u:i));}
+      else{const c=await api.post("/indicadores",form);setItems(is=>[...is,c]);}
+      setModal(false);
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/indicadores/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}
+    catch(e){alert(e.message);}
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}><span style={S.cardTitle}>📈 Indicadores</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Indicador</button>}</div>
+      {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📈</span>Nenhum indicador cadastrado.</div>:(
+        <div style={{overflowX:"auto"}}>
+        <table style={S.table}><thead><tr>
+          {["Nome","Equipe","Unidade","Meta","Direção","Periodicidade","Origem","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+        </tr></thead>
+        <tbody>{items.map(it=>(
+          <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+            <td style={{...S.td,fontWeight:600}}>{it.nome} <span title={it.direcao==="Menor"?"Menor é melhor":"Maior é melhor"}>{setaDirecao(it.direcao)}</span></td>
+            <td style={S.td}>{it.teamName||"—"}</td>
+            <td style={S.td}>{it.unidade||"—"}</td>
+            <td style={S.td}>{it.meta??"—"}</td>
+            <td style={S.td}>{it.direcao==="Menor"?"Menor é melhor":"Maior é melhor"}</td>
+            <td style={S.td}>{it.periodicidade}</td>
+            <td style={S.td}>{it.origem}</td>
+            <td style={S.td}><span style={{...S.badge,...(it.ativo?S.badgeActive:S.badgeInactive)}}>{it.ativo?"Ativo":"Inativo"}</span></td>
+            <td style={S.td}>
+              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
+            </td>
+          </tr>
+        ))}</tbody></table>
+        </div>
+      )}
+      {modal&&(
+        <Modal title={form.id?"Editar Indicador":"Novo Indicador"} onClose={()=>setModal(false)}>
+          <Input label="Nome" value={form.nome} onChange={v=>setForm(f=>({...f,nome:v}))} required/>
+          <SelectField label="Equipe" value={form.teamId} onChange={v=>setForm(f=>({...f,teamId:v}))}
+            options={teams.map(t=>({value:t.id,label:t.name}))} required/>
+          <Input label="Unidade de Medida" value={form.unidade} onChange={v=>setForm(f=>({...f,unidade:v}))} placeholder="ex: %, chamados, horas"/>
+          <Input label="Meta" type="number" value={form.meta} onChange={v=>setForm(f=>({...f,meta:v}))}/>
+          <SelectField label="Direção (o que é melhor)" value={form.direcao} onChange={v=>setForm(f=>({...f,direcao:v}))} options={DIRECOES_INDICADOR}/>
+          {form.direcao==="Menor"&&(
+            <Input label="Limite Máximo do % (opcional)" type="number" value={form.limiteMaximo} onChange={v=>setForm(f=>({...f,limiteMaximo:v}))} placeholder="ex: 200"/>
+          )}
+          <SelectField label="Periodicidade" value={form.periodicidade} onChange={v=>setForm(f=>({...f,periodicidade:v}))} options={PERIODICIDADES}/>
+          <SelectField label="Origem" value={form.origem} onChange={v=>setForm(f=>({...f,origem:v}))} options={ORIGENS_INDICADOR}/>
+          <div style={S.formRow}><label style={S.label}>STATUS</label>
+            <div style={{display:"flex",gap:16}}>
+              {[{v:true,l:"Ativo"},{v:false,l:"Inativo"}].map(o=>(
+                <label key={String(o.v)} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
+                  <input type="radio" checked={form.ativo===o.v} onChange={()=>setForm(f=>({...f,ativo:o.v}))} style={{accentColor:C.primary}}/>{o.l}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(false)}>Cancelar</button>
+            <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button>
+          </div>
+        </Modal>
+      )}
+      {delId&&<ConfirmModal msg="Deseja excluir este indicador?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
     </div>
   );
 }
@@ -7761,6 +8412,148 @@ function RelatorioComposicaoScreen({user}){
   );
 }
 
+// ── PAPÉIS E RESPONSABILIDADES (s61) ───────────────────────────
+function RelatorioPapeisScreen({user}){
+  const p=user.permissions?.s61;
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[expanded,setExpanded]=useState(new Set());
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    api.get("/teams/relatorio-composicao")
+      .then(setItems)
+      .catch(e=>alert(e.message))
+      .finally(()=>setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  const toggle=id=>setExpanded(ex=>{const s=new Set(ex);s.has(id)?s.delete(id):s.add(id);return s;});
+  const expandAll=()=>setExpanded(new Set(items.map(i=>i.id)));
+  const collapseAll=()=>setExpanded(new Set());
+
+  const buildTree=list=>{
+    const map={};
+    list.forEach(t=>{map[t.id]={...t,children:[]};});
+    const roots=[];
+    list.forEach(t=>{
+      if(t.parentId&&map[t.parentId])map[t.parentId].children.push(map[t.id]);
+      else roots.push(map[t.id]);
+    });
+    const sort=nodes=>{nodes.sort((a,b)=>a.name.localeCompare(b.name,"pt"));nodes.forEach(n=>sort(n.children));};
+    sort(roots);
+    return roots;
+  };
+
+  function totalMembros(node){
+    return node.membros.length+node.children.reduce((s,c)=>s+totalMembros(c),0);
+  }
+
+  const tree=buildTree(items);
+
+  const exportPDF=()=>{
+    const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    doc.setFontSize(16);doc.setFont(undefined,"bold");
+    doc.text("Papéis e Responsabilidades",14,16);
+    doc.setFontSize(9);doc.setFont(undefined,"normal");
+    doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}`,14,23);
+    const bodyRows=[];
+    const flattenBody=(nodes,depth)=>{
+      nodes.forEach(node=>{
+        const tot=totalMembros(node);
+        const pfx=" ".repeat(depth*3);
+        const fill=depth===0?[224,235,255]:depth===1?[240,245,255]:[248,250,255];
+        const label=`${pfx}${node.name}  (${tot} func.)${node.atribuicoes?` — ${node.atribuicoes}`:""}`;
+        bodyRows.push([{content:label,colSpan:3,styles:{fontStyle:"bold",fillColor:fill,textColor:[30,60,120]}}]);
+        node.membros.forEach(m=>{
+          const mpfx=" ".repeat((depth+1)*3);
+          bodyRows.push([{content:`${mpfx}${m.funcionarioNome}`,styles:{textColor:[50,50,50]}},m.papel||"—",m.atribuicoes||"—"]);
+        });
+        flattenBody(node.children,depth+1);
+      });
+    };
+    flattenBody(tree,0);
+    autoTable(doc,{
+      head:[["Equipe / Funcionário","Papel","Atribuições"]],
+      body:bodyRows,
+      startY:28,
+      styles:{fontSize:8,cellPadding:2},
+      headStyles:{fillColor:[37,99,235],textColor:255,fontStyle:"bold"},
+      columnStyles:{0:{cellWidth:75},1:{cellWidth:50},2:{cellWidth:60}},
+      margin:{left:14,right:14},
+    });
+    doc.save("Papeis_Responsabilidades.pdf");
+  };
+
+  const renderNode=(node,depth)=>{
+    const isExp=expanded.has(node.id);
+    const hasChildren=node.children.length>0;
+    const hasMembros=node.membros.length>0;
+    const tot=totalMembros(node);
+    const indent=12+depth*24;
+    const bg=depth===0?"#EFF4FF":depth===1?"#F7F9FF":C.white;
+    const borderColor=depth===0?C.primary:depth===1?"#6B8EE8":"#A0B4D8";
+    return(
+      <Fragment key={node.id}>
+        <tr style={{background:bg,borderBottom:`1px solid ${C.border}`}}>
+          <td colSpan={3} style={{...S.td,paddingLeft:indent,paddingTop:8,paddingBottom:8,borderLeft:`3px solid ${borderColor}`}}>
+            <span style={{display:"inline-flex",alignItems:"center",gap:8}}>
+              {(hasChildren||hasMembros)
+                ?<button onClick={()=>toggle(node.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:C.primary,padding:"0 2px",lineHeight:1,minWidth:18,fontWeight:"bold"}}>{isExp?"▼":"▶"}</button>
+                :<span style={{display:"inline-block",width:18}}/>
+              }
+              <span style={{fontWeight:depth===0?700:600,fontSize:depth===0?14:13,color:depth===0?C.primary:"#334"}}>{node.name}</span>
+              <span style={{...S.badge,background:"#E8F0FE",color:"#1A56DB",border:"1px solid #C7D9FA",fontSize:11,marginLeft:4}}>
+                {tot} {tot!==1?"funcionários":"funcionário"}
+              </span>
+            </span>
+            {node.atribuicoes&&(
+              <div style={{marginTop:4,marginLeft:26,fontSize:12,color:"#556",fontStyle:"italic"}}>{node.atribuicoes}</div>
+            )}
+          </td>
+        </tr>
+        {isExp&&node.membros.map((m,i)=>(
+          <tr key={i} style={{background:"#FAFBFF",borderBottom:`1px solid ${C.border}`}}>
+            <td style={{...S.td,paddingLeft:32+indent,fontSize:12,color:"#444"}}>{m.funcionarioNome}</td>
+            <td style={{...S.td,fontSize:12,color:"#555"}}>{m.papel||"—"}</td>
+            <td style={{...S.td,fontSize:12,color:"#555"}}>{m.atribuicoes||"—"}</td>
+          </tr>
+        ))}
+        {isExp&&node.children.map(child=>renderNode(child,depth+1))}
+      </Fragment>
+    );
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão para visualizar este relatório.</div>;
+  if(loading)return<Spinner/>;
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>🧭 Papéis e Responsabilidades</span>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <button style={{...S.btnCancel,fontSize:12,padding:"5px 12px"}} onClick={expandAll}>▼ Expandir tudo</button>
+          <button style={{...S.btnCancel,fontSize:12,padding:"5px 12px"}} onClick={collapseAll}>▶ Recolher tudo</button>
+          <button style={S.btnAdd} onClick={exportPDF}>⬇ PDF</button>
+        </div>
+      </div>
+      {items.length===0
+        ?<div style={S.emptyState}><span style={S.emptyIcon}>🧭</span>Nenhuma equipe cadastrada.</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={S.table}>
+            <thead><tr>
+              <th style={{...S.th,width:"45%"}}>Equipe / Funcionário</th>
+              <th style={S.th}>Papel</th>
+              <th style={S.th}>Atribuições</th>
+            </tr></thead>
+            <tbody>{tree.map(node=>renderNode(node,0))}</tbody>
+          </table>
+        </div>
+      }
+    </div>
+  );
+}
+
 // ── ENDEREÇOS DE REDE (s38) ────────────────────────────────────
 function cidrInfo(cidr){
   try{
@@ -10476,6 +11269,7 @@ const navConfig=[
     {id:"s12",label:"Fornecedores",               icon:"factory"},
     {id:"s39",label:"Filiais",                    icon:"building"},
     {id:"s4", label:"Equipes",                     icon:"team"},
+    {id:"s58",label:"Indicadores",                icon:"chart"},
     {id:"s44",label:"CCusto",                     icon:"coin"},
     {id:"s45",label:"Ítens",                      icon:"package"},
     {id:"s46",label:"Estoque",                    icon:"archive"},
@@ -10496,6 +11290,7 @@ const navConfig=[
     {id:"s35",label:"Controle de Folgas",         icon:"folgas"},
     {id:"s30",label:"Férias",                     icon:"vacation"},
     {id:"s13",label:"Contratos",                  icon:"contracts"},
+    {id:"s59",label:"Lançamento de Indicador",    icon:"chart"},
     {id:"s37",label:"Políticas de TI",            icon:"policy"},
     {id:"s19",label:"Linhas Disponíveis",               icon:"signal"},
     {id:"s57",label:"Liberação de Linhas para Estoque", icon:"signal"},
@@ -10518,7 +11313,10 @@ const navConfig=[
     {id:"s36",label:"Controle de Folgas",         icon:"calendar"},
     {id:"s31",label:"Relatório de Férias",        icon:"vacation"},
     {id:"s32",label:"Composição de Equipe",       icon:"users"},
+    {id:"s61",label:"Papéis e Responsabilidades", icon:"users"},
     {id:"s14",label:"Relatório de Contratos",     icon:"file"},
+    {id:"s60",label:"Painel de Indicadores",      icon:"chart"},
+    {id:"s62",label:"Comparativo de Indicadores", icon:"chart"},
     {id:"s24",label:"Análise de Linhas",          icon:"trending"},
     {id:"s25",label:"Resumo de Linhas",           icon:"signal"},
     {id:"s26",label:"Resumo de Ativos",           icon:"package"},
@@ -10645,6 +11443,11 @@ const screenTitles={
   s35:"Movimentações › Controle de Folgas",
   s36:"Relatórios › Controle de Folgas",
   s37:"Movimentações › Políticas de TI",
+  s58:"Cadastros › Indicadores",
+  s59:"Movimentações › Lançamento de Indicador",
+  s60:"Relatórios › Painel de Indicadores",
+  s61:"Relatórios › Papéis e Responsabilidades",
+  s62:"Relatórios › Comparativo de Indicadores",
   profile:"Meu Perfil",
 };
 
@@ -10707,6 +11510,11 @@ export default function App(){
     s35:<FolgasScreen user={user}/>,
     s36:<RelatorioFolgasScreen user={user}/>,
     s37:<PoliticasScreen user={user}/>,
+    s58:<IndicadoresScreen user={user}/>,
+    s59:<LancamentoIndicadorScreen user={user}/>,
+    s60:<PainelIndicadoresScreen user={user}/>,
+    s61:<RelatorioPapeisScreen user={user}/>,
+    s62:<ComparativoIndicadoresScreen user={user}/>,
     s34:<InventarioRedeScreen user={user}/>,
     s38:<EnderecosRedeScreen user={user}/>,
     s39:<FiliaisScreen user={user}/>,
