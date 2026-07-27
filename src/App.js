@@ -2296,16 +2296,10 @@ function PainelIndicadoresScreen({user}){
   // Agrupar por equipe
   const groups=rows.reduce((acc,r)=>{
     const key=r.teamId;
-    if(!acc[key])acc[key]={teamName:r.teamName,rows:[],pctSum:0,pctCount:0};
+    if(!acc[key])acc[key]={teamName:r.teamName,rows:[]};
     acc[key].rows.push(r);
-    const p2=pct(r.valorRealizado,r.meta,r.direcao,r.limiteMaximo);
-    if(p2!=null){acc[key].pctSum+=p2;acc[key].pctCount++;}
     return acc;
   },{});
-  const grandPct=(()=>{
-    const withPct=rows.map(r=>pct(r.valorRealizado,r.meta,r.direcao,r.limiteMaximo)).filter(v=>v!=null);
-    return withPct.length?withPct.reduce((s,v)=>s+v,0)/withPct.length:null;
-  })();
 
   const exportPDF=()=>{
     const doc=new jsPDF({orientation:"landscape"});
@@ -2314,10 +2308,7 @@ function PainelIndicadoresScreen({user}){
     Object.values(groups).forEach(g=>{
       body.push([{content:`Equipe: ${g.teamName}`,colSpan:5,styles:{fillColor:[240,165,0],textColor:[255,255,255],fontStyle:"bold",fontSize:10}}]);
       g.rows.forEach(r=>body.push([`${r.indicadorNome} ${setaDirecao(r.direcao)}`,`${metaPrefixo(r.direcao)}${r.meta??"—"}`,mesAnoOf(r.dataReferencia),r.valorRealizado,fmtPct(pct(r.valorRealizado,r.meta,r.direcao,r.limiteMaximo))]));
-      const gAvg=g.pctCount?g.pctSum/g.pctCount:null;
-      body.push([{content:`Média ${g.teamName}`,colSpan:4,styles:{fillColor:[255,248,225],fontStyle:"bold"}},{content:fmtPct(gAvg),styles:{fillColor:[255,248,225],fontStyle:"bold"}}]);
     });
-    body.push([{content:"MÉDIA GERAL",colSpan:4,styles:{fillColor:[45,45,45],textColor:[255,255,255],fontStyle:"bold"}},{content:fmtPct(grandPct),styles:{fillColor:[240,165,0],fontStyle:"bold"}}]);
     autoTable(doc,{startY:20,head:[["Indicador","Meta","Mês/Ano","Realizado","% Atingimento"]],body,styles:{fontSize:9,halign:"center"},headStyles:{fillColor:[97,97,97],halign:"center"},columnStyles:{0:{halign:"left"}}});
     doc.save("painel-indicadores.pdf");
   };
@@ -2351,9 +2342,7 @@ function PainelIndicadoresScreen({user}){
       </div>
       {loading?<Spinner/>:rows.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📊</span>Nenhum resultado.</div>:(
         <div>
-          {Object.values(groups).map(g=>{
-            const gAvg=g.pctCount?g.pctSum/g.pctCount:null;
-            return(
+          {Object.values(groups).map(g=>(
             <div key={g.teamName} style={{marginBottom:24}}>
               <div style={{background:C.primary,color:C.white,padding:"8px 14px",borderRadius:"6px 6px 0 0",fontWeight:700,fontSize:13}}>
                 👥 {g.teamName}
@@ -2379,18 +2368,10 @@ function PainelIndicadoresScreen({user}){
                   </tr>
                   );
                 })}
-                <tr style={{background:"#FFF8E1"}}>
-                  <td colSpan={4} style={{...S.td,fontWeight:700,color:C.accent,fontSize:12}}>MÉDIA {g.teamName.toUpperCase()}</td>
-                  <td style={{...S.td,textAlign:"center",fontWeight:700,color:C.primary,fontSize:12}}>{fmtPct(gAvg)}</td>
-                </tr>
               </tbody></table>
               </div>
             </div>
-          );})}
-          <div style={{background:C.dark,color:C.white,padding:"12px 16px",borderRadius:6,display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:14,fontWeight:700}}>
-            <span>MÉDIA GERAL</span>
-            <span style={{color:C.primary,fontSize:16}}>{fmtPct(grandPct)}</span>
-          </div>
+          ))}
         </div>
       )}
     </div>
