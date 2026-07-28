@@ -672,13 +672,13 @@ function EquipeItensModal({equipe,user,onClose}){
     ]).then(([it,fn])=>{setItens(it);setFuncionarios(fn);}).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
 
-  const openAdd=()=>{setErr("");setForm({id:null,funcionarioId:"",papel:"",atribuicoes:""});};
-  const openEdit=it=>{setErr("");setForm({id:it.id,funcionarioId:it.funcionarioId,papel:it.papel||"",atribuicoes:it.atribuicoes||""});};
+  const openAdd=()=>{setErr("");setForm({id:null,funcionarioId:"",missao:"",papel:"",atribuicoes:""});};
+  const openEdit=it=>{setErr("");setForm({id:it.id,funcionarioId:it.funcionarioId,missao:it.missao||"",papel:it.papel||"",atribuicoes:it.atribuicoes||""});};
 
   const save=async()=>{
     if(!form.funcionarioId){setErr("Selecione um funcionário.");return;}
     setSaving(true);setErr("");
-    const body={funcionarioId:form.funcionarioId,papel:form.papel,atribuicoes:form.atribuicoes};
+    const body={funcionarioId:form.funcionarioId,missao:form.missao,papel:form.papel,atribuicoes:form.atribuicoes};
     try{
       if(form.id) await api.put(`/teams/${equipe.id}/itens/${form.id}`,body);
       else        await api.post(`/teams/${equipe.id}/itens`,body);
@@ -716,12 +716,13 @@ function EquipeItensModal({equipe,user,onClose}){
               :(
                 <div style={{overflowX:"auto"}}>
                   <table style={S.table}><thead><tr>
-                    {["Funcionário","Cargo","Papel","Atribuições","Centro de Custo","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+                    {["Funcionário","Cargo","Missão","Papel","Atribuições","Centro de Custo","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
                   </tr></thead>
                   <tbody>{itens.map(it=>(
                     <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                       <td style={{...S.td,fontWeight:600}}>{it.funcionarioNome||"—"}</td>
                       <td style={S.td}>{it.cargo||"—"}</td>
+                      <td style={S.td}><RichTextCell html={it.missao} label="Missão"/></td>
                       <td style={S.td}><RichTextCell html={it.papel} label="Papel"/></td>
                       <td style={S.td}><RichTextCell html={it.atribuicoes} label="Atribuições"/></td>
                       <td style={S.td}>{it.centroCusto||"—"}</td>
@@ -744,6 +745,7 @@ function EquipeItensModal({equipe,user,onClose}){
           <SelectField label="Funcionário *" value={form.funcionarioId}
             onChange={v=>setForm(f=>({...f,funcionarioId:v}))}
             options={disponiveis.map(f=>({value:f.id,label:f.nome}))}/>
+          <RichTextField label="Missão" value={form.missao} onChange={v=>setForm(f=>({...f,missao:v}))} placeholder="ex: Garantir a disponibilidade e segurança da infraestrutura de TI"/>
           <RichTextField label="Papel" value={form.papel} onChange={v=>setForm(f=>({...f,papel:v}))} placeholder="ex: Responsável por Backup e Redes"/>
           <RichTextField label="Atribuições" value={form.atribuicoes} onChange={v=>setForm(f=>({...f,atribuicoes:v}))} placeholder="O que esta pessoa faz nesta equipe..."/>
           {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
