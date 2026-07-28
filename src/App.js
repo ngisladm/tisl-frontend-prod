@@ -414,6 +414,120 @@ function ConfirmModal({msg,onConfirm,onCancel}){
 }
 function Spinner(){return <div style={S.spinner}>Carregando...</div>;}
 
+// ── TEXTO RICO (editor simples com formatação) ──────────────────
+// Remove tags/atributos que não vêm da nossa própria barra de ferramentas (negrito, itálico, sublinhado, listas)
+function sanitizeRichHtml(html){
+  if(!html)return "";
+  const div=document.createElement("div");
+  div.innerHTML=html;
+  const ALLOWED=["b","strong","i","em","u","ul","ol","li","br","p","div","span"];
+  const clean=node=>{
+    [...node.childNodes].forEach(child=>{
+      if(child.nodeType===1){
+        const tag=child.tagName.toLowerCase();
+        if(!ALLOWED.includes(tag)){
+          const text=document.createTextNode(child.textContent);
+          node.replaceChild(text,child);
+          return;
+        }
+        [...child.attributes].forEach(attr=>child.removeAttribute(attr.name));
+        clean(child);
+      }else if(child.nodeType!==3){
+        node.removeChild(child);
+      }
+    });
+  };
+  clean(div);
+  return div.innerHTML;
+}
+// Extrai texto puro de um HTML (para listas, relatórios e exportações)
+function stripHtml(html){
+  if(!html)return "";
+  const div=document.createElement("div");
+  div.innerHTML=html;
+  return (div.textContent||"").replace(/\s+/g," ").trim();
+}
+function RichTextEditor({value,onChange}){
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(ref.current)ref.current.innerHTML=value||"";
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+  const exec=cmd=>{
+    document.execCommand(cmd,false,null);
+    ref.current?.focus();
+    onChange(ref.current.innerHTML);
+  };
+  const barBtn=(cmd,label,title)=>(
+    <button type="button" title={title} onMouseDown={e=>{e.preventDefault();exec(cmd);}}
+      style={{...S.btnCancel,padding:"5px 12px",fontSize:13,fontWeight:700}}>{label}</button>
+  );
+  return(
+    <div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",padding:"0 0 8px",borderBottom:`1px solid ${C.border}`,marginBottom:10}}>
+        {barBtn("bold","B","Negrito")}
+        {barBtn("italic","I","Itálico")}
+        {barBtn("underline","S","Sublinhado")}
+        {barBtn("insertUnorderedList","• Lista","Lista com marcadores")}
+        {barBtn("insertOrderedList","1. Lista","Lista numerada")}
+        {barBtn("removeFormat","Limpar","Remover formatação")}
+      </div>
+      <div ref={ref} contentEditable suppressContentEditableWarning
+        onInput={e=>onChange(e.currentTarget.innerHTML)}
+        style={{...S.input,minHeight:220,maxHeight:420,overflowY:"auto",padding:12,lineHeight:1.5,cursor:"text"}}/>
+    </div>
+  );
+}
+// Campo de texto com formatação: mostra prévia em texto simples e abre um modal dedicado para digitar/editar/visualizar
+function RichTextField({label,value,onChange,placeholder,required}){
+  const[open,setOpen]=useState(false);
+  const[draft,setDraft]=useState(value||"");
+  const openEditor=()=>{setDraft(value||"");setOpen(true);};
+  const save=()=>{onChange(sanitizeRichHtml(draft));setOpen(false);};
+  const preview=stripHtml(value);
+  return(
+    <div style={S.formRow}>
+      <label style={S.label}>{label}{required&&" *"}</label>
+      <div onClick={openEditor}
+        style={{...S.input,minHeight:60,maxHeight:90,overflow:"hidden",cursor:"pointer",padding:10,
+          color:preview?C.text:C.textLight,whiteSpace:"pre-wrap",lineHeight:1.4}}>
+        {preview||placeholder||"Clique para digitar..."}
+      </div>
+      {open&&(
+        <Modal title={label} onClose={()=>setOpen(false)} wide>
+          <RichTextEditor value={draft} onChange={setDraft}/>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:14}}>
+            <button style={S.btnCancel} onClick={()=>setOpen(false)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+// Exibição compacta de um campo de texto rico em listas/tabelas: mostra um resumo curto e só abre o conteúdo completo (formatado) se clicado
+function RichTextCell({html,label}){
+  const[open,setOpen]=useState(false);
+  const preview=stripHtml(html);
+  if(!preview)return <span style={{color:C.textLight}}>—</span>;
+  return(
+    <>
+      <span onClick={()=>setOpen(true)} title="Clique para ver o conteúdo completo"
+        style={{cursor:"pointer",color:C.primary,textDecoration:"underline",display:"inline-block",
+          maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",verticalAlign:"bottom"}}>
+        {preview}
+      </span>
+      {open&&(
+        <Modal title={label||"Conteúdo"} onClose={()=>setOpen(false)}>
+          <div style={{lineHeight:1.6,maxHeight:"60vh",overflowY:"auto"}} dangerouslySetInnerHTML={{__html:sanitizeRichHtml(html)}}/>
+          <div style={{display:"flex",justifyContent:"flex-end",marginTop:14}}>
+            <button style={S.btnCancel} onClick={()=>setOpen(false)}>Fechar</button>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
 
 // ── MOBILE TABLE ──────────────────────────────────────────────
 // Renders a table as stacked cards on mobile
@@ -608,8 +722,8 @@ function EquipeItensModal({equipe,user,onClose}){
                     <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                       <td style={{...S.td,fontWeight:600}}>{it.funcionarioNome||"—"}</td>
                       <td style={S.td}>{it.cargo||"—"}</td>
-                      <td style={S.td}>{it.papel||"—"}</td>
-                      <td style={S.td}>{it.atribuicoes||"—"}</td>
+                      <td style={S.td}><RichTextCell html={it.papel} label="Papel"/></td>
+                      <td style={S.td}><RichTextCell html={it.atribuicoes} label="Atribuições"/></td>
                       <td style={S.td}>{it.centroCusto||"—"}</td>
                       <td style={S.td}>
                         {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
@@ -630,12 +744,8 @@ function EquipeItensModal({equipe,user,onClose}){
           <SelectField label="Funcionário *" value={form.funcionarioId}
             onChange={v=>setForm(f=>({...f,funcionarioId:v}))}
             options={disponiveis.map(f=>({value:f.id,label:f.nome}))}/>
-          <Input label="Papel" value={form.papel} onChange={v=>setForm(f=>({...f,papel:v}))} placeholder="ex: Responsável por Backup e Redes"/>
-          <div style={S.formRow}>
-            <label style={S.label}>Atribuições</label>
-            <textarea value={form.atribuicoes} onChange={e=>setForm(f=>({...f,atribuicoes:e.target.value}))} rows={3}
-              style={{...S.input,resize:"vertical"}} placeholder="O que esta pessoa faz nesta equipe..."/>
-          </div>
+          <RichTextField label="Papel" value={form.papel} onChange={v=>setForm(f=>({...f,papel:v}))} placeholder="ex: Responsável por Backup e Redes"/>
+          <RichTextField label="Atribuições" value={form.atribuicoes} onChange={v=>setForm(f=>({...f,atribuicoes:v}))} placeholder="O que esta pessoa faz nesta equipe..."/>
           {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
           <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
             <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
@@ -768,11 +878,7 @@ function EquipesScreen({user}){
             onChange={v=>setForm(f=>({...f,parentId:v}))}
             options={items.filter(t=>t.id!==form.id).map(t=>({value:t.id,label:t.name}))}
             placeholder="Nenhuma (nó raiz)"/>
-          <div style={S.formRow}>
-            <label style={S.label}>Atribuições</label>
-            <textarea value={form.atribuicoes||""} onChange={e=>setForm(f=>({...f,atribuicoes:e.target.value}))} rows={3}
-              style={{...S.input,resize:"vertical"}} placeholder="O que esta equipe é responsável por fazer..."/>
-          </div>
+          <RichTextField label="Atribuições" value={form.atribuicoes} onChange={v=>setForm(f=>({...f,atribuicoes:v}))} placeholder="O que esta equipe é responsável por fazer..."/>
           <div style={S.formRow}><label style={S.label}>STATUS</label>
             <div style={{display:"flex",gap:16}}>
               {[{v:true,l:"Ativo"},{v:false,l:"Inativo"}].map(o=>(
@@ -8444,11 +8550,12 @@ function RelatorioPapeisScreen({user}){
         const tot=totalMembros(node);
         const pfx=" ".repeat(depth*3);
         const fill=depth===0?[224,235,255]:depth===1?[240,245,255]:[248,250,255];
-        const label=`${pfx}${node.name}  (${tot} func.)${node.atribuicoes?` — ${node.atribuicoes}`:""}`;
+        const nodeAtrib=stripHtml(node.atribuicoes);
+        const label=`${pfx}${node.name}  (${tot} func.)${nodeAtrib?` — ${nodeAtrib}`:""}`;
         bodyRows.push([{content:label,colSpan:3,styles:{fontStyle:"bold",fillColor:fill,textColor:[30,60,120]}}]);
         node.membros.forEach(m=>{
           const mpfx=" ".repeat((depth+1)*3);
-          bodyRows.push([{content:`${mpfx}${m.funcionarioNome}`,styles:{textColor:[50,50,50]}},m.papel||"—",m.atribuicoes||"—"]);
+          bodyRows.push([{content:`${mpfx}${m.funcionarioNome}`,styles:{textColor:[50,50,50]}},stripHtml(m.papel)||"—",stripHtml(m.atribuicoes)||"—"]);
         });
         flattenBody(node.children,depth+1);
       });
@@ -8489,15 +8596,15 @@ function RelatorioPapeisScreen({user}){
               </span>
             </span>
             {node.atribuicoes&&(
-              <div style={{marginTop:4,marginLeft:26,fontSize:12,color:"#556",fontStyle:"italic"}}>{node.atribuicoes}</div>
+              <div style={{marginTop:4,marginLeft:26,fontSize:12}}><RichTextCell html={node.atribuicoes} label={`Atribuições — ${node.name}`}/></div>
             )}
           </td>
         </tr>
         {isExp&&node.membros.map((m,i)=>(
           <tr key={i} style={{background:"#FAFBFF",borderBottom:`1px solid ${C.border}`}}>
             <td style={{...S.td,paddingLeft:32+indent,fontSize:12,color:"#444"}}>{m.funcionarioNome}</td>
-            <td style={{...S.td,fontSize:12,color:"#555"}}>{m.papel||"—"}</td>
-            <td style={{...S.td,fontSize:12,color:"#555"}}>{m.atribuicoes||"—"}</td>
+            <td style={{...S.td,fontSize:12,color:"#555"}}><RichTextCell html={m.papel} label="Papel"/></td>
+            <td style={{...S.td,fontSize:12,color:"#555"}}><RichTextCell html={m.atribuicoes} label="Atribuições"/></td>
           </tr>
         ))}
         {isExp&&node.children.map(child=>renderNode(child,depth+1))}
