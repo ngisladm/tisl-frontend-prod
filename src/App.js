@@ -2700,7 +2700,7 @@ function IndicadoresScreen({user}){
   const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
-  const emptyForm={id:null,teamId:"",nome:"",unidade:"",meta:"",periodicidade:"Mensal",origem:"Manual",direcao:"Maior",limiteMaximo:"",ativo:true};
+  const emptyForm={id:null,teamId:"",nome:"",unidade:"",meta:"",periodicidade:"Mensal",origem:"Manual",direcao:"Maior",limiteMaximo:"",observacao:"",ativo:true};
   const[form,setForm]=useState(emptyForm);
   const p=user.permissions?.s58;
 
@@ -2740,7 +2740,7 @@ function IndicadoresScreen({user}){
       {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📈</span>Nenhum indicador cadastrado.</div>:(
         <div style={{overflowX:"auto"}}>
         <table style={S.table}><thead><tr>
-          {["Nome","Equipe","Unidade","Meta","Direção","Periodicidade","Origem","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          {["Nome","Equipe","Unidade","Meta","Direção","Periodicidade","Origem","Observação","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
         <tbody>{items.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
@@ -2751,6 +2751,7 @@ function IndicadoresScreen({user}){
             <td style={S.td}>{it.direcao==="Menor"?"Menor é melhor":"Maior é melhor"}</td>
             <td style={S.td}>{it.periodicidade}</td>
             <td style={S.td}>{it.origem}</td>
+            <td style={S.td}><RichTextCell html={it.observacao} label="Observação"/></td>
             <td style={S.td}><span style={{...S.badge,...(it.ativo?S.badgeActive:S.badgeInactive)}}>{it.ativo?"Ativo":"Inativo"}</span></td>
             <td style={S.td}>
               {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
@@ -2773,6 +2774,7 @@ function IndicadoresScreen({user}){
           )}
           <SelectField label="Periodicidade" value={form.periodicidade} onChange={v=>setForm(f=>({...f,periodicidade:v}))} options={PERIODICIDADES}/>
           <SelectField label="Origem" value={form.origem} onChange={v=>setForm(f=>({...f,origem:v}))} options={ORIGENS_INDICADOR}/>
+          <RichTextField label="Observação" value={form.observacao} onChange={v=>setForm(f=>({...f,observacao:v}))} placeholder="Observações sobre este indicador..."/>
           <div style={S.formRow}><label style={S.label}>STATUS</label>
             <div style={{display:"flex",gap:16}}>
               {[{v:true,l:"Ativo"},{v:false,l:"Inativo"}].map(o=>(
