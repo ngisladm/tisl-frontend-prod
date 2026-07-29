@@ -1535,8 +1535,8 @@ function ExtraAvulsoScreen({user}){
               ]}
               actions={it=>(
                 <>
-                  {(user.isMaster||it.createdBy===user.id)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit,flex:1,textAlign:"center"}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
-                  {(user.isMaster||it.createdBy===user.id)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flex:1,textAlign:"center"}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
+                  {(user.isMaster||it.funcionarioId===myFuncId)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit,flex:1,textAlign:"center"}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+                  {(user.isMaster||it.funcionarioId===myFuncId)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flex:1,textAlign:"center"}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
                 </>
               )}
             />
@@ -1556,8 +1556,8 @@ function ExtraAvulsoScreen({user}){
                   <td style={S.td}>{it.horaFim}</td>
                   <td style={S.td}><span style={{fontSize:12,color:C.textLight}}>{it.observacao||"—"}</span></td>
                   <td style={S.td}>
-                    {(user.isMaster||it.createdBy===user.id)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
-                    {(user.isMaster||it.createdBy===user.id)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
+                    {(user.isMaster||it.funcionarioId===myFuncId)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+                    {(user.isMaster||it.funcionarioId===myFuncId)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
                   </td>
                 </tr>
               ))}</tbody>
