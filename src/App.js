@@ -8554,22 +8554,22 @@ function RelatorioPapeisScreen({user}){
         const fill=depth===0?[224,235,255]:depth===1?[240,245,255]:[248,250,255];
         const nodeAtrib=stripHtml(node.atribuicoes);
         const label=`${pfx}${node.name}  (${tot} func.)${nodeAtrib?` — ${nodeAtrib}`:""}`;
-        bodyRows.push([{content:label,colSpan:3,styles:{fontStyle:"bold",fillColor:fill,textColor:[30,60,120]}}]);
+        bodyRows.push([{content:label,colSpan:4,styles:{fontStyle:"bold",fillColor:fill,textColor:[30,60,120]}}]);
         node.membros.forEach(m=>{
           const mpfx=" ".repeat((depth+1)*3);
-          bodyRows.push([{content:`${mpfx}${m.funcionarioNome}`,styles:{textColor:[50,50,50]}},stripHtml(m.papel)||"—",stripHtml(m.atribuicoes)||"—"]);
+          bodyRows.push([{content:`${mpfx}${m.funcionarioNome}`,styles:{textColor:[50,50,50]}},stripHtml(m.missao)||"—",stripHtml(m.papel)||"—",stripHtml(m.atribuicoes)||"—"]);
         });
         flattenBody(node.children,depth+1);
       });
     };
     flattenBody(tree,0);
     autoTable(doc,{
-      head:[["Equipe / Funcionário","Papel","Atribuições"]],
+      head:[["Equipe / Funcionário","Missão","Papel","Atribuições"]],
       body:bodyRows,
       startY:28,
       styles:{fontSize:8,cellPadding:2},
       headStyles:{fillColor:[37,99,235],textColor:255,fontStyle:"bold"},
-      columnStyles:{0:{cellWidth:75},1:{cellWidth:50},2:{cellWidth:60}},
+      columnStyles:{0:{cellWidth:60},1:{cellWidth:45},2:{cellWidth:40},3:{cellWidth:45}},
       margin:{left:14,right:14},
     });
     doc.save("Papeis_Responsabilidades.pdf");
@@ -8586,7 +8586,7 @@ function RelatorioPapeisScreen({user}){
     return(
       <Fragment key={node.id}>
         <tr style={{background:bg,borderBottom:`1px solid ${C.border}`}}>
-          <td colSpan={3} style={{...S.td,paddingLeft:indent,paddingTop:8,paddingBottom:8,borderLeft:`3px solid ${borderColor}`}}>
+          <td colSpan={4} style={{...S.td,paddingLeft:indent,paddingTop:8,paddingBottom:8,borderLeft:`3px solid ${borderColor}`}}>
             <span style={{display:"inline-flex",alignItems:"center",gap:8}}>
               {(hasChildren||hasMembros)
                 ?<button onClick={()=>toggle(node.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:C.primary,padding:"0 2px",lineHeight:1,minWidth:18,fontWeight:"bold"}}>{isExp?"▼":"▶"}</button>
@@ -8605,6 +8605,7 @@ function RelatorioPapeisScreen({user}){
         {isExp&&node.membros.map((m,i)=>(
           <tr key={i} style={{background:"#FAFBFF",borderBottom:`1px solid ${C.border}`}}>
             <td style={{...S.td,paddingLeft:32+indent,fontSize:12,color:"#444"}}>{m.funcionarioNome}</td>
+            <td style={{...S.td,fontSize:12,color:"#555"}}><RichTextCell html={m.missao} label="Missão"/></td>
             <td style={{...S.td,fontSize:12,color:"#555"}}><RichTextCell html={m.papel} label="Papel"/></td>
             <td style={{...S.td,fontSize:12,color:"#555"}}><RichTextCell html={m.atribuicoes} label="Atribuições"/></td>
           </tr>
@@ -8632,7 +8633,8 @@ function RelatorioPapeisScreen({user}){
         :<div style={{overflowX:"auto"}}>
           <table style={S.table}>
             <thead><tr>
-              <th style={{...S.th,width:"45%"}}>Equipe / Funcionário</th>
+              <th style={{...S.th,width:"40%"}}>Equipe / Funcionário</th>
+              <th style={S.th}>Missão</th>
               <th style={S.th}>Papel</th>
               <th style={S.th}>Atribuições</th>
             </tr></thead>
