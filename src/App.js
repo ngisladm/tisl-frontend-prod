@@ -834,13 +834,11 @@ function RelatorioPdiScreen({user}){
   return <div>
     <div style={{...S.card,marginBottom:18}}>
       <div style={{...S.cardHeader,marginBottom:16,flexWrap:"wrap",gap:10}}><span style={S.cardTitle}>🎯 Relatório de PDI</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportPDF} disabled={!rows.length}>⬇ PDF</button><button style={S.btnSave} onClick={exportExcel} disabled={!rows.length}>⬇ Excel</button></div></div>
-      <div style={{fontSize:11,fontWeight:700,color:C.accent,marginBottom:8}}>AVALIAÇÃO</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12,marginBottom:14}}>
         <MaskedInput label="Data inicial" mask={MASK_DATE} value={filters.dataInicial} onChange={v=>setFilters(f=>({...f,dataInicial:v}))} placeholder="01/01/2026"/>
         <MaskedInput label="Data final" mask={MASK_DATE} value={filters.dataFinal} onChange={v=>setFilters(f=>({...f,dataFinal:v}))} placeholder="31/12/2026"/>
         <SelectField label="Funcionário" value={filters.funcionarioId} onChange={v=>setFilters(f=>({...f,funcionarioId:v}))} options={funcionarios.map(fn=>({value:fn.id,label:fn.nome}))}/>
       </div>
-      <div style={{fontSize:11,fontWeight:700,color:C.accent,marginBottom:8}}>PDI</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
         <MaskedInput label="Prazo inicial" mask={MASK_DATE} value={filters.prazoInicial} onChange={v=>setFilters(f=>({...f,prazoInicial:v}))} placeholder="01/01/2026"/>
         <MaskedInput label="Prazo final" mask={MASK_DATE} value={filters.prazoFinal} onChange={v=>setFilters(f=>({...f,prazoFinal:v}))} placeholder="31/12/2026"/>
