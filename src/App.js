@@ -651,6 +651,214 @@ function SimpleListScreen({user,screenId,title,icon,apiPath}){
 }
 
 // ── EQUIPE ITENS MODAL ────────────────────────────────────────
+function AvaliacoesModal({item,user,onClose}){
+  const[items,setItems]=useState([]);const[loading,setLoading]=useState(true);
+  const[form,setForm]=useState(null);const[delId,setDelId]=useState(null);
+  const[pdiAvaliacao,setPdiAvaliacao]=useState(null);const[saving,setSaving]=useState(false);
+  const p=user.isMaster?{view:true,insert:true,edit:true,delete:true}:user.permissions?.s63;
+  const pPdi=user.isMaster?{view:true}:user.permissions?.s64;
+  const scores=Array.from({length:10},(_,i)=>({value:String(i+1),label:String(i+1)}));
+  const load=async()=>{setLoading(true);try{setItems(await api.get(`/avaliacoes/equipe-item/${item.id}`));}catch(e){alert(e.message);}finally{setLoading(false);}};
+  useEffect(()=>{load();},[]);
+  const save=async()=>{
+    if(!form.data||!form.competencia.trim()||!form.esperado||!form.atual)return alert("Preencha todos os campos obrigatórios.");
+    setSaving(true);
+    try{const body={...form,equipeItemId:item.id};form.id?await api.put(`/avaliacoes/${form.id}`,body):await api.post("/avaliacoes",body);setForm(null);await load();}
+    catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{try{await api.delete(`/avaliacoes/${delId}`);setDelId(null);await load();}catch(e){alert(e.message);}};
+  return <>
+    <Modal title={`📊 Avaliação — ${item.funcionarioNome}`} onClose={onClose} wide>
+      {p?.insert&&<div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}><button style={S.btnAdd} onClick={()=>setForm({id:null,data:"",competencia:"",esperado:"",atual:""})}>+ Nova Avaliação</button></div>}
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📊</span>Nenhuma avaliação cadastrada.</div>:
+        <div style={{overflowX:"auto"}}><table style={S.table}><thead><tr>{["Data","Competência","Esperado","Atual","PDI Pendente (Não iniciado)","PDI Pendente (Em andamento)","PDI Concluído","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
+        <tbody>{items.map(av=><tr key={av.id}>
+          <td style={S.td}><strong>{av.data}</strong></td><td style={S.td}>{av.competencia}</td>
+          <td style={{...S.td,textAlign:"center"}}>{av.esperado}</td><td style={{...S.td,textAlign:"center"}}>{av.atual}</td>
+          <td style={{...S.td,textAlign:"center"}}><span style={{...S.badge,...S.badgeInactive}}>{av.pdiNaoIniciado}</span></td>
+          <td style={{...S.td,textAlign:"center"}}><span style={{...S.badge,background:"#FFF3CD",color:"#8A6500"}}>{av.pdiEmAndamento}</span></td>
+          <td style={{...S.td,textAlign:"center"}}><span style={{...S.badge,...S.badgeActive}}>{av.pdiConcluido}</span></td>
+          <td style={S.td}>
+            {pPdi?.view&&<button style={{...S.actionBtn,background:"#E8F5E9",color:"#24733D",border:"1px solid #B7DFBF"}} onClick={()=>setPdiAvaliacao(av)}>🎯 PDI</button>}
+            {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>setForm({...av,esperado:String(av.esperado),atual:String(av.atual)})}><Icon name="edit" size={13}/> Editar</button>}
+            {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(av.id)}><Icon name="trash" size={13}/> Excluir</button>}
+          </td>
+        </tr>)}</tbody></table></div>}
+      <div style={{display:"flex",justifyContent:"flex-end",marginTop:14}}><button style={S.btnCancel} onClick={onClose}>Fechar</button></div>
+      {delId&&<ConfirmModal msg="Excluir esta avaliação, seus PDIs e anexos?" onConfirm={del} onCancel={()=>setDelId(null)}/>} 
+    </Modal>
+    {form&&<Modal title={form.id?"Editar Avaliação":"Nova Avaliação"} onClose={()=>setForm(null)}>
+      <MaskedInput label="Data" mask={MASK_DATE} value={form.data} onChange={v=>setForm(f=>({...f,data:v}))} placeholder="01/01/2026" required/>
+      <Input label="Competência" value={form.competencia} onChange={v=>setForm(f=>({...f,competencia:v}))} required/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+        <SelectField label="Esperado" value={form.esperado} onChange={v=>setForm(f=>({...f,esperado:v}))} options={scores} required/>
+        <SelectField label="Atual" value={form.atual} onChange={v=>setForm(f=>({...f,atual:v}))} options={scores} required/>
+      </div>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button><button style={{...S.btnSave,opacity:saving?0.7:1}} disabled={saving} onClick={save}>{saving?"Salvando...":"Salvar"}</button></div>
+    </Modal>}
+    {pdiAvaliacao&&<PdisModal avaliacao={pdiAvaliacao} user={user} onClose={()=>setPdiAvaliacao(null)} onChanged={load}/>} 
+  </>;
+}
+
+function PdiAnexosModal({pdi,user,onClose,onChanged}){
+  const[items,setItems]=useState([]);const[loading,setLoading]=useState(true);const[delId,setDelId]=useState(null);
+  const p=user.isMaster?{view:true,insert:true,edit:true,delete:true}:user.permissions?.s64;
+  const load=()=>api.get(`/avaliacoes/pdis/${pdi.id}/anexos`).then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  useEffect(()=>{load();},[]);
+  const download=async item=>{try{
+    const response=await fetch(`${API_URL}/avaliacoes/anexos/${item.id}/download`,{headers:api.token?{Authorization:`Bearer ${api.token}`}:{}});
+    if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.error||"Erro ao abrir anexo.");}
+    const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement("a");
+    link.href=url;link.download=item.nomeOriginal;link.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
+  }catch(e){alert(e.message);}};
+  const del=async()=>{try{await api.delete(`/avaliacoes/anexos/${delId}`);setDelId(null);setLoading(true);await load();onChanged?.();}catch(e){alert(e.message);}};
+  return <Modal title={`📎 Anexos do PDI (${items.length})`} onClose={onClose}>
+    {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📎</span>Nenhum anexo.</div>:
+      <div style={{maxHeight:"55vh",overflowY:"auto"}}>{items.map(item=><div key={item.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:6,marginBottom:7}}>
+        <button onClick={()=>download(item)} style={{background:"none",border:"none",padding:0,color:C.primary,fontWeight:600,cursor:"pointer",textAlign:"left",wordBreak:"break-word"}}>📎 {item.nomeOriginal}</button>
+        {p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flexShrink:0}} onClick={()=>setDelId(item.id)}><Icon name="trash" size={13}/> Excluir</button>}
+      </div>)}</div>}
+    <div style={{display:"flex",justifyContent:"flex-end",marginTop:14}}><button style={S.btnCancel} onClick={onClose}>Fechar</button></div>
+    {delId&&<ConfirmModal msg="Excluir este anexo?" onConfirm={del} onCancel={()=>setDelId(null)}/>} 
+  </Modal>;
+}
+
+function PdisModal({avaliacao,user,onClose,onChanged}){
+  const[items,setItems]=useState([]);const[responsaveis,setResponsaveis]=useState([]);const[loading,setLoading]=useState(true);
+  const[form,setForm]=useState(null);const[delId,setDelId]=useState(null);const[anexosPdi,setAnexosPdi]=useState(null);const[saving,setSaving]=useState(false);
+  const fileRef=useRef(null);const p=user.isMaster?{view:true,insert:true,edit:true,delete:true}:user.permissions?.s64;
+  const emptyForm={id:null,objetivo:"",justificativa:"",acaoDesenvolvimento:"",prazo:"",responsavelId:"",evidencia:"",resultadoEsperado:"",resultadoObtido:"",status:"Não iniciado",_newFiles:[]};
+  const load=async()=>{setLoading(true);try{setItems(await api.get(`/avaliacoes/${avaliacao.id}/pdis`));}catch(e){alert(e.message);}finally{setLoading(false);}};
+  useEffect(()=>{Promise.all([api.get(`/avaliacoes/${avaliacao.id}/pdis`),api.get("/users/basic")]).then(([pd,us])=>{
+    setItems(pd);const seen=new Set();setResponsaveis(us.filter(u=>u.funcionarioId&&!seen.has(u.funcionarioId)&&seen.add(u.funcionarioId)));
+  }).catch(e=>alert(e.message)).finally(()=>setLoading(false));},[]);
+  const uploadFiles=async(pdiId,files)=>{if(!files?.length)return;const fd=new FormData();files.forEach(file=>fd.append("files",file));await api.upload(`/avaliacoes/pdis/${pdiId}/anexos`,fd);};
+  const save=async()=>{
+    if(!stripHtml(form.objetivo)||!form.prazo||!form.responsavelId||!form.status)return alert("Preencha Objetivo, Prazo, Responsável e Status.");
+    setSaving(true);
+    try{
+      const body={...form,objetivo:sanitizeRichHtml(form.objetivo),justificativa:sanitizeRichHtml(form.justificativa),acaoDesenvolvimento:sanitizeRichHtml(form.acaoDesenvolvimento),evidencia:sanitizeRichHtml(form.evidencia),resultadoEsperado:sanitizeRichHtml(form.resultadoEsperado),resultadoObtido:sanitizeRichHtml(form.resultadoObtido)};
+      const saved=form.id?await api.put(`/avaliacoes/pdis/${form.id}`,body):await api.post(`/avaliacoes/${avaliacao.id}/pdis`,body);
+      await uploadFiles(saved.id,form._newFiles);setForm(null);await load();onChanged?.();
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{try{await api.delete(`/avaliacoes/pdis/${delId}`);setDelId(null);await load();onChanged?.();}catch(e){alert(e.message);}};
+  const statusStyle=status=>status==="Concluído"?S.badgeActive:status==="Em andamento"?{background:"#FFF3CD",color:"#8A6500"}:S.badgeInactive;
+  return <>
+    <Modal title={`🎯 PDI — ${avaliacao.competencia}`} onClose={onClose} wide>
+      {p?.insert&&<div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}><button style={S.btnAdd} onClick={()=>setForm({...emptyForm})}>+ Novo PDI</button></div>}
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🎯</span>Nenhum PDI cadastrado.</div>:
+        <div style={{overflowX:"auto"}}><table style={{...S.table,minWidth:1650}}><thead><tr>{["Objetivo","Competência relacionada","Justificativa","Ação de desenvolvimento","Prazo","Responsável","Evidência","Resultado esperado","Resultado obtido","Anexos","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
+        <tbody>{items.map(item=><tr key={item.id}>
+          <td style={S.td}><RichTextCell html={item.objetivo} label="Objetivo"/></td><td style={S.td}>{item.competenciaRelacionada}</td>
+          <td style={S.td}><RichTextCell html={item.justificativa} label="Justificativa"/></td><td style={S.td}><RichTextCell html={item.acaoDesenvolvimento} label="Ação de desenvolvimento"/></td>
+          <td style={S.td}>{item.prazo}</td><td style={S.td}>{item.responsavelNome||"—"}</td><td style={S.td}><RichTextCell html={item.evidencia} label="Evidência"/></td>
+          <td style={S.td}><RichTextCell html={item.resultadoEsperado} label="Resultado esperado"/></td><td style={S.td}><RichTextCell html={item.resultadoObtido} label="Resultado obtido"/></td>
+          <td style={{...S.td,textAlign:"center"}}><button title="Ver anexos" onClick={()=>setAnexosPdi(item)} style={{...S.badge,...S.badgeActive,border:"none",cursor:"pointer",fontWeight:700}}>{item.anexosCount||0}</button></td>
+          <td style={S.td}><span style={{...S.badge,...statusStyle(item.status)}}>{item.status}</span></td><td style={S.td}>
+            {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>setForm({...item,_newFiles:[]})}><Icon name="edit" size={13}/> Editar</button>}
+            {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}><Icon name="trash" size={13}/> Excluir</button>}
+          </td>
+        </tr>)}</tbody></table></div>}
+      <div style={{display:"flex",justifyContent:"flex-end",marginTop:14}}><button style={S.btnCancel} onClick={onClose}>Fechar</button></div>
+      {delId&&<ConfirmModal msg="Excluir este PDI e todos os seus anexos?" onConfirm={del} onCancel={()=>setDelId(null)}/>} 
+    </Modal>
+    {form&&<Modal title={form.id?"Editar PDI":"Novo PDI"} onClose={()=>setForm(null)} wide>
+      <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:12,marginBottom:14,fontSize:13}}><strong>Competência relacionada:</strong> {avaliacao.competencia}</div>
+      <RichTextField label="Objetivo" required value={form.objetivo} onChange={v=>setForm(f=>({...f,objetivo:v}))} placeholder="Descreva o objetivo do plano..."/>
+      <RichTextField label="Justificativa" value={form.justificativa} onChange={v=>setForm(f=>({...f,justificativa:v}))} placeholder="Descreva a justificativa..."/>
+      <RichTextField label="Ação de desenvolvimento" value={form.acaoDesenvolvimento} onChange={v=>setForm(f=>({...f,acaoDesenvolvimento:v}))} placeholder="Descreva a ação de desenvolvimento..."/>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:16}}>
+        <MaskedInput label="Prazo" mask={MASK_DATE} value={form.prazo||""} onChange={v=>setForm(f=>({...f,prazo:v}))} placeholder="31/12/2026" required/>
+        <SelectField label="Responsável" value={form.responsavelId||""} onChange={v=>setForm(f=>({...f,responsavelId:v}))} options={responsaveis.map(r=>({value:r.funcionarioId,label:r.funcionarioNome||r.name}))} required/>
+        <SelectField label="Status" value={form.status} onChange={v=>setForm(f=>({...f,status:v}))} options={["Não iniciado","Em andamento","Concluído"].map(v=>({value:v,label:v}))} required/>
+      </div>
+      <RichTextField label="Evidência" value={form.evidencia} onChange={v=>setForm(f=>({...f,evidencia:v}))} placeholder="Registre as evidências..."/>
+      <RichTextField label="Resultado esperado" value={form.resultadoEsperado} onChange={v=>setForm(f=>({...f,resultadoEsperado:v}))} placeholder="Descreva o resultado esperado..."/>
+      <RichTextField label="Resultado obtido" value={form.resultadoObtido} onChange={v=>setForm(f=>({...f,resultadoObtido:v}))} placeholder="Descreva o resultado obtido..."/>
+      <div style={S.formRow}><label style={S.label}>Anexos</label>{(form._newFiles||[]).map((file,index)=><div key={`${file.name}-${index}`} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",border:`1px dashed ${C.border}`,borderRadius:6,marginBottom:6}}>
+        <span style={{fontSize:12}}>📎 {file.name}</span><button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setForm(f=>({...f,_newFiles:f._newFiles.filter((_,i)=>i!==index)}))}><Icon name="trash" size={13}/></button>
+      </div>)}
+      <input ref={fileRef} type="file" multiple style={{display:"none"}} onChange={e=>{const files=Array.from(e.target.files||[]);setForm(f=>({...f,_newFiles:[...(f._newFiles||[]),...files]}));e.target.value="";}}/>
+      <button style={S.btnCancel} onClick={()=>fileRef.current?.click()}><Icon name="paperclip" size={13}/> Selecionar anexos</button>{form.id&&<span style={{fontSize:11,color:C.textLight,marginLeft:8}}>Anexos atuais: clique no número da listagem.</span>}</div>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button><button style={{...S.btnSave,opacity:saving?0.7:1}} disabled={saving} onClick={save}>{saving?"Salvando...":"Salvar"}</button></div>
+    </Modal>}
+    {anexosPdi&&<PdiAnexosModal pdi={anexosPdi} user={user} onClose={()=>setAnexosPdi(null)} onChanged={async()=>{await load();onChanged?.();}}/>}
+  </>;
+}
+
+function RelatorioPdiScreen({user}){
+  const[rows,setRows]=useState([]);const[funcionarios,setFuncionarios]=useState([]);const[responsaveis,setResponsaveis]=useState([]);
+  const[loading,setLoading]=useState(false);const[loaded,setLoaded]=useState(false);
+  const emptyFilters={dataInicial:"",dataFinal:"",funcionarioId:"",prazoInicial:"",prazoFinal:"",responsavelId:"",status:""};
+  const[filters,setFilters]=useState(emptyFilters);
+  const p=user.isMaster?{view:true}:user.permissions?.s65;
+
+  useEffect(()=>{if(!p?.view)return;Promise.all([api.get("/funcionarios/basic"),api.get("/users/basic")]).then(([fn,us])=>{
+    setFuncionarios(fn);const seen=new Set();setResponsaveis(us.filter(u=>u.funcionarioId&&!seen.has(u.funcionarioId)&&seen.add(u.funcionarioId)));
+  }).catch(e=>alert(e.message));},[]);
+
+  const buscar=async(custom=filters)=>{setLoading(true);try{
+    const params=new URLSearchParams();Object.entries(custom).forEach(([key,value])=>value&&params.append(key,value));
+    setRows(await api.get(`/avaliacoes/relatorio/pdi?${params}`));setLoaded(true);
+  }catch(e){alert(e.message);}finally{setLoading(false);}};
+  const clear=()=>{setFilters(emptyFilters);setRows([]);setLoaded(false);};
+
+  const excelRows=()=>rows.flatMap(av=>{
+    const details=av.pdis.length?av.pdis:[{}];
+    return details.map(pd=>({
+      "Data":av.data,"Funcionário":av.funcionarioNome,"Competência":av.competencia,"Esperado":av.esperado,"Atual":av.atual,
+      "PDI Pendente (Não iniciado)":av.pdiNaoIniciado,"PDI Pendente (Em andamento)":av.pdiEmAndamento,"PDI Concluído":av.pdiConcluido,
+      "Ação de desenvolvimento":stripHtml(pd.acaoDesenvolvimento),"Resultado esperado":stripHtml(pd.resultadoEsperado),
+      "Prazo":pd.prazo||"","Responsável":pd.responsavelNome||"","Status":pd.status||"",
+    }));
+  });
+  const exportExcel=()=>{
+    const ws=XLSX.utils.json_to_sheet(excelRows());const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"PDI");XLSX.writeFile(wb,"relatorio-pdi.xlsx");
+  };
+  const exportPDF=()=>{
+    const doc=new jsPDF({orientation:"landscape"});doc.setFontSize(14);doc.text("Relatório de PDI",14,14);
+    const body=[];
+    rows.forEach(av=>{
+      body.push([{content:`${av.data}  |  ${av.funcionarioNome}  |  Competência: ${av.competencia}  |  Esperado: ${av.esperado}  |  Atual: ${av.atual}  |  Pendentes: ${av.pdiNaoIniciado} não iniciado(s), ${av.pdiEmAndamento} em andamento  |  Concluídos: ${av.pdiConcluido}`,colSpan:5,styles:{fillColor:[240,165,0],textColor:[255,255,255],fontStyle:"bold"}}]);
+      if(av.pdis.length)av.pdis.forEach(pd=>body.push([stripHtml(pd.acaoDesenvolvimento)||"—",stripHtml(pd.resultadoEsperado)||"—",pd.prazo||"—",pd.responsavelNome||"—",pd.status||"—"]));
+      else body.push([{content:"Nenhum PDI encontrado para os filtros selecionados.",colSpan:5,styles:{textColor:[120,120,120],fontStyle:"italic"}}]);
+    });
+    autoTable(doc,{startY:20,head:[["Ação de desenvolvimento","Resultado esperado","Prazo","Responsável","Status"]],body,styles:{fontSize:8,cellPadding:2},headStyles:{fillColor:[97,97,97]},columnStyles:{0:{cellWidth:75},1:{cellWidth:75},2:{cellWidth:25},3:{cellWidth:45},4:{cellWidth:30}}});
+    doc.save("relatorio-pdi.pdf");
+  };
+  const statusBadge=status=>status==="Concluído"?S.badgeActive:status==="Em andamento"?{background:"#FFF3CD",color:"#8A6500"}:S.badgeInactive;
+
+  if(!p?.view)return <div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  return <div>
+    <div style={{...S.card,marginBottom:18}}>
+      <div style={{...S.cardHeader,marginBottom:16,flexWrap:"wrap",gap:10}}><span style={S.cardTitle}>🎯 Relatório de PDI</span><div style={{display:"flex",gap:8}}><button style={S.btnSave} onClick={exportPDF} disabled={!rows.length}>⬇ PDF</button><button style={S.btnSave} onClick={exportExcel} disabled={!rows.length}>⬇ Excel</button></div></div>
+      <div style={{fontSize:11,fontWeight:700,color:C.accent,marginBottom:8}}>AVALIAÇÃO</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12,marginBottom:14}}>
+        <MaskedInput label="Data inicial" mask={MASK_DATE} value={filters.dataInicial} onChange={v=>setFilters(f=>({...f,dataInicial:v}))} placeholder="01/01/2026"/>
+        <MaskedInput label="Data final" mask={MASK_DATE} value={filters.dataFinal} onChange={v=>setFilters(f=>({...f,dataFinal:v}))} placeholder="31/12/2026"/>
+        <SelectField label="Funcionário" value={filters.funcionarioId} onChange={v=>setFilters(f=>({...f,funcionarioId:v}))} options={funcionarios.map(fn=>({value:fn.id,label:fn.nome}))}/>
+      </div>
+      <div style={{fontSize:11,fontWeight:700,color:C.accent,marginBottom:8}}>PDI</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
+        <MaskedInput label="Prazo inicial" mask={MASK_DATE} value={filters.prazoInicial} onChange={v=>setFilters(f=>({...f,prazoInicial:v}))} placeholder="01/01/2026"/>
+        <MaskedInput label="Prazo final" mask={MASK_DATE} value={filters.prazoFinal} onChange={v=>setFilters(f=>({...f,prazoFinal:v}))} placeholder="31/12/2026"/>
+        <SelectField label="Responsável" value={filters.responsavelId} onChange={v=>setFilters(f=>({...f,responsavelId:v}))} options={responsaveis.map(r=>({value:r.funcionarioId,label:r.funcionarioNome||r.name}))}/>
+        <SelectField label="Status" value={filters.status} onChange={v=>setFilters(f=>({...f,status:v}))} options={["Não iniciado","Em andamento","Concluído"].map(v=>({value:v,label:v}))}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}><button style={S.btnCancel} onClick={clear}>Limpar</button><button style={S.btnSave} onClick={()=>buscar()} disabled={loading}>{loading?"Buscando...":<><Icon name="search" size={13}/> Pesquisar</>}</button></div>
+    </div>
+    {loading?<Spinner/>:loaded&&(rows.length===0?<div style={{...S.card,...S.emptyState}}><span style={S.emptyIcon}>🎯</span>Nenhum registro encontrado para os filtros selecionados.</div>:
+      rows.map(av=><div key={av.id} style={{...S.card,marginBottom:16,padding:0,overflow:"hidden"}}>
+        <div style={{background:C.primary,color:C.white,padding:"12px 16px",display:"flex",flexWrap:"wrap",gap:"8px 24px",alignItems:"center"}}><strong>{av.funcionarioNome}</strong><span>{av.data}</span><span>Competência: <strong>{av.competencia}</strong></span></div>
+        <div style={{display:"flex",flexWrap:"wrap",background:"#FFF8E1",borderBottom:`1px solid ${C.border}`}}>{[["Esperado",av.esperado],["Atual",av.atual],["PDI Pendente (Não iniciado)",av.pdiNaoIniciado],["PDI Pendente (Em andamento)",av.pdiEmAndamento],["PDI Concluído",av.pdiConcluido]].map(([label,value])=><div key={label} style={{padding:"9px 14px",borderRight:`1px solid ${C.border}`,minWidth:120}}><div style={{fontSize:10,color:C.textLight}}>{label}</div><div style={{fontSize:14,fontWeight:700}}>{value}</div></div>)}</div>
+        {av.pdis.length===0?<div style={{padding:16,color:C.textLight,fontSize:13}}>Nenhum PDI encontrado para os filtros selecionados.</div>:
+          <div style={{overflowX:"auto"}}><table style={S.table}><thead><tr>{["Ação de desenvolvimento","Resultado esperado","Prazo","Responsável","Status"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead><tbody>{av.pdis.map(pd=><tr key={pd.id}><td style={S.td}><RichTextCell html={pd.acaoDesenvolvimento} label="Ação de desenvolvimento"/></td><td style={S.td}><RichTextCell html={pd.resultadoEsperado} label="Resultado esperado"/></td><td style={S.td}>{pd.prazo}</td><td style={S.td}>{pd.responsavelNome||"—"}</td><td style={S.td}><span style={{...S.badge,...statusBadge(pd.status)}}>{pd.status}</span></td></tr>)}</tbody></table></div>}
+      </div>))}
+  </div>;
+}
+
 function EquipeItensModal({equipe,user,onClose}){
   const[itens,setItens]=useState([]);
   const[funcionarios,setFuncionarios]=useState([]);
@@ -659,7 +867,9 @@ function EquipeItensModal({equipe,user,onClose}){
   const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
   const[err,setErr]=useState("");
+  const[avaliacaoItem,setAvaliacaoItem]=useState(null);
   const p=user.permissions?.s4;
+  const podeVerAvaliacao=user.isMaster||user.permissions?.s63?.view;
 
   const load=()=>{
     setLoading(true);
@@ -727,6 +937,7 @@ function EquipeItensModal({equipe,user,onClose}){
                       <td style={S.td}><RichTextCell html={it.atribuicoes} label="Atribuições"/></td>
                       <td style={S.td}>{it.centroCusto||"—"}</td>
                       <td style={S.td}>
+                        {podeVerAvaliacao&&<button style={{...S.actionBtn,background:"#F3E5F5",color:"#7B1FA2",border:"1px solid #E1BEE7"}} onClick={()=>setAvaliacaoItem(it)}>📊 Avaliação</button>}
                         {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
                         {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
                       </td>
@@ -755,6 +966,7 @@ function EquipeItensModal({equipe,user,onClose}){
           </div>
         </Modal>
       )}
+      {avaliacaoItem&&<AvaliacoesModal item={avaliacaoItem} user={user} onClose={()=>setAvaliacaoItem(null)}/>}
     </>
   );
 }
@@ -11411,6 +11623,7 @@ const navConfig=[
     {id:"s14",label:"Relatório de Contratos",     icon:"file"},
     {id:"s60",label:"Painel de Indicadores",      icon:"chart"},
     {id:"s62",label:"Comparativo de Indicadores", icon:"chart"},
+    {id:"s65",label:"PDI",                         icon:"clipboard"},
     {id:"s24",label:"Análise de Linhas",          icon:"trending"},
     {id:"s25",label:"Resumo de Linhas",           icon:"signal"},
     {id:"s26",label:"Resumo de Ativos",           icon:"package"},
@@ -11542,6 +11755,7 @@ const screenTitles={
   s60:"Relatórios › Painel de Indicadores",
   s61:"Relatórios › Papéis e Responsabilidades",
   s62:"Relatórios › Comparativo de Indicadores",
+  s65:"Relatórios › PDI",
   profile:"Meu Perfil",
 };
 
@@ -11609,6 +11823,7 @@ export default function App(){
     s60:<PainelIndicadoresScreen user={user}/>,
     s61:<RelatorioPapeisScreen user={user}/>,
     s62:<ComparativoIndicadoresScreen user={user}/>,
+    s65:<RelatorioPdiScreen user={user}/>,
     s34:<InventarioRedeScreen user={user}/>,
     s38:<EnderecosRedeScreen user={user}/>,
     s39:<FiliaisScreen user={user}/>,
