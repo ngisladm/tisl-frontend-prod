@@ -5,6 +5,11 @@ import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
 
 const API_URL = process.env.REACT_APP_API_URL || "/api";
+const PASSWORD_RULE_MESSAGE = "A senha deve ter no mínimo 8 caracteres, pelo menos 1 letra maiúscula, 1 número e 1 caractere especial.";
+const validatePassword = password =>
+  password.length >= 8 && /[A-Z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9\s]/.test(password)
+    ? null
+    : PASSWORD_RULE_MESSAGE;
 
 // ── Responsive hook ──────────────────────────────────────────
 function useIsMobile(){ 
@@ -1178,15 +1183,18 @@ function UsersScreen({user}){
   const[funcionarios,setFuncionarios]=useState([]);
   const[loading,setLoading]=useState(true);const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
-  const[form,setForm]=useState({id:null,name:"",apelido:"",email:"",password:"",profileId:"",companyId:"",teamId:"",active:true,isMaster:false,funcionarioId:""});
+  const[form,setForm]=useState({id:null,name:"",apelido:"",email:"",password:"",profileIds:[],companyId:"",teamId:"",active:true,isMaster:false,funcionarioId:""});
   const p=user.permissions?.s2;
   useEffect(()=>{if(!p?.view)return;Promise.all([api.get("/users"),api.get("/profiles"),api.get("/companies"),api.get("/teams"),api.get("/funcionarios")]).then(([u,pr,c,t,fn])=>{setUsers(u);setProfiles(pr);setCompanies(c);setTeams(t);setFuncionarios(fn);}).catch(e=>alert(e.message)).finally(()=>setLoading(false));},[]);
-  const openAdd=()=>{setForm({id:null,name:"",apelido:"",email:"",password:"",profileId:"",companyId:"",teamId:"",active:true,isMaster:false,funcionarioId:""});setModal(true);};
-  const openEdit=u=>{setForm({...u,apelido:u.apelido||"",password:"",funcionarioId:u.funcionarioId||""});setModal(true);};
+  const openAdd=()=>{setForm({id:null,name:"",apelido:"",email:"",password:"",profileIds:[],companyId:"",teamId:"",active:true,isMaster:false,funcionarioId:""});setModal(true);};
+  const openEdit=u=>{setForm({...u,apelido:u.apelido||"",password:"",funcionarioId:u.funcionarioId||"",profileIds:u.profileIds?.length?u.profileIds:(u.profileId?[u.profileId]:[])});setModal(true);};
   const save=async()=>{
     if(!form.name.trim()||!form.email.trim())return alert("Nome e e-mail obrigatórios.");
     if(!form.id&&!form.password.trim())return alert("Senha obrigatória.");
-    setSaving(true);try{if(form.id){const u=await api.put(`/users/${form.id}`,form);setUsers(us=>us.map(x=>x.id===u.id?{...x,...u,funcionarioNome:funcionarios.find(f=>f.id===form.funcionarioId)?.nome||x.funcionarioNome}:x));}else{const c=await api.post("/users",form);setUsers(us=>[...us,{...c,funcionarioNome:funcionarios.find(f=>f.id===form.funcionarioId)?.nome}]);}setModal(false);}catch(e){alert(e.message);}finally{setSaving(false);}
+    if(form.password){const passwordError=validatePassword(form.password);if(passwordError)return alert(passwordError);}
+    if(!form.profileIds?.length)return alert("Selecione pelo menos um perfil.");
+    const profileName=form.profileIds.map(id=>profiles.find(pr=>pr.id===id)?.name).filter(Boolean).sort().join(", ");
+    setSaving(true);try{if(form.id){const u=await api.put(`/users/${form.id}`,form);setUsers(us=>us.map(x=>x.id===u.id?{...x,...u,profileName,funcionarioNome:funcionarios.find(f=>f.id===form.funcionarioId)?.nome||x.funcionarioNome}:x));}else{const c=await api.post("/users",form);setUsers(us=>[...us,{...c,profileName,funcionarioNome:funcionarios.find(f=>f.id===form.funcionarioId)?.nome}]);}setModal(false);}catch(e){alert(e.message);}finally{setSaving(false);}
   };
   const del=async()=>{try{await api.delete(`/users/${delId}`);setUsers(us=>us.filter(u=>u.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
   const[filterU,setFilterU]=useState({nome:"",email:"",funcionario:"",empresa:"",perfil:"",master:""});
@@ -1201,7 +1209,7 @@ function UsersScreen({user}){
         <input placeholder="E-mail" value={filterU.email} onChange={e=>setFilterU(f=>({...f,email:e.target.value}))} style={{...S.input,flex:"1 1 170px",minWidth:140,padding:"6px 10px",fontSize:13}}/>
         <input placeholder="Funcionário Vinculado" value={filterU.funcionario} onChange={e=>setFilterU(f=>({...f,funcionario:e.target.value}))} style={{...S.input,flex:"1 1 180px",minWidth:150,padding:"6px 10px",fontSize:13}}/>
         <input placeholder="Empresa" value={filterU.empresa} onChange={e=>setFilterU(f=>({...f,empresa:e.target.value}))} style={{...S.input,flex:"1 1 140px",minWidth:120,padding:"6px 10px",fontSize:13}}/>
-        <input placeholder="Perfil" value={filterU.perfil} onChange={e=>setFilterU(f=>({...f,perfil:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Perfis" value={filterU.perfil} onChange={e=>setFilterU(f=>({...f,perfil:e.target.value}))} style={{...S.input,flex:"1 1 130px",minWidth:110,padding:"6px 10px",fontSize:13}}/>
         <select value={filterU.master} onChange={e=>setFilterU(f=>({...f,master:e.target.value}))} style={{...S.input,flex:"1 1 120px",minWidth:100,padding:"6px 10px",fontSize:13}}>
           <option value="">Master: Todos</option>
           <option value="sim">Master: Sim</option>
@@ -1210,7 +1218,7 @@ function UsersScreen({user}){
       </div>
       {users.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>👤</span>Nenhum usuário.</div>:(
         <table style={S.table}><thead><tr>
-          {["Nome","E-mail","Funcionário Vinculado","Empresa","Perfil","Master","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          {["Nome","E-mail","Funcionário Vinculado","Empresa","Perfis","Master","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead><tbody>{fltU.map(u=>(
           <tr key={u.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={S.td}><strong>{u.name}</strong></td><td style={S.td}>{u.email}</td>
@@ -1228,9 +1236,22 @@ function UsersScreen({user}){
           <Input label="Apelido (exibido no sistema)" value={form.apelido||""} onChange={v=>setForm(f=>({...f,apelido:v}))} placeholder="Como deseja ser chamado"/>
           <Input label="E-mail" type="email" value={form.email} onChange={v=>setForm(f=>({...f,email:v}))} required/>
           <Input label={form.id?"Nova senha (em branco para manter)":"Senha"} type="password" value={form.password} onChange={v=>setForm(f=>({...f,password:v}))} required={!form.id}/>
+          <div style={{fontSize:11,color:C.textLight,marginTop:-12,marginBottom:14}}>Mínimo de 8 caracteres, com letra maiúscula, número e caractere especial.</div>
           <SelectField label="Funcionário Vinculado" value={form.funcionarioId} onChange={v=>setForm(f=>({...f,funcionarioId:v}))} options={funcionarios.map(fn=>({value:fn.id,label:fn.nome}))} placeholder="Selecione o funcionário"/>
           <SelectField label="Empresa"  value={form.companyId} onChange={v=>setForm(f=>({...f,companyId:v}))} options={companies.map(c=>({value:c.id,label:c.name}))}/>
-          <SelectField label="Perfil"   value={form.profileId} onChange={v=>setForm(f=>({...f,profileId:v}))} options={profiles.map(p=>({value:p.id,label:p.name}))}/>
+          <div style={S.formRow}>
+            <label style={S.label}>Perfis *</label>
+            <div style={{border:`1px solid ${C.border}`,borderRadius:7,maxHeight:180,overflowY:"auto",padding:"6px 10px",background:C.white}}>
+              {profiles.map(profile=><label key={profile.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 4px",cursor:"pointer",fontSize:13,borderBottom:`1px solid ${C.bg}`}}>
+                <input type="checkbox" checked={form.profileIds?.includes(profile.id)}
+                  onChange={e=>setForm(f=>({...f,profileIds:e.target.checked?[...(f.profileIds||[]),profile.id]:(f.profileIds||[]).filter(id=>id!==profile.id)}))}
+                  style={{width:16,height:16,accentColor:C.primary,cursor:"pointer"}}/>
+                {profile.name}
+              </label>)}
+              {profiles.length===0&&<div style={{padding:8,fontSize:12,color:C.textLight}}>Nenhum perfil cadastrado.</div>}
+            </div>
+            <div style={{fontSize:11,color:C.textLight,marginTop:5}}>{form.profileIds?.length||0} perfil(is) selecionado(s)</div>
+          </div>
           <div style={S.formRow}><label style={S.label}>STATUS</label>
             <div style={{display:"flex",gap:16}}>{[{v:true,l:"Ativo"},{v:false,l:"Inativo"}].map(o=>(
               <label key={String(o.v)} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
@@ -1254,6 +1275,54 @@ function UsersScreen({user}){
       {delId&&<ConfirmModal msg="Excluir usuário?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
     </div>
   );
+}
+
+// ── FECHAMENTO DE PERÍODO (s66) ───────────────────────────────
+function FechamentoPeriodoScreen({user}){
+  const p=user.isMaster?{view:true,insert:true,edit:true,delete:true}:user.permissions?.s66;
+  const[items,setItems]=useState([]);const[escalas,setEscalas]=useState([]);
+  const[loading,setLoading]=useState(true);const[form,setForm]=useState(null);const[delId,setDelId]=useState(null);const[saving,setSaving]=useState(false);
+  const screenOptions=[
+    {value:"SOBREAVISO_EXTRA",label:"Sobreaviso/Extra"},{value:"EXTRA_AVULSO",label:"Extra Avulso"},
+    {value:"REGISTRO_KM",label:"Registro de Km"},{value:"CONTROLE_FOLGAS",label:"Controle de Folgas"},
+    {value:"LANCAMENTO_INDICADOR",label:"Lançamento de Indicador"},
+  ];
+  const empty={id:null,screenKey:"",dateStart:"",dateEnd:"",escalaId:""};
+  const load=()=>{setLoading(true);Promise.all([api.get("/period-closures"),api.get("/period-closures/escalas-options")])
+    .then(([rows,esc])=>{setItems(rows);setEscalas(esc);}).catch(e=>alert(e.message)).finally(()=>setLoading(false));};
+  useEffect(()=>{if(p?.view)load();},[]);
+  const openAdd=()=>setForm(empty);
+  const openEdit=it=>setForm({id:it.id,screenKey:it.screenKey,dateStart:it.dateStart||"",dateEnd:it.dateEnd||"",escalaId:it.escalaId||""});
+  const save=async()=>{
+    if(!form.screenKey)return alert("Selecione a tela.");
+    if(form.screenKey==="SOBREAVISO_EXTRA"&&!form.escalaId)return alert("Selecione a escala.");
+    if(form.screenKey!=="SOBREAVISO_EXTRA"&&(!form.dateStart||!form.dateEnd))return alert("Informe a Data Inicial e a Data Final.");
+    setSaving(true);try{if(form.id)await api.put(`/period-closures/${form.id}`,form);else await api.post("/period-closures",form);setForm(null);load();}catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+  const del=async()=>{try{await api.delete(`/period-closures/${delId}`);setDelId(null);load();}catch(e){alert(e.message);}};
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+  return <div style={S.card}>
+    <div style={S.cardHeader}><span style={S.cardTitle}>🔒 Fechamento de Período</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Novo Fechamento</button>}</div>
+    {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Nenhum período fechado.</div>:<div style={{overflowX:"auto"}}><table style={S.table}>
+      <thead><tr>{["Tela","Data Inicial","Data Final","Escala","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
+      <tbody>{items.map(it=><tr key={it.id}>
+        <td style={S.td}><strong>{it.screenName}</strong></td><td style={S.td}>{it.dateStart||"—"}</td><td style={S.td}>{it.dateEnd||"—"}</td>
+        <td style={S.td}>{it.escalaId?`${it.escalaEquipes} — ${it.escalaDataInicio} até ${it.escalaDataFim}`:"—"}</td>
+        <td style={S.td}>{p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}{p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}</td>
+      </tr>)}</tbody></table></div>}
+    {form&&<Modal title={form.id?"Editar Fechamento":"Novo Fechamento"} onClose={()=>setForm(null)}>
+      <SelectField label="Tela" value={form.screenKey} onChange={v=>setForm(f=>({...f,screenKey:v,dateStart:"",dateEnd:"",escalaId:""}))} options={screenOptions} required/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+        <MaskedInput label="Data Inicial" mask={MASK_DATE} value={form.dateStart} onChange={v=>setForm(f=>({...f,dateStart:v}))} disabled={!form.screenKey||form.screenKey==="SOBREAVISO_EXTRA"} required={form.screenKey&&form.screenKey!=="SOBREAVISO_EXTRA"}/>
+        <MaskedInput label="Data Final" mask={MASK_DATE} value={form.dateEnd} onChange={v=>setForm(f=>({...f,dateEnd:v}))} disabled={!form.screenKey||form.screenKey==="SOBREAVISO_EXTRA"} required={form.screenKey&&form.screenKey!=="SOBREAVISO_EXTRA"}/>
+      </div>
+      <SelectField label="Escala" value={form.escalaId} onChange={v=>setForm(f=>({...f,escalaId:v}))} disabled={form.screenKey!=="SOBREAVISO_EXTRA"}
+        options={escalas.map(e=>({value:e.id,label:`${e.teamNamesStr} — ${e.dataInicio} até ${e.dataFim}`}))} required={form.screenKey==="SOBREAVISO_EXTRA"}/>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button><button style={S.btnSave} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button></div>
+    </Modal>}
+    {delId&&<ConfirmModal msg="Excluir este fechamento e liberar novamente o período?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+  </div>;
 }
 
 // ── CONTROLE DE HORAS ─────────────────────────────────────────
@@ -1322,8 +1391,7 @@ function ControleHorasScreen({user}){
               actions={e=>(
                 <>
                   <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",flex:1,textAlign:"center"}} onClick={()=>setModalCal(e)}>📅 Calendário</button>
-                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit,flex:1,textAlign:"center"}} onClick={()=>openEdit(e)}>✏️</button>}
-                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flex:1,textAlign:"center"}} onClick={()=>setDelId(e.id)}><Icon name="trash" size={13}/></button>}
+                  {e.periodoFechado?<span style={{...S.badge,background:"#FFEBEE",color:C.danger}}>🔒 Fechado</span>:<>{p?.edit&&<button style={{...S.actionBtn,...S.btnEdit,flex:1,textAlign:"center"}} onClick={()=>openEdit(e)}>✏️</button>}{p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flex:1,textAlign:"center"}} onClick={()=>setDelId(e.id)}><Icon name="trash" size={13}/></button>}</>}
                 </>
               )}
             />
@@ -1338,8 +1406,7 @@ function ControleHorasScreen({user}){
                 <td style={S.td}>{e.dataInicio} até {e.dataFim}</td>
                 <td style={S.td}>
                   <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",marginRight:4}} onClick={()=>setModalCal(e)}>📅 Calendário</button>
-                  {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(e)}><Icon name="edit" size={13}/> Editar</button>}
-                  {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(e.id)}><Icon name="trash" size={13}/> Excluir</button>}
+                  {e.periodoFechado?<span style={{...S.badge,background:"#FFEBEE",color:C.danger}}>🔒 Fechado</span>:<>{p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(e)}><Icon name="edit" size={13}/> Editar</button>}{p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(e.id)}><Icon name="trash" size={13}/> Excluir</button>}</>}
                 </td>
               </tr>
             ))}</tbody></table>
@@ -1745,8 +1812,7 @@ function ExtraAvulsoScreen({user}){
               ]}
               actions={it=>(
                 <>
-                  {(user.isMaster||it.funcionarioId===myFuncId)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit,flex:1,textAlign:"center"}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
-                  {(user.isMaster||it.funcionarioId===myFuncId)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flex:1,textAlign:"center"}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
+                  {it.periodoFechado?<span style={{...S.badge,background:"#FFEBEE",color:C.danger}}>🔒 Fechado</span>:<>{(user.isMaster||it.funcionarioId===myFuncId)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit,flex:1,textAlign:"center"}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}{(user.isMaster||it.funcionarioId===myFuncId)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel,flex:1,textAlign:"center"}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}</>}
                 </>
               )}
             />
@@ -1766,8 +1832,7 @@ function ExtraAvulsoScreen({user}){
                   <td style={S.td}>{it.horaFim}</td>
                   <td style={S.td}><span style={{fontSize:12,color:C.textLight}}>{it.observacao||"—"}</span></td>
                   <td style={S.td}>
-                    {(user.isMaster||it.funcionarioId===myFuncId)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
-                    {(user.isMaster||it.funcionarioId===myFuncId)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
+                    {it.periodoFechado?<span style={{...S.badge,background:"#FFEBEE",color:C.danger}}>🔒 Fechado</span>:<>{(user.isMaster||it.funcionarioId===myFuncId)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}{(user.isMaster||it.funcionarioId===myFuncId)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}</>}
                   </td>
                 </tr>
               ))}</tbody>
@@ -1810,7 +1875,7 @@ function RelatorioHorasScreen({user}){
   const p=user.permissions?.s6;
   useEffect(()=>{
     if(!p?.view)return;
-    Promise.all([api.get("/companies"),api.get("/teams"),api.get("/users")])
+    Promise.all([api.get("/companies"),api.get("/teams"),api.get("/users/basic")])
       .then(([c,t,u])=>{setCompanies(c);setTeams(t);setUsers(u);}).catch(e=>alert(e.message));
   },[]);
   const buscar=async()=>{
@@ -2269,8 +2334,7 @@ function LancamentoIndicadorScreen({user}){
             <td style={{...S.td,fontWeight:700,color:corStatus}}>{fmtPctIndicador(rp)}</td>
             <td style={{...S.td,color:C.textLight}}>{r.observacao||"—"}</td>
             <td style={S.td}>
-              {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(r)}><Icon name="edit" size={13}/> Editar</button>}
-              {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(r.id)}><Icon name="trash" size={13}/> Excluir</button>}
+              {r.periodoFechado?<span style={{...S.badge,background:"#FFEBEE",color:C.danger}}>🔒 Fechado</span>:<>{p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(r)}><Icon name="edit" size={13}/> Editar</button>}{p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(r.id)}><Icon name="trash" size={13}/> Excluir</button>}</>}
             </td>
           </tr>
           );
@@ -2410,8 +2474,7 @@ function RegistroKmScreen({user}){
             <td style={{...S.td,textAlign:"right"}}>{fmtMoney(it.valorKm)}</td>
             <td style={{...S.td,textAlign:"right",fontWeight:700,color:C.success}}>{fmtMoney(it.valorTotalKm)}</td>
             <td style={S.td}>
-              {canEdit(it)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️</button>}
-              {canEdit(it)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>}
+              {it.periodoFechado?<span style={{...S.badge,background:"#FFEBEE",color:C.danger}}>🔒 Fechado</span>:<>{canEdit(it)&&p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}>✏️</button>}{canEdit(it)&&p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>}</>}
             </td>
           </tr>
         ))}</tbody></table>
@@ -2593,7 +2656,7 @@ function PainelIndicadoresScreen({user}){
 
   useEffect(()=>{
     if(!p?.view)return;
-    Promise.all([api.get("/teams"),api.get("/indicadores")])
+    Promise.all([api.get("/teams"),api.get("/indicadores/report-options")])
       .then(([t,i])=>{setTeams(t);setIndicadoresAll(i);})
       .catch(e=>alert(e.message));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2709,7 +2772,7 @@ function ComparativoIndicadoresScreen({user}){
 
   useEffect(()=>{
     if(!p?.view)return;
-    Promise.all([api.get("/teams"),api.get("/indicadores")])
+    Promise.all([api.get("/teams"),api.get("/indicadores/report-options")])
       .then(([t,i])=>{setTeams(t);setIndicadoresAll(i);})
       .catch(e=>alert(e.message));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -5849,7 +5912,8 @@ function UserProfileModal({user,onClose,onUserUpdated}){
   const saveSenha=async()=>{
     if(!curPwd||!newPwd||!confPwd){setErr("Preencha todos os campos.");return;}
     if(newPwd!==confPwd){setErr("As senhas não coincidem.");return;}
-    if(newPwd.length<6){setErr("A nova senha deve ter no mínimo 6 caracteres.");return;}
+    const passwordError=validatePassword(newPwd);
+    if(passwordError){setErr(passwordError);return;}
     setSaving(true);setErr("");setOk("");
     try{
       await api.put("/users/me/password",{currentPassword:curPwd,newPassword:newPwd});
@@ -5907,6 +5971,7 @@ function UserProfileModal({user,onClose,onUserUpdated}){
           <Input label="Senha atual" value={curPwd} onChange={setCurPwd} type="password" required/>
           <Input label="Nova senha" value={newPwd} onChange={setNewPwd} type="password" required/>
           <Input label="Confirmar nova senha" value={confPwd} onChange={setConfPwd} type="password" required/>
+          <div style={{fontSize:11,color:C.textLight,marginTop:-12,marginBottom:14}}>Mínimo de 8 caracteres, com letra maiúscula, número e caractere especial.</div>
           {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
           {ok&&<div style={{color:C.success,fontSize:12,marginBottom:8}}>{ok}</div>}
           <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -7585,8 +7650,7 @@ function FolgasScreen({user}){
               <td style={S.td}><span style={{...S.badge,background:it.compensado==="Sim"?"#E8F5E9":"#FFEBEE",color:it.compensado==="Sim"?"#2E7D32":"#C62828"}}>{it.compensado}</span></td>
               <td style={{...S.td,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={it.observacao}>{it.observacao||"—"}</td>
               <td style={S.td}>
-                {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openForm(it)}>✏️</button>}
-                {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>}
+                {it.periodoFechado?<span style={{...S.badge,background:"#FFEBEE",color:C.danger}}>🔒 Fechado</span>:<>{p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openForm(it)}>✏️</button>}{p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>}</>}
               </td>
             </tr>
           ))}</tbody></table>
@@ -9916,7 +9980,7 @@ function EnderecosRedeScreen({user}){
 
 // ── RELATÓRIO LINKS (s43) ────────────────────────────────────
 function RelatorioLinksScreen({user}){
-  const p=user.permissions?.s40||user.permissions?.s43;
+  const p=user.permissions?.s43;
   const[filiais,setFiliais]=useState([]);
   const[companies,setCompanies]=useState([]);
   const[suppliers,setSuppliers]=useState([]);
@@ -10094,7 +10158,7 @@ function RelatorioLinksScreen({user}){
 
 // ── RELATÓRIO FIREWALL (s42) ──────────────────────────────────
 function RelatorioFirewallScreen({user}){
-  const p=user.permissions?.s41||user.permissions?.s42;
+  const p=user.permissions?.s42;
   const[filiais,setFiliais]=useState([]);
   const[equipamentos,setEquipamentos]=useState([]);
   const[modelos,setModelos]=useState([]);
@@ -10107,7 +10171,7 @@ function RelatorioFirewallScreen({user}){
 
   useEffect(()=>{
     api.get("/filiais/basic").then(r=>setFiliais(Array.isArray(r)?r:[])).catch(()=>{});
-    api.get("/firewall").then(r=>{
+    api.get("/firewall/report-options").then(r=>{
       const list=Array.isArray(r)?r:[];
       setEquipamentos([...new Set(list.map(f=>f.equipamento).filter(Boolean))].sort());
       setModelos([...new Set(list.map(f=>f.modelo).filter(Boolean))].sort());
@@ -11586,6 +11650,7 @@ const navConfig=[
     {id:"s20",label:"Ativos",                     icon:"package"},
     {id:"s28",label:"Configuração de E-mail",     icon:"mail"},
     {id:"s33",label:"Configuração de Inventário", icon:"wrench"},
+    {id:"s66",label:"Fechamento de Período",      icon:"lock"},
   ]},
   {id:"movimentacoes",label:"Movimentações",icon:"refresh",children:[
     {id:"s5", label:"Sobreaviso/Extra",           icon:"clock"},
@@ -11754,6 +11819,7 @@ const screenTitles={
   s61:"Relatórios › Papéis e Responsabilidades",
   s62:"Relatórios › Comparativo de Indicadores",
   s65:"Relatórios › PDI",
+  s66:"Cadastros › Fechamento de Período",
   profile:"Meu Perfil",
 };
 
@@ -11788,6 +11854,7 @@ export default function App(){
     home:<HomeScreen user={user} navigate={setScreen}/>,
     s1:<ProfilesScreen user={user}/>,s2:<UsersScreen user={user}/>,
     s3:<EmpresasScreen user={user}/>,
+    s66:<FechamentoPeriodoScreen user={user}/>,
     s4:<EquipesScreen user={user}/>,
     s5:<ControleHorasScreen user={user}/>,s6:<RelatorioHorasScreen user={user}/>,s7:<ExtraAvulsoScreen user={user}/>,
     s8:<TipoVeiculoScreen user={user}/>,s9:<ValorKmScreen user={user}/>,
