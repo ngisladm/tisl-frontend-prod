@@ -4029,6 +4029,71 @@ function TipoAtivosScreen({user}){
   );
 }
 
+// ── CATÁLOGOS DE NOMES E MARCAS DE ATIVOS (s67/s68) ──────────
+function AssetCatalogScreen({user,screenId,title,fieldLabel,endpoint,emptyText}){
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[err,setErr]=useState("");
+  const isMobile=useIsMobile();
+  const p=user.isMaster?{view:true,insert:true,edit:true,delete:true}:user.permissions?.[screenId];
+
+  const load=()=>{
+    setLoading(true);
+    api.get(endpoint).then(setItems).catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[endpoint]);
+
+  const save=async()=>{
+    if(!modal.name?.trim()){setErr(`${fieldLabel} é obrigatório.`);return;}
+    try{
+      if(modal.id)await api.put(`${endpoint}/${modal.id}`,{name:modal.name});
+      else await api.post(endpoint,{name:modal.name});
+      setModal(null);load();
+    }catch(e){setErr(e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`${endpoint}/${delId}`);setDelId(null);load();}
+    catch(e){alert(e.message);setDelId(null);}
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>📦 {title}</span>
+        {p.insert&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({name:""});}}>+ Novo</button>}
+      </div>
+      {loading?<Spinner/>:items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>{emptyText}</div>:(
+        isMobile
+          ?<MobileCardList items={items} columns={[{key:"name",label:fieldLabel}]} actions={item=>(
+            <>{p.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}>Editar</button>}
+              {p.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}</>
+          )}/>
+          :<table style={S.table}><thead><tr><th style={S.th}>{fieldLabel}</th><th style={{...S.th,width:140}}>Ações</th></tr></thead>
+            <tbody>{items.map(item=><tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+              <td style={S.td}>{item.name}</td>
+              <td style={S.td}>
+                {p.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}>Editar</button>}
+                {p.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}>Excluir</button>}
+              </td>
+            </tr>)}</tbody>
+          </table>
+      )}
+      {modal&&<Modal title={modal.id?`Editar ${fieldLabel}`:`Novo ${fieldLabel}`} onClose={()=>setModal(null)}>
+        <Input label={fieldLabel} value={modal.name} onChange={v=>setModal(m=>({...m,name:v}))} required/>
+        {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+          <button style={S.btnSave} onClick={save}>Salvar</button>
+        </div>
+      </Modal>}
+      {delId&&<ConfirmModal msg={`Excluir ${fieldLabel.toLowerCase()}?`} onConfirm={del} onCancel={()=>setDelId(null)}/>}
+    </div>
+  );
+}
+
 // ── LINHAS DISPONÍVEIS (s19) ──────────────────────────────────
 const STATUS_LD=["Em análise","Em estoque","Em uso","Baixado"];
 function LinhasDisponiveisScreen({user}){
@@ -4400,6 +4465,8 @@ function AtivosScreen({user}){
   const[items,setItems]=useState([]);
   const[tipoAtivos,setTipoAtivos]=useState([]);
   const[companies,setCompanies]=useState([]);
+  const[assetNames,setAssetNames]=useState([]);
+  const[assetBrands,setAssetBrands]=useState([]);
   const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(null);
   const[delId,setDelId]=useState(null);
@@ -4417,8 +4484,8 @@ function AtivosScreen({user}){
 
   const load=()=>{
     setLoading(true);
-    Promise.all([api.get("/ativos"),api.get("/tipo-ativos"),api.get("/companies")])
-      .then(([a,ta,co])=>{setItems(a);setTipoAtivos(ta);setCompanies(co);})
+    Promise.all([api.get("/ativos"),api.get("/tipo-ativos"),api.get("/companies"),api.get("/nomes-ativos"),api.get("/marcas-ativos")])
+      .then(([a,ta,co,an,ab])=>{setItems(a);setTipoAtivos(ta);setCompanies(co);setAssetNames(an);setAssetBrands(ab);})
       .catch(()=>{}).finally(()=>setLoading(false));
   };
   useEffect(()=>{load();},[]);
@@ -4526,14 +4593,16 @@ function AtivosScreen({user}){
       {modal&&(
         <Modal title={modal.id?"Editar Ativo":"Novo Ativo"} onClose={()=>setModal(null)} extraWide>
           <div style={g2}>
-            <Input label="Nome do Ativo *" value={modal.nome} onChange={v=>setModal(m=>({...m,nome:v}))} required/>
+            <SelectField label="Nome do Ativo" value={modal.nome} onChange={v=>setModal(m=>({...m,nome:v}))}
+              options={assetNames.map(n=>({value:n.name,label:n.name}))} required/>
             <SelectField label="Tipo de Ativo" value={modal.tipoAtivoId||""} onChange={v=>setModal(m=>({...m,tipoAtivoId:v}))}
               options={tipoAtivos.map(t=>({value:t.id,label:t.name}))}/>
           </div>
           <div style={g2}>
             <SelectField label="Empresa" value={modal.companyId||""} onChange={v=>setModal(m=>({...m,companyId:v}))}
               options={companies.filter(c=>c.active).map(c=>({value:c.id,label:c.name}))}/>
-            {F("Marca","marca")}
+            <SelectField label="Marca" value={modal.marca||""} onChange={v=>setModal(m=>({...m,marca:v}))}
+              options={assetBrands.map(b=>({value:b.name,label:b.name}))}/>
           </div>
           <div style={g2}>
             {F("Modelo","modelo")}
@@ -5226,6 +5295,21 @@ function ControleAtivosScreen({user}){
     }catch(e){alert(e.message);}
   };
 
+  const carregarFuncionarioContrato=async()=>{
+    try{
+      return await api.get(`/controle-ativos/${itensModal.controle.id}/funcionario-contrato`);
+    }catch(e){
+      alert(e.message);
+      return null;
+    }
+  };
+
+  const formatarValorContrato=valor=>{
+    if(valor===null||valor===undefined||valor==="")return "";
+    const numero=Number(valor);
+    return Number.isFinite(numero)?numero.toFixed(2):"";
+  };
+
   const imprimirContrato=async(item)=>{
     const modelo=modelos.find(m=>m.tipoAtivoId===item.tipoAtivoId&&m.empresaId===item.companyId);
     if(!modelo){alert("Nenhum modelo de contrato cadastrado para o Tipo de Ativo \""+( item.tipoAtivoName||"—")+"\" e a Empresa \""+( item.companyName||"—")+"\".");return;}
@@ -5235,7 +5319,8 @@ function ControleAtivosScreen({user}){
     let logoHtml="";
     try{const ld=await api.get(`/companies/${item.companyId}/logo`);if(ld.logo)logoHtml=`<img src="${ld.logo}" style="max-width:200px;height:auto;">`;}
     catch(e){}
-    const funcItem=funcionarios.find(f=>f.id===itensModal.controle.funcionarioId);
+    const funcItem=await carregarFuncionarioContrato();
+    if(!funcItem)return;
     const compItem=companies.find(c=>c.id===item.companyId);
     const now=new Date();
     const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -5283,7 +5368,7 @@ function ControleAtivosScreen({user}){
       "[HD]":item.hd||"",
       "[PATRIMONIO]":item.patrimonio||"",
       "[NRDOCUM]":item.numeroDocumento||"",
-      "[VALOR]":item.valor?Number(item.valor).toFixed(2):"",
+      "[VALOR]":formatarValorContrato(item.valor),
       "[CONDICAO]":item.condicao||"",
       "[ACESSORIOS]":item.acessorios||"",
       "[IMEI1]":item.imeiSlot1||"",
@@ -5317,7 +5402,8 @@ function ControleAtivosScreen({user}){
 
   const enviarContrato=async(item)=>{
     if(sendingEmail)return;
-    const funcItem=funcionarios.find(f=>f.id===itensModal.controle.funcionarioId);
+    const funcItem=await carregarFuncionarioContrato();
+    if(!funcItem)return;
     if(!funcItem?.email?.trim()){
       alert("O funcionário "+(funcItem?.nome||itensModal.controle.nomeFuncionario||"")+" não possui e-mail cadastrado. Cadastre o e-mail na tela de Funcionários.");
       return;
@@ -5348,7 +5434,7 @@ function ControleAtivosScreen({user}){
       "[TPATIVO]":item.tipoAtivoName||"","[NOMEATIVO]":item.ativoNome||"","[MARCA]":item.marca||"","[MODELO]":item.modelo||"",
       "[NRSER]":item.numeroSerie||"","[SISTOPER]":item.sistemaOperacional||"","[VERSAO]":item.versao||"",
       "[PROCES]":item.processador||"","[MEMORIA]":item.memoria||"","[HD]":item.hd||"","[PATRIMONIO]":item.patrimonio||"",
-      "[NRDOCUM]":item.numeroDocumento||"","[VALOR]":item.valor?Number(item.valor).toFixed(2):"",
+      "[NRDOCUM]":item.numeroDocumento||"","[VALOR]":formatarValorContrato(item.valor),
       "[CONDICAO]":item.condicao||"","[ACESSORIOS]":item.acessorios||"",
       "[IMEI1]":item.imeiSlot1||"","[IMEI2]":item.imeiSlot2||"","[OPERADORA]":item.operadoraName||"",
       "[NRLINHA]":item.numeroLinha||"","[ICCID]":item.iccid||"","[ACESSO]":item.acesso||"",
@@ -11646,6 +11732,8 @@ const navConfig=[
     {id:"s16",label:"Operadoras",                 icon:"satellite"},
     {id:"s17",label:"Linhas Faturadas",           icon:"phone"},
     {id:"s23",label:"Modelos de Contrato",        icon:"clipboard"},
+    {id:"s67",label:"Nomes de Ativos",            icon:"package"},
+    {id:"s68",label:"Marcas de Ativos",           icon:"package"},
     {id:"s18",label:"Tipo de Ativo",              icon:"archive"},
     {id:"s20",label:"Ativos",                     icon:"package"},
     {id:"s28",label:"Configuração de E-mail",     icon:"mail"},
@@ -11820,6 +11908,8 @@ const screenTitles={
   s62:"Relatórios › Comparativo de Indicadores",
   s65:"Relatórios › PDI",
   s66:"Cadastros › Fechamento de Período",
+  s67:"Cadastros › Nomes de Ativos",
+  s68:"Cadastros › Marcas de Ativos",
   profile:"Meu Perfil",
 };
 
@@ -11855,6 +11945,8 @@ export default function App(){
     s1:<ProfilesScreen user={user}/>,s2:<UsersScreen user={user}/>,
     s3:<EmpresasScreen user={user}/>,
     s66:<FechamentoPeriodoScreen user={user}/>,
+    s67:<AssetCatalogScreen user={user} screenId="s67" title="Nomes de Ativos" fieldLabel="Nome do Ativo" endpoint="/nomes-ativos" emptyText="Nenhum nome de ativo cadastrado"/>,
+    s68:<AssetCatalogScreen user={user} screenId="s68" title="Marcas de Ativos" fieldLabel="Marca" endpoint="/marcas-ativos" emptyText="Nenhuma marca cadastrada"/>,
     s4:<EquipesScreen user={user}/>,
     s5:<ControleHorasScreen user={user}/>,s6:<RelatorioHorasScreen user={user}/>,s7:<ExtraAvulsoScreen user={user}/>,
     s8:<TipoVeiculoScreen user={user}/>,s9:<ValorKmScreen user={user}/>,
