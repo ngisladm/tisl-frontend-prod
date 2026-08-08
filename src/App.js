@@ -4507,6 +4507,11 @@ function AtivosScreen({user}){
     try{await api.post(`/ativos/${id}/reverter-baixa`,{});load();}
     catch(e){alert(e.message);}
   };
+  const baixarAtivo=async(id)=>{
+    if(!window.confirm("Baixar este ativo? Ele ficará indisponível para novos vínculos."))return;
+    try{await api.post(`/ativos/${id}/baixar`,{});load();}
+    catch(e){alert(e.message);}
+  };
   const canI=act=>user.permissions?.s20?.[act];
   const handleCsvImpFile=e=>{
     const f=e.target.files[0]; e.target.value=""; if(!f)return;
@@ -4583,6 +4588,9 @@ function AtivosScreen({user}){
               <td style={S.td}>
                 {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...item});}}> ✏️</button>}
                 {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(item.id)}><Icon name="trash" size={13}/></button>}
+                {user.isMaster&&<button
+                  style={{...S.actionBtn,background:item.status==="Em Estoque"?"#FDECEC":"#F3F4F6",color:item.status==="Em Estoque"?"#B91C1C":"#9CA3AF",border:`1px solid ${item.status==="Em Estoque"?"#F5B7B1":"#D1D5DB"}`,cursor:item.status==="Em Estoque"?"pointer":"not-allowed"}}
+                  disabled={item.status!=="Em Estoque"} onClick={()=>baixarAtivo(item.id)}>Baixar</button>}
                 {user.isMaster&&item.status==="Baixado"&&<button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"1px solid #A5D6A7"}} onClick={()=>reverterBaixaAtivo(item.id)}>↩ Reverter Baixa</button>}
               </td>
             </tr>
@@ -6941,12 +6949,13 @@ function HistoricoMovimentacoesScreen({user}){
       "Transferência":{bg:"#FFF3E0",cl:"#E65100"},
       "Baixa":{bg:"#FCE4EC",cl:"#880E4F"},
       "Devolução Estoque":{bg:"#F3E5F5",cl:"#4A148C"},
+      "Reversão de Baixa":{bg:"#E0F2F1",cl:"#00695C"},
     };
     const{bg,cl}=colors[t]||{bg:"#F5F5F5",cl:"#444"};
     return<span style={{...S.badge,background:bg,color:cl}}>{t}</span>;
   };
 
-  const TIPOS=["Inclusão","Edição","Exclusão","Transferência","Baixa","Devolução Estoque"];
+  const TIPOS=["Inclusão","Edição","Exclusão","Transferência","Baixa","Devolução Estoque","Reversão de Baixa"];
 
   return(
     <div style={S.card}>
@@ -11479,9 +11488,13 @@ function ManutencaoRegistrosScreen({user}){
   const TIPO_STATUS={"Entrada do Equipamento":"Aguardando","Envio para Manutenção":"Enviado","Retorno de Manutenção":"Disponível","Entrega do Equipamento":"Entregue","Solicitação de Baixa":"Condenado"};
   const TIPOS=Object.keys(TIPO_STATUS);
   const tiposDisponiveis=(excludeId=null)=>{
-    const lista=excludeId?itens.filter(it=>it.id!==excludeId):itens;
+    if(excludeId){
+      const atual=itens.find(it=>it.id===excludeId);
+      return atual?[atual.tipo]:[];
+    }
+    const lista=itens;
     const ultimo=lista.length>0?lista[lista.length-1].tipo:null;
-    if(!ultimo)return["Entrada do Equipamento"];
+    if(!ultimo)return["Entrada do Equipamento","Solicitação de Baixa"];
     if(ultimo==="Entrada do Equipamento")return["Envio para Manutenção"];
     if(ultimo==="Envio para Manutenção")return["Retorno de Manutenção"];
     if(ultimo==="Retorno de Manutenção")return["Entrega do Equipamento","Solicitação de Baixa"];
@@ -11489,7 +11502,7 @@ function ManutencaoRegistrosScreen({user}){
   };
   const statusBadge=s=>{
     if(!s)return<span style={{...S.badge,background:"#F3F4F6",color:"#6B7280"}}>—</span>;
-    const cfg={Aguardando:{bg:"#FEF3C7",color:"#D97706"},Enviado:{bg:"#DBEAFE",color:"#1D4ED8"},Disponível:{bg:"#D1FAE5",color:"#065F46"},Entregue:{bg:"#EDE9FE",color:"#5B21B6"},Condenado:{bg:"#FEE2E2",color:"#991B1B"}};
+    const cfg={Aguardando:{bg:"#FEF3C7",color:"#D97706"},Enviado:{bg:"#DBEAFE",color:"#1D4ED8"},Disponível:{bg:"#D1FAE5",color:"#065F46"},Entregue:{bg:"#EDE9FE",color:"#5B21B6"},Condenado:{bg:"#FEE2E2",color:"#991B1B"},Revertido:{bg:"#E5E7EB",color:"#374151"}};
     const c=cfg[s]||{bg:"#F3F4F6",color:"#374151"};
     return<span style={{...S.badge,background:c.bg,color:c.color}}>{s}</span>;
   };
@@ -11599,8 +11612,8 @@ function ManutencaoRegistrosScreen({user}){
               <td style={S.td}>{i.observacao||"—"}</td>
               <td style={S.td}>{statusBadge(i.status)}</td>
               <td style={{...S.td,whiteSpace:"nowrap"}}>
-                {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(i)}>Editar</button>}
-                {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(i.id)}>Excluir</button>}
+                {canI("edit")&&!['Condenado','Revertido'].includes(i.status)&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(i)}>Editar</button>}
+                {canI("delete")&&!['Condenado','Revertido'].includes(i.status)&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(i.id)}>Excluir</button>}
                 {canI("view")&&<button style={{...S.actionBtn,background:"#E0E7FF",color:"#3730A3"}} onClick={()=>openRegistros(i)}>Registros</button>}
               </td>
             </tr>
@@ -11665,8 +11678,8 @@ function ManutencaoRegistrosScreen({user}){
                 <td style={S.td}>{it.observacao||"—"}</td>
                 <td style={S.td}>{statusBadge(it.status)}</td>
                 <td style={{...S.td,whiteSpace:"nowrap"}}>
-                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEditItem(it)}>Editar</button>}
-                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelItemId(it.id)}>Excluir</button>}
+                  {canI("edit")&&it.tipo!=="Solicitação de Baixa"&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEditItem(it)}>Editar</button>}
+                  {canI("delete")&&it.tipo!=="Solicitação de Baixa"&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelItemId(it.id)}>Excluir</button>}
                 </td>
               </tr>
             ))}</tbody></table>
@@ -11688,7 +11701,7 @@ function ManutencaoRegistrosScreen({user}){
           const fornecOk=v==="Envio para Manutenção";
           const funcOk=v==="Entrada do Equipamento"||v==="Entrega do Equipamento";
           setItemModal(m=>({...m,tipo:v,fornecedorId:fornecOk?m.fornecedorId:"",funcionarioId:funcOk?m.funcionarioId:""}));
-        }} required options={[{value:"",label:"Selecione..."},...tiposDisponiveis(itemModal.id||null).map(t=>({value:t,label:t}))]}/>
+        }} required disabled={!!itemModal.id} options={[{value:"",label:"Selecione..."},...tiposDisponiveis(itemModal.id||null).map(t=>({value:t,label:t}))]}/>
         <SelectField label="Fornecedor" value={itemModal.fornecedorId}
           onChange={v=>setItemModal(m=>({...m,fornecedorId:v}))}
           disabled={itemModal.tipo!=="Envio para Manutenção"}
