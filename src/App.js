@@ -1318,7 +1318,7 @@ function FechamentoPeriodoScreen({user}){
         <MaskedInput label="Data Final" mask={MASK_DATE} value={form.dateEnd} onChange={v=>setForm(f=>({...f,dateEnd:v}))} disabled={!form.screenKey||form.screenKey==="SOBREAVISO_EXTRA"} required={form.screenKey&&form.screenKey!=="SOBREAVISO_EXTRA"}/>
       </div>
       <SelectField label="Escala" value={form.escalaId} onChange={v=>setForm(f=>({...f,escalaId:v}))} disabled={form.screenKey!=="SOBREAVISO_EXTRA"}
-        options={escalas.map(e=>({value:e.id,label:`${e.teamNamesStr} — ${e.dataInicio} até ${e.dataFim}`}))} required={form.screenKey==="SOBREAVISO_EXTRA"}/>
+        options={escalas.filter(e=>!e.periodoFechado||e.id===form.escalaId).map(e=>({value:e.id,label:`${e.teamNamesStr} — ${e.dataInicio} até ${e.dataFim}`}))} required={form.screenKey==="SOBREAVISO_EXTRA"}/>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button><button style={S.btnSave} onClick={save} disabled={saving}>{saving?"Salvando...":"Salvar"}</button></div>
     </Modal>}
     {delId&&<ConfirmModal msg="Excluir este fechamento e liberar novamente o período?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
@@ -10126,6 +10126,7 @@ function RelatorioLinksScreen({user}){
   function buildEndereco(l){
     return[l.logradouro,l.filialNumero,l.bairro,l.cidade,l.estado,l.cep,l.complemento].filter(x=>x&&String(x).trim()).join(", ")||"—";
   }
+  const fmtMoney=v=>v===null||v===undefined||v===""?"—":Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 
   function exportPdf(){
     const doc=new jsPDF({orientation:"landscape"});
@@ -10139,8 +10140,8 @@ function RelatorioLinksScreen({user}){
       doc.setFontSize(9);doc.text(g.endereco,14,y+5);y+=12;
       autoTable(doc,{
         startY:y,margin:{left:14},
-        head:[["Tipo","Fornecedor","Contato","Velocidade","Empresa Contratante","CNPJ Contratante","CCusto","Email Conta","Senha Conta","Nº Série","Nº Conta","Status"]],
-        body:g.links.map(l=>[l.tipo||"—",l.fornecedorNome||"—",l.contato||"—",l.velocidade||"—",l.empresaContratanteNome||"—",l.cnpjContratante||"—",l.ccusto||"—",l.emailConta||"—",l.senhaConta||"—",l.numeroSerie||"—",l.numeroConta||"—",l.status||"—"]),
+        head:[["Tipo","Fornecedor","Contato","Velocidade","Empresa Contratante","CNPJ Contratante","CCusto","Vr Mensal","Email Conta","Senha Conta","Nº Série","Nº Conta","Status"]],
+        body:g.links.map(l=>[l.tipo||"—",l.fornecedorNome||"—",l.contato||"—",l.velocidade||"—",l.empresaContratanteNome||"—",l.cnpjContratante||"—",l.ccusto||"—",fmtMoney(l.vrMensal),l.emailConta||"—",l.senhaConta||"—",l.numeroSerie||"—",l.numeroConta||"—",l.status||"—"]),
         styles:{fontSize:7},headStyles:{fillColor:[37,99,235]},theme:"striped",
       });
     });
@@ -10149,8 +10150,8 @@ function RelatorioLinksScreen({user}){
 
   function exportExcel(){
     const wb=XLSX.utils.book_new();
-    const rows=[["Filial","Endereço Filial","Tipo","Fornecedor","Contato","Velocidade","Empresa Contratante","CNPJ Contratante","CCusto","Email Conta","Senha Conta","Nº Série","Nº Conta","Status"]];
-    groupByFilial(items).forEach(g=>g.links.forEach(l=>rows.push([g.filialNome,g.endereco,l.tipo||"",l.fornecedorNome||"",l.contato||"",l.velocidade||"",l.empresaContratanteNome||"",l.cnpjContratante||"",l.ccusto||"",l.emailConta||"",l.senhaConta||"",l.numeroSerie||"",l.numeroConta||"",l.status||""])));
+    const rows=[["Filial","Endereço Filial","Tipo","Fornecedor","Contato","Velocidade","Empresa Contratante","CNPJ Contratante","CCusto","Vr Mensal","Email Conta","Senha Conta","Nº Série","Nº Conta","Status"]];
+    groupByFilial(items).forEach(g=>g.links.forEach(l=>rows.push([g.filialNome,g.endereco,l.tipo||"",l.fornecedorNome||"",l.contato||"",l.velocidade||"",l.empresaContratanteNome||"",l.cnpjContratante||"",l.ccusto||"",l.vrMensal==null?"":Number(l.vrMensal),l.emailConta||"",l.senhaConta||"",l.numeroSerie||"",l.numeroConta||"",l.status||""])));
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),"Links");
     XLSX.writeFile(wb,"relatorio-links.xlsx");
   }
@@ -10218,7 +10219,7 @@ function RelatorioLinksScreen({user}){
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
               <thead>
                 <tr style={{background:C.hover}}>
-                  {["Tipo","Fornecedor","Contato","Velocidade","Empresa Contratante","CNPJ Contratante","CCusto","Email Conta","Senha Conta","Nº Série","Nº Conta","Status"].map(h=>(
+                  {["Tipo","Fornecedor","Contato","Velocidade","Empresa Contratante","CNPJ Contratante","CCusto","Vr Mensal","Email Conta","Senha Conta","Nº Série","Nº Conta","Status"].map(h=>(
                     <th key={h} style={{textAlign:"left",padding:"6px 10px",color:C.muted,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>
                   ))}
                 </tr>
@@ -10233,6 +10234,7 @@ function RelatorioLinksScreen({user}){
                     <td style={{padding:"6px 10px"}}>{l.empresaContratanteNome||"—"}</td>
                     <td style={{padding:"6px 10px",fontFamily:"monospace"}}>{l.cnpjContratante||"—"}</td>
                     <td style={{padding:"6px 10px"}}>{l.ccusto||"—"}</td>
+                    <td style={{padding:"6px 10px",whiteSpace:"nowrap"}}>{fmtMoney(l.vrMensal)}</td>
                     <td style={{padding:"6px 10px"}}>{l.emailConta||"—"}</td>
                     <td style={{padding:"6px 10px"}}>{l.senhaConta||"—"}</td>
                     <td style={{padding:"6px 10px",fontFamily:"monospace"}}>{l.numeroSerie||"—"}</td>
