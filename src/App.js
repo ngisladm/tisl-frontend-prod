@@ -5222,7 +5222,8 @@ function ControleAtivosScreen({user}){
 
   const load=()=>{
     setLoading(true);
-    Promise.all([
+    const ok=(r,def=[])=>r.status==="fulfilled"?r.value:def;
+    Promise.allSettled([
       api.get("/controle-ativos"),api.get("/companies"),
       api.get("/tipo-ativos"),api.get("/operadoras"),
       api.get("/linhas-disponiveis"),api.get("/ativos"),
@@ -5230,12 +5231,11 @@ function ControleAtivosScreen({user}){
       api.get("/funcionarios/basic"),
       api.get("/modelos-contrato"),
     ]).then(([ca,co,ta,op,ld,av,ai,func,mc])=>{
-      setItems(ca);setCompanies(co);setTipoAtivos(ta);
-      setOperadoras(op);
-      setLinhasEstoque(ld.filter(l=>l.status==="Em estoque"));
-      setAtivos(av);setAllItens(ai);setFuncionarios(func);setModelos(mc);
-      // ativosEstoque exposto via closure na tela
-    }).catch(()=>{}).finally(()=>setLoading(false));
+      setItems(ok(ca));setCompanies(ok(co));setTipoAtivos(ok(ta));
+      setOperadoras(ok(op));
+      setLinhasEstoque(ok(ld).filter(l=>l.status==="Em estoque"));
+      setAtivos(ok(av));setAllItens(ok(ai));setFuncionarios(ok(func));setModelos(ok(mc));
+    }).finally(()=>setLoading(false));
   };
   useEffect(()=>{load();},[]);
 
