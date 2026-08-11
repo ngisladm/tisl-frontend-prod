@@ -7639,7 +7639,7 @@ function FolgasScreen({user}){
   const[empresas,setEmpresas]=useState([]);
   const[equipes,setEquipes]=useState([]);
   const[funcs,setFuncs]=useState([]);
-  const[filters,setFilters]=useState({empresa:"",equipe:"",funcionario:"",data:"",compensado:""});
+  const[filters,setFilters]=useState({empresa:"",equipe:"",funcionario:"",data:"",compensado:"",deveEmpresa:""});
   const[form,setForm]=useState(null);
   const[delId,setDelId]=useState(null);
 
@@ -7672,9 +7672,9 @@ function FolgasScreen({user}){
   const openForm=(item=null)=>{
     if(item){
       const[d,m,y]=(item.data||"").split("/");
-      setForm({...item,data:y&&m&&d?`${y}-${m}-${d}`:"",equipeId:item.equipeId,funcionarioId:item.funcionarioId,empresaId:item.empresaId});
+      setForm({...item,data:y&&m&&d?`${y}-${m}-${d}`:"",equipeId:item.equipeId,funcionarioId:item.funcionarioId,empresaId:item.empresaId,deveEmpresa:item.deveEmpresa||false});
     } else {
-      setForm({empresaId:"",equipeId:"",funcionarioId:"",data:"",horaInicio:"",horaFim:"",totalHoras:"",compensado:"Não",observacao:""});
+      setForm({empresaId:"",equipeId:"",funcionarioId:"",data:"",horaInicio:"",horaFim:"",totalHoras:"",compensado:"Não",observacao:"",deveEmpresa:false});
     }
   };
 
@@ -7724,14 +7724,18 @@ function FolgasScreen({user}){
           <option value="">Compensado</option>
           <option>Sim</option><option>Não</option>
         </select>
+        <select style={{...S.input,width:160}} value={filters.deveEmpresa} onChange={e=>setFilters(f=>({...f,deveEmpresa:e.target.value}))}>
+          <option value="">Deve a empresa</option>
+          <option>Sim</option><option>Não</option>
+        </select>
         <button style={S.btnSave} onClick={()=>load()}><Icon name="search" size={13}/> Pesquisar</button>
-        <button style={S.btnCancel} onClick={()=>{setFilters({empresa:"",equipe:"",funcionario:"",data:"",compensado:""});load({empresa:"",equipe:"",funcionario:"",data:"",compensado:""});}}><Icon name="x" size={13}/> Limpar</button>
+        <button style={S.btnCancel} onClick={()=>{setFilters({empresa:"",equipe:"",funcionario:"",data:"",compensado:"",deveEmpresa:""});load({empresa:"",equipe:"",funcionario:"",data:"",compensado:"",deveEmpresa:""});}}><Icon name="x" size={13}/> Limpar</button>
       </div>
       {loading?<Spinner/>:items.length===0
         ?<div style={S.emptyState}><span style={S.emptyIcon}>🏖️</span>Nenhuma folga registrada.</div>
         :<div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
-            {["Empresa","Equipe","Funcionário","Data","Início","Fim","Total","Compensado","Observação","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            {["Empresa","Equipe","Funcionário","Data","Início","Fim","Total","Compensado","Deve Empresa","Observação","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
           <tbody>{items.map(it=>(
             <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
@@ -7741,8 +7745,9 @@ function FolgasScreen({user}){
               <td style={S.td}>{fmtDate(it.data)}</td>
               <td style={S.td}>{it.horaInicio}</td>
               <td style={S.td}>{it.horaFim}</td>
-              <td style={{...S.td,textAlign:"center",fontWeight:600}}>{it.totalHoras||"—"}</td>
+              <td style={{...S.td,textAlign:"center",fontWeight:600,color:it.deveEmpresa?"#C62828":undefined}}>{it.totalHoras?(it.deveEmpresa?`-${it.totalHoras}`:it.totalHoras):"—"}</td>
               <td style={S.td}><span style={{...S.badge,background:it.compensado==="Sim"?"#E8F5E9":"#FFEBEE",color:it.compensado==="Sim"?"#2E7D32":"#C62828"}}>{it.compensado}</span></td>
+              <td style={S.td}><span style={{...S.badge,background:it.deveEmpresa?"#FFEBEE":"#F5F5F5",color:it.deveEmpresa?"#C62828":"#757575"}}>{it.deveEmpresa?"Sim":"Não"}</span></td>
               <td style={{...S.td,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={it.observacao}>{it.observacao||"—"}</td>
               <td style={S.td}>
                 {it.periodoFechado?<span style={{...S.badge,background:"#FFEBEE",color:C.danger}}>🔒 Fechado</span>:<>{p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openForm(it)}>✏️</button>}{p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>}</>}
@@ -7763,6 +7768,10 @@ function FolgasScreen({user}){
             <div style={{flex:1,...S.formRow}}><label style={S.label}>Total Horas</label><input style={{...S.input,background:C.bg,color:C.primary,fontWeight:700}} value={form.totalHoras||""} readOnly/></div>
           </div>
           <SelectField label="Compensado" value={form.compensado} onChange={v=>setForm(f=>({...f,compensado:v}))} options={[{value:"Não",label:"Não"},{value:"Sim",label:"Sim"}]}/>
+          <div style={{...S.formRow,alignItems:"center",gap:8}}>
+            <input type="checkbox" id="deveEmpresaChk" checked={!!form.deveEmpresa} onChange={e=>setForm(f=>({...f,deveEmpresa:e.target.checked}))} style={{width:16,height:16,cursor:"pointer"}}/>
+            <label htmlFor="deveEmpresaChk" style={{...S.label,marginBottom:0,cursor:"pointer"}}>Deve a empresa</label>
+          </div>
           <div style={S.formRow}><label style={S.label}>Observação</label><textarea style={{...S.input,minHeight:80,resize:"vertical"}} value={form.observacao||""} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))}/></div>
           <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:8}}>
             <button style={S.btnCancel} onClick={()=>setForm(null)}>Cancelar</button>
