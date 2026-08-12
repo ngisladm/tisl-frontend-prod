@@ -7791,7 +7791,7 @@ function RelatorioFolgasScreen({user}){
   const[loading,setLoading]=useState(false);
   const[empresas,setEmpresas]=useState([]);
   const[equipes,setEquipes]=useState([]);
-  const[filters,setFilters]=useState({empresa:"",equipe:"",funcionario:"",data:"",compensado:""});
+  const[filters,setFilters]=useState({empresa:"",equipe:"",funcionario:"",dataInicio:"",dataFim:"",compensado:""});
 
   useEffect(()=>{
     if(!p?.view)return;
@@ -7849,7 +7849,8 @@ function RelatorioFolgasScreen({user}){
           <option value="">Equipe</option>
           {equipes.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
-        <input type="date" style={{...S.input,width:150}} value={filters.data} onChange={e=>setFilters(f=>({...f,data:e.target.value}))}/>
+        <input type="date" style={{...S.input,width:150}} value={filters.dataInicio} onChange={e=>setFilters(f=>({...f,dataInicio:e.target.value}))} title="Data Inicial"/>
+        <input type="date" style={{...S.input,width:150}} value={filters.dataFim} onChange={e=>setFilters(f=>({...f,dataFim:e.target.value}))} title="Data Final"/>
         <select style={{...S.input,width:130}} value={filters.compensado} onChange={e=>setFilters(f=>({...f,compensado:e.target.value}))}>
           <option value="">Compensado</option>
           <option>Sim</option><option>Não</option>
