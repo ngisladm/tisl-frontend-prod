@@ -6524,8 +6524,8 @@ function RelatorioAnaliseLinhasScreen({user}){
         <select value={filtOp} onChange={e=>setFiltOp(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
           <option value="">Todas as operadoras</option>{operadoras.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
         </select>
-        <input placeholder="Nº Linha..." value={filtNrLinha} onChange={e=>setFiltNrLinha(e.target.value)} style={{...S.input,width:"auto",minWidth:130,padding:"6px 10px",fontSize:13}}/>
-        <input placeholder="Plano..." value={filtPlano} onChange={e=>setFiltPlano(e.target.value)} style={{...S.input,width:"auto",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Nº Linha..." value={filtNrLinha} onChange={e=>setFiltNrLinha(e.target.value)} style={{...S.input,width:"auto",minWidth:130}}/>
+        <input placeholder="Plano..." value={filtPlano} onChange={e=>setFiltPlano(e.target.value)} style={{...S.input,width:"auto",minWidth:130}}/>
         <select value={filtConsumo} onChange={e=>setFiltConsumo(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
           {["Todos","Zerados","Não zerados"].map(v=><option key={v}>{v}</option>)}
         </select>
@@ -8329,6 +8329,20 @@ function FeriasScreen({user}){
 }
 
 // ── RELATÓRIO DE FÉRIAS ────────────────────────────────────────
+function DtRange({label,vDe,setDe,vAte,setAte}){
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:200}}>
+      <label style={S.label}>{label}</label>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <input type="date" value={vDe} onChange={e=>setDe(e.target.value)}
+          style={{...S.input,flex:1,minWidth:0}} title="De"/>
+        <span style={{fontSize:11,color:C.textLight,flexShrink:0}}>até</span>
+        <input type="date" value={vAte} onChange={e=>setAte(e.target.value)}
+          style={{...S.input,flex:1,minWidth:0}} title="Até"/>
+      </div>
+    </div>
+  );
+}
 function RelatorioFeriasScreen({user}){
   const p=user.permissions?.s31;
   const[companies,setCompanies]=useState([]);
@@ -8418,19 +8432,6 @@ function RelatorioFeriasScreen({user}){
     });
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(wsData),"Férias");XLSX.writeFile(wb,"Relatorio_Ferias.xlsx");
   };
-
-  const DtRange=({label,vDe,setDe,vAte,setAte})=>(
-    <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:200}}>
-      <label style={S.label}>{label}</label>
-      <div style={{display:"flex",gap:6,alignItems:"center"}}>
-        <input type="date" value={vDe} onChange={e=>setDe(e.target.value)}
-          style={{...S.input,flex:1,minWidth:0}} title="De"/>
-        <span style={{fontSize:11,color:C.textLight,flexShrink:0}}>até</span>
-        <input type="date" value={vAte} onChange={e=>setAte(e.target.value)}
-          style={{...S.input,flex:1,minWidth:0}} title="Até"/>
-      </div>
-    </div>
-  );
 
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
 
@@ -8780,7 +8781,7 @@ function RelatorioFolgasScreen({user}){
       autoTable(doc,{
         startY:y,
         head:[["Data","Início","Fim","Total","Compensado","Observação"]],
-        body:g.rows.map(r=>[r.data,r.horaInicio,r.horaFim,r.totalHoras||"",r.compensado,r.observacao||""]),
+        body:g.rows.map(r=>[fmtDate(r.data),r.horaInicio,r.horaFim,r.totalHoras?(r.deveEmpresa?"-"+r.totalHoras:r.totalHoras):"",r.compensado,r.observacao||""]),
         styles:{fontSize:9},margin:{left:14,right:14},
       });
       y=doc.lastAutoTable.finalY+8;
@@ -8789,7 +8790,7 @@ function RelatorioFolgasScreen({user}){
   };
 
   const exportFolgasExcel=()=>{
-    const wsData=items.map(r=>({"Equipe":r.equipeNome||"","Funcionário":r.funcionarioNome||"","Data":r.data||"","Início":r.horaInicio||"","Fim":r.horaFim||"","Total":r.totalHoras||"","Compensado":r.compensado||"","Observação":r.observacao||""}));
+    const wsData=items.map(r=>({"Equipe":r.equipeNome||"","Funcionário":r.funcionarioNome||"","Data":r.data||"","Início":r.horaInicio||"","Fim":r.horaFim||"","Total":r.totalHoras?(r.deveEmpresa?"-"+r.totalHoras:r.totalHoras):"","Compensado":r.compensado||"","Deve Empresa":r.deveEmpresa?"Sim":"Não","Observação":r.observacao||""}));
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(wsData),"Folgas");XLSX.writeFile(wb,"relatorio-folgas.xlsx");
   };
 
@@ -8830,7 +8831,7 @@ function RelatorioFolgasScreen({user}){
                 <td style={S.td}>{fmtDate(r.data)}</td>
                 <td style={S.td}>{r.horaInicio}</td>
                 <td style={S.td}>{r.horaFim}</td>
-                <td style={{...S.td,fontWeight:700}}>{r.totalHoras||"—"}</td>
+                <td style={{...S.td,fontWeight:700,textAlign:"center",color:r.deveEmpresa?"#C62828":undefined}}>{r.totalHoras?(r.deveEmpresa?"-"+r.totalHoras:r.totalHoras):"—"}</td>
                 <td style={S.td}><span style={{...S.badge,background:r.compensado==="Sim"?"#E8F5E9":"#FFEBEE",color:r.compensado==="Sim"?"#2E7D32":"#C62828"}}>{r.compensado}</span></td>
                 <td style={S.td}>{r.observacao||"—"}</td>
               </tr>
