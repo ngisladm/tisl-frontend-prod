@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, Fragment } from "react";
+import { useState, useEffect, useRef, useMemo, Fragment, createElement } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -6799,6 +6799,7 @@ function InventarioAtivosScreen({user}){
   const[allData,setAllData]=useState([]);
   const[loading,setLoading]=useState(true);
   const[filtNome,setFiltNome]=useState("");
+  const[filtCpf,setFiltCpf]=useState("");
   const[filtTipo,setFiltTipo]=useState("");
   const[filtEmp,setFiltEmp]=useState("");
   const[filtAtivo,setFiltAtivo]=useState("");
@@ -6826,12 +6827,12 @@ function InventarioAtivosScreen({user}){
     let d=allData;
     const fi=(f,fn)=>{if(f)d=d.filter(r=>(r[fn]||"").toLowerCase().includes(f.toLowerCase()));};
     const fe=(f,fn)=>{if(f)d=d.filter(r=>r[fn]===f);};
-    fi(filtNome,"nomeFuncionario");fe(filtTipo,"tipoAtivoName");fe(filtEmp,"companyName");
+    fi(filtNome,"nomeFuncionario");fi(filtCpf,"cpf");fe(filtTipo,"tipoAtivoName");fe(filtEmp,"companyName");
     fi(filtAtivo,"ativoNome");fi(filtSerie,"numeroSerie");fi(filtDoc,"numeroDocumento");
     fe(filtStatus,"statusAtivo");fe(filtOp,"operadoraName");
     fi(filtLinha,"numeroLinha");fi(filtIccid,"iccid");fi(filtAcesso,"acesso");fi(filtEstrutura,"estrutura");
     return d;
-  },[allData,filtNome,filtTipo,filtEmp,filtAtivo,filtSerie,filtDoc,filtStatus,filtOp,filtLinha,filtIccid,filtAcesso,filtEstrutura]);
+  },[allData,filtNome,filtCpf,filtTipo,filtEmp,filtAtivo,filtSerie,filtDoc,filtStatus,filtOp,filtLinha,filtIccid,filtAcesso,filtEstrutura]);
 
   const grouped=useMemo(()=>{
     const map=new Map();
@@ -6842,17 +6843,44 @@ function InventarioAtivosScreen({user}){
     }
     return[...map.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
   },[filtered]);
+  const cpfMap=useMemo(()=>{
+    const m=new Map();
+    for(const r of filtered){const k=r.nomeFuncionario||"(sem funcionário)";if(!m.has(k))m.set(k,r.cpf||"");}
+    return m;
+  },[filtered]);
 
   if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
   if(loading)return<Spinner/>;
 
   const COLS=["Tipo de Ativo","Empresa","Nome do Ativo","Nº Linha","Marca","Modelo","Nº Série","IMEI 1","ICCID","Nº Documento"];
 
+  const tableRows=[];
+  for(const[nome,itens] of grouped){
+    const cpf=cpfMap.get(nome)||"";
+    const cpfSpan=cpf?createElement("span",{style:{fontWeight:400,marginLeft:10,fontSize:11}},"CPF: "+cpf):null;
+    tableRows.push(createElement("tr",{key:"h-"+nome},createElement("td",{colSpan:COLS.length,style:{...S.td,background:C.primary,color:"#fff",fontWeight:700,padding:"8px 12px"}},"👤 "+nome,cpfSpan)));
+    itens.forEach((r,j)=>tableRows.push(
+      <tr key={nome+"-"+j} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+        <td style={S.td}>{r.tipoAtivoName||"—"}</td>
+        <td style={S.td}>{r.companyName||"—"}</td>
+        <td style={S.td}>{r.ativoNome||"—"}</td>
+        <td style={S.td}>{r.numeroLinha||"—"}</td>
+        <td style={S.td}>{r.marca||"—"}</td>
+        <td style={S.td}>{r.modelo||"—"}</td>
+        <td style={S.td}>{r.numeroSerie||"—"}</td>
+        <td style={S.td}>{r.imeiSlot1||"—"}</td>
+        <td style={S.td}>{r.iccid||"—"}</td>
+        <td style={S.td}>{r.numeroDocumento||"—"}</td>
+      </tr>
+    ));
+  }
+
   const exportExcel=()=>{
     const rows=[];
     for(const[nome,itens] of grouped){
-      rows.push({"Funcionário":nome,...Object.fromEntries(COLS.map(c=>[c,""]))});
-      for(const r of itens) rows.push({"Funcionário":"","Tipo de Ativo":r.tipoAtivoName||"","Empresa":r.companyName||"","Nome do Ativo":r.ativoNome||"","Nº Linha":r.numeroLinha||"","Marca":r.marca||"","Modelo":r.modelo||"","Nº Série":r.numeroSerie||"","IMEI 1":r.imeiSlot1||"","ICCID":r.iccid||"","Nº Documento":r.numeroDocumento||""});
+      const cpf=cpfMap.get(nome)||"";
+      rows.push({"Funcionário":nome,"CPF":cpf,...Object.fromEntries(COLS.map(c=>[c,""]))});
+      for(const r of itens) rows.push({"Funcionário":"","CPF":"","Tipo de Ativo":r.tipoAtivoName||"","Empresa":r.companyName||"","Nome do Ativo":r.ativoNome||"","Nº Linha":r.numeroLinha||"","Marca":r.marca||"","Modelo":r.modelo||"","Nº Série":r.numeroSerie||"","IMEI 1":r.imeiSlot1||"","ICCID":r.iccid||"","Nº Documento":r.numeroDocumento||""});
     }
     const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Inventário");XLSX.writeFile(wb,"inventario-ativos.xlsx");
   };
@@ -6866,7 +6894,8 @@ function InventarioAtivosScreen({user}){
             const doc=new jsPDF({orientation:"landscape"});doc.setFontSize(14);doc.text("Inventário de Ativos",14,14);
             const body=[];
             for(const[nome,itens] of grouped){
-              body.push([{content:`Funcionário: ${nome}`,colSpan:10,styles:{fillColor:[240,165,0],textColor:[255,255,255],fontStyle:"bold",fontSize:9}}]);
+              const cpf=cpfMap.get(nome)||"";
+              body.push([{content:"Funcionário: "+nome+(cpf?" — CPF: "+cpf:""),colSpan:10,styles:{fillColor:[240,165,0],textColor:[255,255,255],fontStyle:"bold",fontSize:9}}]);
               itens.forEach(r=>body.push([r.tipoAtivoName||"",r.companyName||"",r.ativoNome||"",r.numeroLinha||"",r.marca||"",r.modelo||"",r.numeroSerie||"",r.imeiSlot1||"",r.iccid||"",r.numeroDocumento||""]));
             }
             autoTable(doc,{startY:20,head:[["Tipo de Ativo","Empresa","Nome do Ativo","Nº Linha","Marca","Modelo","Nº Série","IMEI 1","ICCID","Nº Documento"]],body,styles:{fontSize:7},headStyles:{fillColor:[97,97,97]}});
@@ -6877,6 +6906,7 @@ function InventarioAtivosScreen({user}){
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
         <input placeholder="Nome Funcionário..." value={filtNome} onChange={e=>setFiltNome(e.target.value)} style={{...S.input,width:"auto",minWidth:160,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="CPF..." value={filtCpf} onChange={e=>setFiltCpf(e.target.value)} style={{...S.input,width:"auto",minWidth:130,padding:"6px 10px",fontSize:13}}/>
         <select value={filtTipo} onChange={e=>setFiltTipo(e.target.value)} style={{...S.select,width:"auto",minWidth:140}}>
           <option value="">Todos os tipos</option>{tipoOpts.map(t=><option key={t}>{t}</option>)}
         </select>
@@ -6903,20 +6933,227 @@ function InventarioAtivosScreen({user}){
         <div style={{overflowX:"auto"}}>
           <table style={{...S.table,minWidth:900}}>
             <thead><tr>{COLS.map(h=><th key={h} style={{...S.th,fontSize:11}}>{h}</th>)}</tr></thead>
-            <tbody>{grouped.flatMap(([nome,itens])=>[
-              <tr key={`h-${nome}`}><td colSpan={COLS.length} style={{...S.td,background:C.primary,color:"#fff",fontWeight:700,padding:"8px 12px"}}>👤 {nome}</td></tr>,
+            <tbody>{tableRows}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── RESUMO DE ATIVOS TERCEIRIZADOS (s71) ─────────────────────
+function ResumoAtivosTercScreen({user}){
+  const p=user.permissions?.s71;
+  const[allData,setAllData]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[filtLoc,setFiltLoc]=useState("");
+  const[filtEmp,setFiltEmp]=useState("");
+  const[filtAtivo,setFiltAtivo]=useState("");
+  const[filtMarca,setFiltMarca]=useState("");
+  const[filtModelo,setFiltModelo]=useState("");
+  const[filtStatus,setFiltStatus]=useState("");
+  const[searched,setSearched]=useState(false);
+  useEffect(()=>{
+    if(!p?.view)return;
+    api.get("/controle-ativos-terceirizados/itens/relatorio").then(setAllData).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[]);
+  const empOpts=useMemo(()=>[...new Set(allData.map(r=>r.empresaLocalizacao||r.companyName||"").filter(Boolean))].sort(),[allData]);
+  const stOpts=useMemo(()=>[...new Set(allData.map(r=>r.statusAtivo||"").filter(Boolean))].sort(),[allData]);
+  const filtered=useMemo(()=>{
+    let d=allData;
+    if(filtLoc)d=d.filter(r=>(r.filialNome||"").toLowerCase().includes(filtLoc.toLowerCase()));
+    if(filtEmp)d=d.filter(r=>(r.empresaLocalizacao||r.companyName||"")===filtEmp);
+    if(filtAtivo)d=d.filter(r=>(r.ativoNome||"").toLowerCase().includes(filtAtivo.toLowerCase()));
+    if(filtMarca)d=d.filter(r=>(r.marca||"").toLowerCase().includes(filtMarca.toLowerCase()));
+    if(filtModelo)d=d.filter(r=>(r.modelo||"").toLowerCase().includes(filtModelo.toLowerCase()));
+    if(filtStatus)d=d.filter(r=>r.statusAtivo===filtStatus);
+    return d;
+  },[allData,filtLoc,filtEmp,filtAtivo,filtMarca,filtModelo,filtStatus]);
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+  function buildSummary(getters){
+    const map=new Map();
+    for(const r of filtered){
+      const vals=getters.map(g=>g(r));
+      const key=vals.join("|||");
+      if(!map.has(key))map.set(key,{vals,count:0});
+      map.get(key).count++;
+    }
+    const rows=[...map.values()].sort((a,b)=>{
+      for(let i=0;i<a.vals.length;i++){const c=(a.vals[i]||"").localeCompare(b.vals[i]||"");if(c!==0)return c;}
+      return 0;
+    });
+    return rows;
+  }
+  const DEFS=[
+    {title:"Ativo + Fornecedor",labels:["Nome do Ativo","Fornecedor"],getters:[r=>r.ativoNome||"(sem ativo)",r=>r.supplierName||"(sem fornecedor)"]},
+    {title:"Ativo + Fornecedor + Marca",labels:["Nome do Ativo","Fornecedor","Marca"],getters:[r=>r.ativoNome||"(sem ativo)",r=>r.supplierName||"(sem fornecedor)",r=>r.marca||"(sem marca)"]},
+    {title:"Ativo + Fornecedor + Modelo",labels:["Nome do Ativo","Fornecedor","Modelo"],getters:[r=>r.ativoNome||"(sem ativo)",r=>r.supplierName||"(sem fornecedor)",r=>r.modelo||"(sem modelo)"]},
+    {title:"Ativo + Fornecedor + Status",labels:["Nome do Ativo","Fornecedor","Status"],getters:[r=>r.ativoNome||"(sem ativo)",r=>r.supplierName||"(sem fornecedor)",r=>r.statusAtivo||"(sem status)"]},
+    {title:"Ativo + Empresa",labels:["Nome do Ativo","Empresa"],getters:[r=>r.ativoNome||"(sem ativo)",r=>r.empresaLocalizacao||r.companyName||"(sem empresa)"]},
+  ];
+  const thStyle={...S.th,fontSize:11,padding:"6px 10px"};
+  const tdStyle={...S.td,fontSize:12,padding:"5px 10px"};
+  const panels=[];
+  if(searched&&filtered.length>0){
+    for(let d=0;d<DEFS.length;d++){
+      const def=DEFS[d];
+      const rows=buildSummary(def.getters);
+      const total=rows.reduce((s,r)=>s+r.count,0);
+      const headerCells=def.labels.concat(["Qtd"]).map((l,i)=>createElement("th",{key:i,style:thStyle},l));
+      const bodyRows=rows.map((r,i)=>{
+        const dataCells=r.vals.map((v,j)=>createElement("td",{key:j,style:tdStyle},v));
+        dataCells.push(createElement("td",{key:"q",style:{...tdStyle,textAlign:"center",fontWeight:700,color:C.accent}},r.count));
+        return createElement("tr",{key:i,onMouseOver:e=>e.currentTarget.style.background=C.bg,onMouseOut:e=>e.currentTarget.style.background=C.white},...dataCells);
+      });
+      bodyRows.push(createElement("tr",{key:"tot",style:{background:"#F5F5F5"}},
+        createElement("td",{colSpan:def.labels.length,style:{...tdStyle,fontWeight:700,textAlign:"right"}},"Total"),
+        createElement("td",{style:{...tdStyle,textAlign:"center",fontWeight:700,color:C.primary}},total)
+      ));
+      const table=createElement("div",{style:{overflowX:"auto"}},
+        createElement("table",{style:{...S.table,marginBottom:0}},
+          createElement("thead",null,createElement("tr",null,...headerCells)),
+          createElement("tbody",null,...bodyRows)
+        )
+      );
+      const header=createElement("div",{style:{background:C.primary,color:"#fff",padding:"8px 14px",fontWeight:700,fontSize:12,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        createElement("span",null,def.title),
+        createElement("span",{style:{fontWeight:400,fontSize:11}},rows.length+" grupo(s) · Total: "+total)
+      );
+      panels.push(createElement("div",{key:d,style:{background:C.white,borderRadius:8,border:"1px solid #E0E0E0",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.06)"}},header,table));
+    }
+  }
+  let content;
+  if(!searched){
+    content=createElement("div",{style:S.emptyState},createElement("span",{style:S.emptyIcon},"📦"),"Use os filtros e clique em Filtrar.");
+  }else if(filtered.length===0){
+    content=createElement("div",{style:S.emptyState},createElement("span",{style:S.emptyIcon},"📦"),"Nenhum dado encontrado.");
+  }else{
+    content=createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(420px,1fr))",gap:16}},...panels);
+  }
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>📦 Resumo de Ativos Terceirizados</span>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+        <input placeholder="Localização..." value={filtLoc} onChange={e=>setFiltLoc(e.target.value)} style={{...S.input,width:"auto",minWidth:150,padding:"6px 10px",fontSize:13}}/>
+        <select value={filtEmp} onChange={e=>setFiltEmp(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
+          <option value="">Todas as empresas</option>{empOpts.map(e=><option key={e}>{e}</option>)}
+        </select>
+        <input placeholder="Nome do Ativo..." value={filtAtivo} onChange={e=>setFiltAtivo(e.target.value)} style={{...S.input,width:"auto",minWidth:130,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Marca..." value={filtMarca} onChange={e=>setFiltMarca(e.target.value)} style={{...S.input,width:"auto",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Modelo..." value={filtModelo} onChange={e=>setFiltModelo(e.target.value)} style={{...S.input,width:"auto",minWidth:110,padding:"6px 10px",fontSize:13}}/>
+        <select value={filtStatus} onChange={e=>setFiltStatus(e.target.value)} style={{...S.select,width:"auto",minWidth:130}}>
+          <option value="">Todos os status</option>{stOpts.map(s=><option key={s}>{s}</option>)}
+        </select>
+        <button style={S.btnSave} onClick={()=>setSearched(true)}>Filtrar</button>
+      </div>
+      {searched&&filtered.length>0&&<div style={{fontSize:12,color:C.textLight,marginBottom:12}}>{filtered.length} registro(s) encontrado(s)</div>}
+      {content}
+    </div>
+  );
+}
+
+// ── INVENTÁRIO DE ATIVOS TERCEIRIZADOS (s72) ──────────────────
+function InventarioAtivosTercScreen({user}){
+  const p=user.permissions?.s72;
+  const[allData,setAllData]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[filtLoc,setFiltLoc]=useState("");
+  const[filtTipo,setFiltTipo]=useState("");
+  const[filtEmp,setFiltEmp]=useState("");
+  const[filtAtivo,setFiltAtivo]=useState("");
+  const[filtSerie,setFiltSerie]=useState("");
+  const[filtStatus,setFiltStatus]=useState("");
+  const[searched,setSearched]=useState(false);
+  useEffect(()=>{
+    if(!p?.view)return;
+    api.get("/controle-ativos-terceirizados/itens/relatorio").then(setAllData).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[]);
+  const tipoOpts=useMemo(()=>[...new Set(allData.map(r=>r.tipoAtivoName||"").filter(Boolean))].sort(),[allData]);
+  const empOpts=useMemo(()=>[...new Set(allData.map(r=>r.companyName||r.empresaLocalizacao||"").filter(Boolean))].sort(),[allData]);
+  const stOpts=useMemo(()=>[...new Set(allData.map(r=>r.statusAtivo||"").filter(Boolean))].sort(),[allData]);
+  const filtered=useMemo(()=>{
+    let d=allData;
+    if(filtLoc)d=d.filter(r=>(r.filialNome||"").toLowerCase().includes(filtLoc.toLowerCase()));
+    if(filtTipo)d=d.filter(r=>r.tipoAtivoName===filtTipo);
+    if(filtEmp)d=d.filter(r=>(r.companyName||r.empresaLocalizacao||"")===filtEmp);
+    if(filtAtivo)d=d.filter(r=>(r.ativoNome||"").toLowerCase().includes(filtAtivo.toLowerCase()));
+    if(filtSerie)d=d.filter(r=>(r.numeroSerie||"").toLowerCase().includes(filtSerie.toLowerCase()));
+    if(filtStatus)d=d.filter(r=>r.statusAtivo===filtStatus);
+    return d;
+  },[allData,filtLoc,filtTipo,filtEmp,filtAtivo,filtSerie,filtStatus]);
+  const grouped=useMemo(()=>{
+    const map=new Map();
+    for(const r of filtered){
+      const loc=r.filialNome||"(sem localização)";
+      if(!map.has(loc))map.set(loc,[]);
+      map.get(loc).push(r);
+    }
+    return[...map.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+  },[filtered]);
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+  const COLS=["Tipo de Ativo","Empresa","Nome do Ativo","Marca","Modelo","Nº Série","IP","Status"];
+  const exportExcel=()=>{
+    const rows=[];
+    for(const[loc,itens] of grouped){
+      rows.push({"Localização":loc,...Object.fromEntries(COLS.map(c=>[c,""]))});
+      for(const r of itens) rows.push({"Localização":"","Tipo de Ativo":r.tipoAtivoName||"","Empresa":r.companyName||r.empresaLocalizacao||"","Nome do Ativo":r.ativoNome||"","Marca":r.marca||"","Modelo":r.modelo||"","Nº Série":r.numeroSerie||"","IP":r.ip||"","Status":r.statusAtivo||""});
+    }
+    const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Inventário");XLSX.writeFile(wb,"inventario-ativos-terceirizados.xlsx");
+  };
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>📋 Inventário de Ativos Terceirizados</span>
+        <div style={{display:"flex",gap:8}}>
+          <button style={S.btnSave} onClick={()=>{
+            const doc=new jsPDF({orientation:"landscape"});doc.setFontSize(14);doc.text("Inventário de Ativos Terceirizados",14,14);
+            const body=[];
+            for(const[loc,itens] of grouped){
+              body.push([{content:`Localização: ${loc}`,colSpan:8,styles:{fillColor:[240,165,0],textColor:[255,255,255],fontStyle:"bold",fontSize:9}}]);
+              itens.forEach(r=>body.push([r.tipoAtivoName||"",r.companyName||r.empresaLocalizacao||"",r.ativoNome||"",r.marca||"",r.modelo||"",r.numeroSerie||"",r.ip||"",r.statusAtivo||""]));
+            }
+            autoTable(doc,{startY:20,head:[["Tipo de Ativo","Empresa","Nome do Ativo","Marca","Modelo","Nº Série","IP","Status"]],body,styles:{fontSize:7},headStyles:{fillColor:[97,97,97]}});
+            doc.save("inventario-ativos-terceirizados.pdf");
+          }} disabled={grouped.length===0}>⬇ PDF</button>
+          <button style={S.btnSave} onClick={exportExcel}>⬇️ Excel</button>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+        <input placeholder="Localização..." value={filtLoc} onChange={e=>setFiltLoc(e.target.value)} style={{...S.input,width:"auto",minWidth:160,padding:"6px 10px",fontSize:13}}/>
+        <select value={filtTipo} onChange={e=>setFiltTipo(e.target.value)} style={{...S.select,width:"auto",minWidth:140}}>
+          <option value="">Todos os tipos</option>{tipoOpts.map(t=><option key={t}>{t}</option>)}
+        </select>
+        <select value={filtEmp} onChange={e=>setFiltEmp(e.target.value)} style={{...S.select,width:"auto",minWidth:140}}>
+          <option value="">Todas as empresas</option>{empOpts.map(e=><option key={e}>{e}</option>)}
+        </select>
+        <input placeholder="Nome do Ativo..." value={filtAtivo} onChange={e=>setFiltAtivo(e.target.value)} style={{...S.input,width:"auto",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <input placeholder="Nº de Série..." value={filtSerie} onChange={e=>setFiltSerie(e.target.value)} style={{...S.input,width:"auto",minWidth:120,padding:"6px 10px",fontSize:13}}/>
+        <select value={filtStatus} onChange={e=>setFiltStatus(e.target.value)} style={{...S.select,width:"auto",minWidth:120}}>
+          <option value="">Todos os status</option>{stOpts.map(s=><option key={s}>{s}</option>)}
+        </select>
+        <button style={S.btnSave} onClick={()=>setSearched(true)}>Filtrar</button>
+      </div>
+      {searched&&<div style={{fontSize:12,color:C.textLight,marginBottom:8}}>{filtered.length} item(ns)</div>}
+      {!searched?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Use os filtros e clique em Filtrar.</div>:grouped.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📋</span>Nenhum dado encontrado.</div>:(
+        <div style={{overflowX:"auto"}}>
+          <table style={{...S.table,minWidth:900}}>
+            <thead><tr>{COLS.map(h=><th key={h} style={{...S.th,fontSize:11}}>{h}</th>)}</tr></thead>
+            <tbody>{grouped.flatMap(([loc,itens])=>[
+              <tr key={`h-${loc}`}><td colSpan={COLS.length} style={{...S.td,background:C.primary,color:"#fff",fontWeight:700,padding:"8px 12px"}}>📍 {loc}</td></tr>,
               ...itens.map((r,j)=>(
-                <tr key={`${nome}-${j}`} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <tr key={`${loc}-${j}`} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
                   <td style={S.td}>{r.tipoAtivoName||"—"}</td>
-                  <td style={S.td}>{r.companyName||"—"}</td>
+                  <td style={S.td}>{r.companyName||r.empresaLocalizacao||"—"}</td>
                   <td style={S.td}>{r.ativoNome||"—"}</td>
-                  <td style={S.td}>{r.numeroLinha||"—"}</td>
                   <td style={S.td}>{r.marca||"—"}</td>
                   <td style={S.td}>{r.modelo||"—"}</td>
                   <td style={S.td}>{r.numeroSerie||"—"}</td>
-                  <td style={S.td}>{r.imeiSlot1||"—"}</td>
-                  <td style={S.td}>{r.iccid||"—"}</td>
-                  <td style={S.td}>{r.numeroDocumento||"—"}</td>
+                  <td style={S.td}>{r.ip||"—"}</td>
+                  <td style={S.td}>{r.statusAtivo?<span style={{...S.badge,background:"#EBF5FB",color:"#2980B9"}}>{r.statusAtivo}</span>:"—"}</td>
                 </tr>
               ))
             ])}</tbody>
@@ -12585,8 +12822,10 @@ const navConfig=[
     {id:"s65",label:"PDI",                         icon:"clipboard"},
     {id:"s24",label:"Análise de Linhas",          icon:"trending"},
     {id:"s25",label:"Resumo de Linhas",           icon:"signal"},
-    {id:"s26",label:"Resumo de Ativos",           icon:"package"},
-    {id:"s27",label:"Inventário de Ativos",       icon:"archive"},
+    {id:"s26",label:"Resumo de Ativos",                        icon:"package"},
+    {id:"s27",label:"Inventário de Ativos",                    icon:"archive"},
+    {id:"s71",label:"Resumo de Ativos Terceirizados",          icon:"package"},
+    {id:"s72",label:"Inventário de Ativos Terceirizados",      icon:"archive"},
     {id:"s42",label:"Firewall",                               icon:"monitor"},
     {id:"s43",label:"Links",                                  icon:"link"},
     {id:"s52",label:"Movimentação de Ítens - Detalhado",      icon:"file"},
@@ -12682,6 +12921,8 @@ const screenTitles={
   s25:"Relatórios › Resumo de Linhas",
   s26:"Relatórios › Resumo de Ativos",
   s27:"Relatórios › Inventário de Ativos",
+  s71:"Relatórios › Resumo de Ativos Terceirizados",
+  s72:"Relatórios › Inventário de Ativos Terceirizados",
   s29:"Movimentações › Histórico de Movimentações de Ativos",
   s70:"Movimentações › Consumo de Impressão",
   s31:"Relatórios › Relatório de Férias",
@@ -12778,6 +13019,8 @@ export default function App(){
     s25:<RelatorioResumoLinhasScreen user={user}/>,
     s26:<ResumoAtivosScreen user={user}/>,
     s27:<InventarioAtivosScreen user={user}/>,
+    s71:<ResumoAtivosTercScreen user={user}/>,
+    s72:<InventarioAtivosTercScreen user={user}/>,
     s29:<HistoricoMovimentacoesScreen user={user}/>,
     s30:<FeriasScreen user={user}/>,
     s31:<RelatorioFeriasScreen user={user}/>,
@@ -12878,3 +13121,4 @@ export default function App(){
     </div>
   );
 }
+
