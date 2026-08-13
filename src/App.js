@@ -4467,6 +4467,7 @@ function AtivosScreen({user}){
   const[companies,setCompanies]=useState([]);
   const[assetNames,setAssetNames]=useState([]);
   const[assetBrands,setAssetBrands]=useState([]);
+  const[suppliers,setSuppliers]=useState([]);
   const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(null);
   const[delId,setDelId]=useState(null);
@@ -4480,12 +4481,13 @@ function AtivosScreen({user}){
   const blankAtivo=()=>({nome:"",tipoAtivoId:"",companyId:"",marca:"",modelo:"",
     numeroSerie:"",sistemaOperacional:"",versao:"",processador:"",memoria:"",hd:"",
     patrimonio:"",numeroDocumento:"",valor:"",dataAquisicao:"",condicao:"",
-    acessorios:"",imeiSlot1:"",imeiSlot2:"",observacao:""});
+    acessorios:"",imeiSlot1:"",imeiSlot2:"",observacao:"",
+    supplierId:"",toner:"",franquia:"",vrExcedentes:""});
 
   const load=()=>{
     setLoading(true);
-    Promise.all([api.get("/ativos"),api.get("/tipo-ativos"),api.get("/companies"),api.get("/nomes-ativos"),api.get("/marcas-ativos")])
-      .then(([a,ta,co,an,ab])=>{setItems(a);setTipoAtivos(ta);setCompanies(co);setAssetNames(an);setAssetBrands(ab);})
+    Promise.all([api.get("/ativos"),api.get("/tipo-ativos"),api.get("/companies"),api.get("/nomes-ativos"),api.get("/marcas-ativos"),api.get("/suppliers")])
+      .then(([a,ta,co,an,ab,sup])=>{setItems(a);setTipoAtivos(ta);setCompanies(co);setAssetNames(an);setAssetBrands(ab);setSuppliers(sup);})
       .catch(()=>{}).finally(()=>setLoading(false));
   };
   useEffect(()=>{load();},[]);
@@ -4641,6 +4643,13 @@ function AtivosScreen({user}){
             {F("IMEI Slot 1","imeiSlot1")}
             {F("IMEI Slot 2","imeiSlot2")}
           </div>
+          <SelectField label="Fornecedor" value={modal.supplierId||""} onChange={v=>setModal(m=>({...m,supplierId:v}))}
+            options={[{value:"",label:"Selecione"},...suppliers.map(s=>({value:s.id,label:s.name}))]}/>
+          <div style={g2}>
+            {F("Toner","toner")}
+            {F("Franquia","franquia","number")}
+          </div>
+          {F("Vr Excedentes","vrExcedentes","number")}
           <div style={S.formRow}>
             <label style={S.label}>Acessórios</label>
             <textarea value={modal.acessorios||""} onChange={e=>setModal(m=>({...m,acessorios:e.target.value}))}
@@ -4668,7 +4677,7 @@ function AtivosScreen({user}){
       {delId&&<ConfirmModal msg="Excluir este ativo?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
       {csvImpModal&&(
         <Modal title="Importar Ativos via CSV" onClose={()=>{setCsvImpModal(false);setCsvImpRows(null);}}>
-          <p style={{fontSize:12,color:C.textLight,marginBottom:12}}>CSV com colunas: <strong>Nome do Ativo</strong>, <strong>Tipo de Ativo</strong>, <strong>Empresa</strong>, Marca, Modelo, Nº de Série, Sistema Operacional, Versão, Processador, Memória, HD, Patrimônio, Nº Documento, Valor, Data Aquisição, Condição, IMEI Slot 1, IMEI Slot 2, Acessórios</p>
+          <p style={{fontSize:12,color:C.textLight,marginBottom:12}}>CSV com colunas: <strong>Nome do Ativo</strong>, <strong>Tipo de Ativo</strong>, <strong>Empresa</strong>, Marca, Modelo, Nº de Série, Sistema Operacional, Versão, Processador, Memória, HD, Patrimônio, Nº Documento, Valor, Data Aquisição, Condição, IMEI Slot 1, IMEI Slot 2, Acessórios, Fornecedor, Toner, Franquia, Vr Excedentes</p>
           <label style={{...S.btnAdd,cursor:"pointer",display:"inline-block",marginBottom:12}}>
             📂 Selecionar arquivo CSV
             <input type="file" accept=".csv" style={{display:"none"}} onChange={handleCsvImpFile}/>
@@ -6914,6 +6923,718 @@ function InventarioAtivosScreen({user}){
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── CONTROLE DE ATIVOS TERCEIRIZADOS (s69) ────────────────────
+function MovimentacoesModalTerc({movModal,onClose,itensModal,localizacoes,onDone}){
+  const[tipoMov,setTipoMov]=useState("Transferência");
+  const[movLocId,setMovLocId]=useState("");
+  const[movErr,setMovErr]=useState("");
+  const[movSaving,setMovSaving]=useState(false);
+  const doMov=async()=>{
+    if(tipoMov==="Transferência"&&!movLocId){setMovErr("Selecione a localização de destino.");return;}
+    setMovSaving(true);
+    try{
+      await api.post(`/controle-ativos-terceirizados/${movModal.controleId}/itens/${movModal.item.id}/movimentacao`,
+        {tipoMovimentacao:tipoMov,localizacaoId:movLocId||null});
+      onDone();
+    }catch(e){setMovErr(e.message);}finally{setMovSaving(false);}
+  };
+  return(
+    <Modal title="Registrar Movimentação" onClose={onClose}>
+      <div style={{marginBottom:12,padding:10,background:"#F8F9FA",borderRadius:6,fontSize:12,color:C.text}}>
+        <strong>Item:</strong> {movModal.item.ativoNome||"—"}<br/>
+        <strong>Localização atual:</strong> {itensModal?.controle.filialNome||"—"}
+      </div>
+      <SelectField label="Tipo de Movimentação" value={tipoMov} onChange={v=>{setTipoMov(v);setMovLocId("");setMovErr("");}}
+        options={["Transferência","Baixa","Devolução Estoque"].map(s=>({value:s,label:s}))}/>
+      {tipoMov==="Transferência"&&(
+        <SelectField label="Localização de Destino *" value={movLocId} onChange={setMovLocId}
+          options={[{value:"",label:"Selecione"},...(localizacoes||[]).filter(l=>l.id!==itensModal?.controle.localizacaoId).map(l=>({value:l.id,label:`${l.nome} — ${l.empresaNome||""}`}))]}/>
+      )}
+      {tipoMov==="Baixa"&&<div style={{padding:"8px 12px",background:"#FFF3E0",borderRadius:6,fontSize:12,color:"#E65100",marginBottom:8}}>O ativo será marcado como <strong>Baixado</strong> e o item será removido.</div>}
+      {tipoMov==="Devolução Estoque"&&<div style={{padding:"8px 12px",background:"#E8F5E9",borderRadius:6,fontSize:12,color:"#2E7D32",marginBottom:8}}>O ativo voltará ao status <strong>Em Estoque</strong> e o item será removido.</div>}
+      {movErr&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{movErr}</div>}
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <button style={S.btnCancel} onClick={onClose}>Cancelar</button>
+        <button style={{...S.btnSave,opacity:movSaving?0.6:1}} disabled={movSaving} onClick={doMov}>{movSaving?"Salvando...":"Confirmar"}</button>
+      </div>
+    </Modal>
+  );
+}
+
+function ControleAtivosTerceirizadosScreen({user}){
+  const[items,setItems]=useState([]);
+  const[allItens,setAllItens]=useState([]);
+  const[localizacoes,setLocalizacoes]=useState([]);
+  const[companies,setCompanies]=useState([]);
+  const[tipoAtivos,setTipoAtivos]=useState([]);
+  const[suppliers,setSuppliers]=useState([]);
+  const[ativos,setAtivos]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[itensModal,setItensModal]=useState(null);
+  const[itemForm,setItemForm]=useState(null);
+  const[anexosModal,setAnexosModal]=useState(null);
+  const[movModal,setMovModal]=useState(null);
+  const[modelos,setModelos]=useState([]);
+  const[sendingEmail,setSendingEmail]=useState(false);
+  const[delId,setDelId]=useState(null);
+  const[delItemId,setDelItemId]=useState(null);
+  const[err,setErr]=useState("");
+  const[errItem,setErrItem]=useState("");
+  const[filterCA,setFilterCA]=useState({localizacao:"",empresa:"",numeroSerie:"",numeroDocumento:"",patrimonio:""});
+  const[csvImpItensModal,setCsvImpItensModal]=useState(false);
+  const[csvImpItensRows,setCsvImpItensRows]=useState(null);
+  const[csvImpItensBusy,setCsvImpItensBusy]=useState(false);
+  const isMobile=useIsMobile();
+
+  const load=()=>{
+    setLoading(true);
+    const ok=(r,def=[])=>r.status==="fulfilled"?r.value:def;
+    Promise.allSettled([
+      api.get("/controle-ativos-terceirizados"),
+      api.get("/filiais/basic"),
+      api.get("/companies"),
+      api.get("/tipo-ativos"),
+      api.get("/suppliers"),
+      api.get("/ativos"),
+      api.get("/controle-ativos-terceirizados/itens/all"),
+      api.get("/modelos-contrato"),
+    ]).then(([ca,loc,co,ta,sup,av,ai,mc])=>{
+      setItems(ok(ca));setLocalizacoes(ok(loc));setCompanies(ok(co));
+      setTipoAtivos(ok(ta));setSuppliers(ok(sup));
+      setAtivos(ok(av));setAllItens(ok(ai));setModelos(ok(mc));
+    }).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+
+  const save=async()=>{
+    if(!modal.localizacaoId){setErr("Selecione uma localização.");return;}
+    try{
+      if(modal.id) await api.put(`/controle-ativos-terceirizados/${modal.id}`,modal);
+      else         await api.post("/controle-ativos-terceirizados",modal);
+      setModal(null);load();
+    }catch(e){setErr(e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/controle-ativos-terceirizados/${delId}`);setDelId(null);load();}
+    catch(e){alert(e.message);}
+  };
+
+  const openItens=async(controle)=>{
+    const itens=await api.get(`/controle-ativos-terceirizados/${controle.id}/itens`).catch(()=>[]);
+    setItensModal({controle,itens});
+  };
+  const reloadItens=async()=>{
+    if(!itensModal)return;
+    const itens=await api.get(`/controle-ativos-terceirizados/${itensModal.controle.id}/itens`).catch(()=>[]);
+    setItensModal(m=>({...m,itens}));
+    load();
+  };
+
+  const saveItem=async()=>{
+    try{
+      if(itemForm.id)
+        await api.put(`/controle-ativos-terceirizados/${itensModal.controle.id}/itens/${itemForm.id}`,itemForm);
+      else
+        await api.post(`/controle-ativos-terceirizados/${itensModal.controle.id}/itens`,itemForm);
+      setItemForm(null);reloadItens();
+    }catch(e){setErrItem(e.message);}
+  };
+  const delItem=async()=>{
+    try{
+      await api.delete(`/controle-ativos-terceirizados/${itensModal.controle.id}/itens/${delItemId}`);
+      setDelItemId(null);reloadItens();
+    }catch(e){alert(e.message);}
+  };
+
+  const openAnexos=(controleId,item)=>setAnexosModal({controleId,itemId:item.id,attachments:item.attachments||[]});
+  const removeAnexo=idx=>setAnexosModal(m=>({...m,attachments:m.attachments.filter((_,i)=>i!==idx)}));
+  const handleAnexoAdd=e=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{setAnexosModal(m=>({...m,attachments:[...m.attachments,{name:file.name,type:file.type,size:file.size,data:ev.target.result}]}));};
+    reader.readAsDataURL(file);
+  };
+  const saveAnexos=async()=>{
+    try{
+      await api.put(`/controle-ativos-terceirizados/${anexosModal.controleId}/itens/${anexosModal.itemId}/anexos`,{attachments:anexosModal.attachments});
+      setAnexosModal(null);reloadItens();
+    }catch(e){alert(e.message);}
+  };
+
+  const canI=act=>user.permissions?.s69?.[act];
+
+  const handleCsvImpItensFile=e=>{
+    const f=e.target.files[0];e.target.value="";if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>{const{rows}=parseCSVGeneric(ev.target.result);setCsvImpItensRows(rows);};
+    r.readAsText(f,"UTF-8");
+  };
+  const processarCsvImpItens=async()=>{
+    if(!csvImpItensRows?.length){alert("Nenhum dado válido no arquivo.");return;}
+    setCsvImpItensBusy(true);
+    try{
+      const res=await api.post("/controle-ativos-terceirizados/importar-itens",{linhas:csvImpItensRows});
+      alert(`✅ Importação concluída!\nInseridos: ${res.inseridos}\nDuplicados (ignorados): ${res.duplicados||0}\nNão encontrados: ${res.naoEncontrados||0}${res.erros?.length?"\n\nErros:\n"+res.erros.join("\n"):""}`);
+      setCsvImpItensModal(false);setCsvImpItensRows(null);load();
+    }catch(e){alert("❌ "+(e?.error||e.message));}
+    setCsvImpItensBusy(false);
+  };
+
+  const formatarValorContrato=valor=>{
+    if(valor===null||valor===undefined||valor==="")return "";
+    const n=Number(valor);return Number.isFinite(n)?n.toFixed(2):"";
+  };
+
+  const imprimirContrato=async(item)=>{
+    const modelo=modelos.find(m=>m.tipoAtivoId===item.tipoAtivoId&&m.empresaId===item.companyId);
+    if(!modelo){alert("Nenhum modelo de contrato cadastrado para o Tipo de Ativo \""+(item.tipoAtivoName||"—")+"\" e a Empresa \""+(item.companyName||"—")+"\".");return;}
+    let conteudo="";
+    try{const d=await api.get(`/modelos-contrato/${modelo.id}/conteudo`);conteudo=d.conteudo||"";}
+    catch(e){alert("Erro ao carregar modelo: "+e.message);return;}
+    let logoHtml="";
+    try{const ld=await api.get(`/companies/${item.companyId}/logo`);if(ld.logo)logoHtml=`<img src="${ld.logo}" style="max-width:200px;height:auto;">`;}
+    catch(e){}
+    const compItem=companies.find(c=>c.id===item.companyId);
+    const loc=itensModal?.controle;
+    const now=new Date();
+    const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    const subs={
+      "[RAZSOCEMP]":compItem?.razaoSocial||"","[FANTASEMP]":compItem?.name||item.companyName||"",
+      "[CNPJEMP]":compItem?.cnpj||"","[INSCEST]":compItem?.inscEstadual||"","[INSCMUN]":compItem?.inscMunicipal||"",
+      "[LOGREMP]":compItem?.logradouro||"","[NRLOGREMP]":compItem?.numero||"","[BAIRROEMP]":compItem?.bairro||"",
+      "[CEPEMP]":compItem?.cep||"","[CIDEMP]":compItem?.cidade||"","[ESTEMP]":compItem?.estado||"",
+      "[REPRLEGEMP]":compItem?.representanteLegal||"","[LOGOEMP]":logoHtml,
+      "[NMFUN]":loc?.filialNome||"","[CPFFUN]":"","[RGFUN]":"","[CARGOFUN]":"","[MATRICFUN]":"",
+      "[CCUSTOFUN]":"","[FONEFUN]":"","[EMAILFUN]":"","[LOGRFUN]":"","[NRLOGRFUN]":"",
+      "[COMPLEMFUN]":"","[BAIRROFUN]":"","[CEPFUN]":"","[CIDFUN]":"","[ESTFUN]":"",
+      "[NMLOC]":loc?.filialNome||"","[EMPRESALOC]":loc?.empresaNome||"",
+      "[TPATIVO]":item.tipoAtivoName||"","[NOMEATIVO]":item.ativoNome||"","[MARCA]":item.marca||"",
+      "[MODELO]":item.modelo||"","[NRSER]":item.numeroSerie||"","[SISTOPER]":item.sistemaOperacional||"",
+      "[VERSAO]":item.versao||"","[PROCES]":item.processador||"","[MEMORIA]":item.memoria||"",
+      "[HD]":item.hd||"","[PATRIMONIO]":item.patrimonio||"","[NRDOCUM]":item.numeroDocumento||"",
+      "[VALOR]":formatarValorContrato(item.valor),"[CONDICAO]":item.condicao||"","[ACESSORIOS]":item.acessorios||"",
+      "[IMEI1]":item.imeiSlot1||"","[IMEI2]":item.imeiSlot2||"","[OPERADORA]":item.operadoraName||"",
+      "[NRLINHA]":item.numeroLinha||"","[ICCID]":item.iccid||"","[ACESSO]":item.acesso||"",
+      "[ESTRUTURA]":item.estrutura||"","[TPPACOTE]":item.tipoPacote||"",
+      "[Dia]":String(now.getDate()).padStart(2,"0"),"[Mes]":MESES[now.getMonth()],"[Ano]":String(now.getFullYear()),
+    };
+    let html=conteudo;
+    Object.entries(subs).forEach(([k,v])=>{html=html.split(k).join(v);});
+    const win=window.open("","_blank","width=900,height=700");
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Contrato</title>
+<style>@page{margin:20mm;size:A4 portrait;}body{font-family:Arial,sans-serif;margin:40px;font-size:12pt;color:#222;line-height:1.5;}img{max-width:100%;}@media print{.no-print{display:none;}body{margin:0;}}</style>
+</head><body><div class="no-print" style="margin-bottom:20px;display:flex;gap:8px;">
+<button onclick="window.print()" style="padding:8px 16px;background:#2563EB;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;">🖨️ Imprimir</button>
+<button onclick="window.close()" style="padding:8px 16px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;">✕ Fechar</button>
+</div>${html}</body></html>`);
+    win.document.close();
+  };
+
+  const tipoTerceirizado=tipoAtivos.find(t=>t.name.toLowerCase()==="terceirizado");
+  const ativosTerceirizados=ativos.filter(a=>tipoTerceirizado&&a.tipoAtivoId===tipoTerceirizado.id);
+
+  const blankItem=()=>({companyId:"",tipoAtivoId:tipoTerceirizado?.id||"",ativoId:"",
+    marca:"",modelo:"",imeiSlot1:"",imeiSlot2:"",
+    numeroSerie:"",sistemaOperacional:"",versao:"",processador:"",memoria:"",hd:"",
+    patrimonio:"",numeroDocumento:"",valor:"",dataAquisicao:"",condicao:"",acessorios:"",statusAtivo:"",
+    supplierId:"",toner:"",franquia:"",vrExcedentes:"",ip:""});
+
+  const autoFillAtivo=ativoId=>{
+    const a=ativos.find(x=>x.id===ativoId);
+    if(!a)return{ativoId};
+    return{
+      ativoId,
+      marca:a.marca||"",modelo:a.modelo||"",numeroSerie:a.numeroSerie||"",
+      sistemaOperacional:a.sistemaOperacional||"",versao:a.versao||"",
+      processador:a.processador||"",memoria:a.memoria||"",hd:a.hd||"",
+      patrimonio:a.patrimonio||"",numeroDocumento:a.numeroDocumento||"",
+      valor:a.valor||"",dataAquisicao:a.dataAquisicao||"",condicao:a.condicao||"",
+      supplierId:a.supplierId||"",toner:a.toner||"",
+      franquia:a.franquia||"",vrExcedentes:a.vrExcedentes||"",
+    };
+  };
+
+  const hasItemFilter=filterCA.empresa||filterCA.operadora||filterCA.numeroLinha||filterCA.numeroSerie||filterCA.numeroDocumento||filterCA.patrimonio;
+  const matchingIds=hasItemFilter?new Set(
+    allItens.filter(i=>{
+      if(filterCA.empresa&&i.companyId!==filterCA.empresa)return false;
+      if(filterCA.operadora&&i.operadoraId!==filterCA.operadora)return false;
+      if(filterCA.numeroLinha&&!(i.numeroLinha||"").toLowerCase().includes(filterCA.numeroLinha.toLowerCase()))return false;
+      if(filterCA.numeroSerie&&!(i.numeroSerie||"").toLowerCase().includes(filterCA.numeroSerie.toLowerCase()))return false;
+      if(filterCA.numeroDocumento&&!(i.numeroDocumento||"").toLowerCase().includes(filterCA.numeroDocumento.toLowerCase()))return false;
+      if(filterCA.patrimonio&&!(i.patrimonio||"").toLowerCase().includes(filterCA.patrimonio.toLowerCase()))return false;
+      return true;
+    }).map(i=>i.controleAtivoId)
+  ):null;
+  const filteredCA=items.filter(item=>{
+    if(filterCA.localizacao&&!(item.nomeLocalizacao||"").toLowerCase().includes(filterCA.localizacao.toLowerCase()))return false;
+    if(matchingIds&&!matchingIds.has(item.id))return false;
+    return true;
+  });
+  const caFilterStyle={...S.input,width:"auto",flex:"1 1 160px",minWidth:130,padding:"6px 10px",fontSize:13};
+
+  if(!user.permissions?.s69?.view)return<div style={S.emptyState}><Icon name="lock" size={32}/><br/>Sem permissão.</div>;
+
+  return(
+    <div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>
+          <span style={S.cardTitle}>🖨️ Controle de Ativos Terceirizados</span>
+          <div style={{display:"flex",gap:8}}>
+            {user.isMaster&&<button style={{...S.btnAdd,background:"#27AE60"}} onClick={()=>{setCsvImpItensRows(null);setCsvImpItensModal(true);}}>📥 Importação Itens</button>}
+            {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({localizacaoId:""});}}>+ Nova Localização</button>}
+          </div>
+        </div>
+        {/* Filtros */}
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,padding:"10px 0"}}>
+          <input placeholder="Localização" value={filterCA.localizacao} onChange={e=>setFilterCA(f=>({...f,localizacao:e.target.value}))} style={caFilterStyle}/>
+          <select value={filterCA.empresa} onChange={e=>setFilterCA(f=>({...f,empresa:e.target.value}))} style={caFilterStyle}>
+            <option value="">Empresa</option>
+            {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <input placeholder="Nº Série" value={filterCA.numeroSerie} onChange={e=>setFilterCA(f=>({...f,numeroSerie:e.target.value}))} style={{...caFilterStyle,minWidth:110}}/>
+          <input placeholder="Nº Série" value={filterCA.numeroSerie} onChange={e=>setFilterCA(f=>({...f,numeroSerie:e.target.value}))} style={{...caFilterStyle,minWidth:110}}/>
+          <input placeholder="Nº Documento" value={filterCA.numeroDocumento} onChange={e=>setFilterCA(f=>({...f,numeroDocumento:e.target.value}))} style={{...caFilterStyle,minWidth:120}}/>
+          <input placeholder="Patrimônio" value={filterCA.patrimonio} onChange={e=>setFilterCA(f=>({...f,patrimonio:e.target.value}))} style={{...caFilterStyle,minWidth:110}}/>
+        </div>
+        {loading?<Spinner/>:filteredCA.length===0
+          ?<div style={S.emptyState}><span style={S.emptyIcon}>🖨️</span>Nenhum registro.</div>
+          :<div style={{overflowX:"auto"}}>
+            <table style={S.table}><thead><tr>
+              {["Localização","Empresa","Itens","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            </tr></thead>
+            <tbody>{filteredCA.map(it=>{
+              const qtd=allItens.filter(i=>i.controleAtivoId===it.id).length;
+              return(
+              <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={{...S.td,fontWeight:600}}>{it.filialNome||"—"}</td>
+                <td style={S.td}>{it.empresaNome||"—"}</td>
+                <td style={S.td}><span style={{...S.badge,background:"#EDE7F6",color:"#4527A0"}}>{qtd}</span></td>
+                <td style={S.td}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  <button style={{...S.actionBtn,background:"#E8F5E9",color:"#1B5E20",border:"0.5px solid #A5D6A7"}} onClick={()=>openItens(it)}>📋 Itens</button>
+                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...it});}}>✏️</button>}
+                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>}
+                </div></td>
+              </tr>
+            );})}</tbody></table>
+          </div>}
+      </div>
+
+      {/* Modal novo/editar cabeçalho */}
+      {modal&&(
+        <Modal title={modal.id?"Editar Localização":"Nova Localização"} onClose={()=>setModal(null)}>
+          <SelectField label="Localização *" value={modal.localizacaoId||""} onChange={v=>setModal(m=>({...m,localizacaoId:v}))}
+            options={[{value:"",label:"Selecione"},...localizacoes.map(l=>({value:l.id,label:`${l.nome} — ${l.empresaNome||""}`}))]}/>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal itens */}
+      {itensModal&&(
+        <Modal title={`Itens — ${itensModal.controle.filialNome||"—"}`} onClose={()=>setItensModal(null)} extraWide>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12,gap:8}}>
+            {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErrItem("");setItemForm(blankItem());}}>+ Novo Item</button>}
+          </div>
+          {itensModal.itens.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum item.</div>:(
+            <div style={{overflowX:"auto"}}>
+              <table style={S.table}><thead><tr>
+                {["Empresa","Tipo","Ativo","Marca","Modelo","Nº Série","IP","Status","Ações"].map(h=><th key={h} style={{...S.th,fontSize:11}}>{h}</th>)}
+              </tr></thead>
+              <tbody>{itensModal.itens.map(item=>(
+                <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                  <td style={{...S.td,fontSize:11}}>{item.companyName||"—"}</td>
+                  <td style={{...S.td,fontSize:11}}>{item.tipoAtivoName||"—"}</td>
+                  <td style={{...S.td,fontSize:11}}>{item.ativoNome||item.numeroLinha||"—"}</td>
+                  <td style={{...S.td,fontSize:11}}>{item.marca||"—"}</td>
+                  <td style={{...S.td,fontSize:11}}>{item.modelo||"—"}</td>
+                  <td style={{...S.td,fontSize:11,fontFamily:"monospace"}}>{item.numeroSerie||"—"}</td>
+                  <td style={{...S.td,fontSize:11,fontFamily:"monospace"}}>{item.ip||"—"}</td>
+                  <td style={{...S.td,fontSize:11}}>{item.statusAtivo?<span style={{...S.badge,background:"#EBF5FB",color:"#2980B9"}}>{item.statusAtivo}</span>:"—"}</td>
+                  <td style={{...S.td,fontSize:11}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                    {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit,fontSize:11}} onClick={()=>{setErrItem("");setItemForm({...item});}}>✏️</button>}
+                    {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel,fontSize:11}} onClick={()=>setDelItemId(item.id)}><Icon name="trash" size={12}/></button>}
+                    <button style={{...S.actionBtn,background:"#FFF3E0",color:"#E65100",fontWeight:600,fontSize:11}} onClick={()=>setMovModal({item,controleId:itensModal.controle.id})}>🔄 Mov.</button>
+                    <button style={{...S.actionBtn,background:"#FFF3E0",color:"#E65100",border:"0.5px solid #FFCC80",fontSize:11}} onClick={()=>openAnexos(itensModal.controle.id,item)}>📎{item.attachments?.length?` (${item.attachments.length})`:""}</button>
+                    {item.tipoAtivoId&&<button style={{...S.actionBtn,background:"#E8F5E9",color:"#1B5E20",fontWeight:600,fontSize:11}} onClick={()=>imprimirContrato(item)}>🖨️ Contrato</button>}
+                  </div></td>
+                </tr>
+              ))}</tbody></table>
+            </div>
+          )}
+          {delItemId&&<ConfirmModal msg="Excluir este item?" onConfirm={delItem} onCancel={()=>setDelItemId(null)}/>}
+        </Modal>
+      )}
+
+      {/* Modal novo/editar item */}
+      {itemForm&&(
+        <Modal title={itemForm.id?"Editar Item":"Novo Item"} onClose={()=>setItemForm(null)} extraWide>
+          {(()=>{
+            const g2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"};
+            const FI=(label,key,type="text",readOnly=false,customValue)=>(
+              <div style={S.formRow}><label style={S.label}>{label}</label>
+                <input type={type} value={customValue!==undefined?customValue:(itemForm[key]||"")} onChange={e=>!readOnly&&setItemForm(m=>({...m,[key]:e.target.value}))} style={{...S.input,...(readOnly?{background:"#f5f5f5",color:"#888"}:{})}} readOnly={readOnly}/></div>
+            );
+            return(<>
+              <div style={g2}>
+                <SelectField label="Empresa" value={itemForm.companyId||""} onChange={v=>setItemForm(m=>({...m,companyId:v}))} options={[{value:"",label:"Selecione"},...companies.map(c=>({value:c.id,label:c.name}))]}/>
+                <div style={S.formRow}><label style={S.label}>Tipo de Ativo</label>
+                  <input value={tipoTerceirizado?.name||"Terceirizado"} readOnly style={{...S.input,background:"#f5f5f5",color:"#888"}}/></div>
+              </div>
+              <SelectField label="Ativo *" value={itemForm.ativoId||""} onChange={v=>setItemForm(m=>({...m,...autoFillAtivo(v)}))}
+                options={[{value:"",label:"Selecione"},...ativosTerceirizados.filter(a=>a.status==="Em Estoque"||a.id===itemForm.ativoId).map(a=>({value:a.id,label:`${a.nome}${a.numeroSerie?" — "+a.numeroSerie:""}`}))]}/>
+              <div style={g2}>{FI("Marca","marca",undefined,true)}{FI("Modelo","modelo",undefined,true)}</div>
+              <div style={g2}>{FI("IMEI Slot 1","imeiSlot1",undefined,true)}{FI("IMEI Slot 2","imeiSlot2",undefined,true)}</div>
+              <div style={g2}>{FI("Nº de Série","numeroSerie",undefined,true)}{FI("Sistema Operacional","sistemaOperacional",undefined,true)}</div>
+              <div style={g2}>{FI("Versão","versao",undefined,true)}{FI("Processador","processador",undefined,true)}</div>
+              <div style={g2}>{FI("Memória","memoria",undefined,true)}{FI("HD","hd",undefined,true)}</div>
+              <div style={g2}>{FI("Patrimônio","patrimonio",undefined,true)}{FI("Nº Documento","numeroDocumento",undefined,true)}</div>
+              <div style={g2}>{FI("Valor","valor","number",true)}{FI("Data Aquisição","dataAquisicao",undefined,true)}</div>
+              <div style={g2}>
+                {FI("Condição","condicao",undefined,true)}
+                <div style={S.formRow}><label style={S.label}>Status</label>
+                  <input value={itemForm.statusAtivo||"Em Estoque"} readOnly style={{...S.input,background:"#f5f5f5",color:"#888"}}/></div>
+              </div>
+              <div style={{borderTop:`1px solid ${C.border}`,margin:"12px 0",paddingTop:12}}>
+                <div style={{fontWeight:600,fontSize:13,marginBottom:8,color:C.text}}>Dados do Fornecedor / Contrato</div>
+                <div style={g2}>
+                  {FI("Fornecedor",undefined,undefined,true,suppliers.find(s=>s.id===itemForm.supplierId)?.name||"")}
+                  {FI("Toner","toner",undefined,true)}
+                </div>
+                <div style={g2}>
+                  {FI("Franquia","franquia","number",true)}
+                  {FI("Excedentes (R$)","vrExcedentes","number",true)}
+                </div>
+              </div>
+              <div style={S.formRow}><label style={S.label}>Acessórios</label><textarea value={itemForm.acessorios||""} onChange={e=>setItemForm(m=>({...m,acessorios:e.target.value}))} style={{...S.input,minHeight:60,resize:"vertical"}}/></div>
+              {FI("IP","ip")}
+              {errItem&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{errItem}</div>}
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+                <button style={S.btnCancel} onClick={()=>setItemForm(null)}>Cancelar</button>
+                <button style={S.btnSave} onClick={saveItem}>Salvar</button>
+              </div>
+            </>);
+          })()}
+        </Modal>
+      )}
+
+      {/* Modal anexos */}
+      {anexosModal&&(
+        <Modal title="Anexos do Item" onClose={()=>setAnexosModal(null)}>
+          <div style={{marginBottom:12}}>
+            <label style={{...S.btnAdd,cursor:"pointer",display:"inline-block"}}>
+              + Adicionar Arquivo
+              <input type="file" style={{display:"none"}} onChange={handleAnexoAdd}/>
+            </label>
+          </div>
+          {anexosModal.attachments.length===0?<p style={{color:C.textLight,fontSize:13}}>Nenhum anexo.</p>:(
+            <ul style={{margin:0,padding:0,listStyle:"none"}}>
+              {anexosModal.attachments.map((a,i)=>(
+                <li key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
+                  <span style={{flex:1,fontSize:13}}>{a.name}</span>
+                  <a href={a.data} download={a.name} style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0"}}>⬇</a>
+                  <button style={{...S.actionBtn,...S.btnDel}} onClick={()=>removeAnexo(i)}>✕</button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:12}}>
+            <button style={S.btnCancel} onClick={()=>setAnexosModal(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={saveAnexos}>Salvar Anexos</button>
+          </div>
+        </Modal>
+      )}
+
+      {delId&&<ConfirmModal msg="Excluir este registro?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+
+      {csvImpItensModal&&(
+        <Modal title="Importação de Itens — Controle de Ativos Terceirizados" onClose={()=>{setCsvImpItensModal(false);setCsvImpItensRows(null);}}>
+          <p style={{fontSize:12,color:C.textLight,marginBottom:8}}>CSV com as colunas: <strong>Localização</strong>, Empresa, <strong>Tipo de Ativo</strong>, <strong>Nome do Ativo</strong>, <strong>Nº de Série</strong></p>
+          <ul style={{fontSize:11,color:C.textLight,marginBottom:12,paddingLeft:18,lineHeight:1.7}}>
+            <li>A <strong>Localização</strong> será criada automaticamente se ainda não existir no Controle.</li>
+            <li>Itens com o mesmo <strong>Nº de Série</strong> já cadastrado serão ignorados.</li>
+            <li>Vários itens com a mesma localização serão inseridos no mesmo registro.</li>
+          </ul>
+          <label style={{...S.btnAdd,cursor:"pointer",display:"inline-block",marginBottom:12}}>
+            📂 Selecionar arquivo CSV
+            <input type="file" accept=".csv" style={{display:"none"}} onChange={handleCsvImpItensFile}/>
+          </label>
+          {csvImpItensRows&&<div style={{fontSize:12,color:C.success,fontWeight:600,marginBottom:12}}>✅ {csvImpItensRows.length} linha(s) prontas para importar</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>{setCsvImpItensModal(false);setCsvImpItensRows(null);}}>Cancelar</button>
+            <button style={{...S.btnSave,background:C.success}} onClick={processarCsvImpItens} disabled={!csvImpItensRows||csvImpItensBusy}>
+              {csvImpItensBusy?"Processando...":"⚙️ Processar"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {movModal&&<MovimentacoesModalTerc movModal={movModal} onClose={()=>setMovModal(null)} itensModal={itensModal} localizacoes={localizacoes} onDone={()=>{setMovModal(null);reloadItens();}}/> }
+    </div>
+  );
+}
+
+// ── CONSUMO DE IMPRESSÃO (s70) ────────────────────────────────
+const CATEGORIA_OPTS=["P&B","COLLOR","A4 COLLOR","A3 P/B","A3 COLLOR"];
+
+function ConsumoImpressaoScreen({user}){
+  const[items,setItems]=useState([]);
+  const[suppliers,setSuppliers]=useState([]);
+  const[ativosTer,setAtivosTer]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[modal,setModal]=useState(null);
+  const[itensModal,setItensModal]=useState(null);
+  const[itemForm,setItemForm]=useState(null);
+  const[importModal,setImportModal]=useState(null);
+  const[delId,setDelId]=useState(null);
+  const[delItemId,setDelItemId]=useState(null);
+  const[err,setErr]=useState("");
+  const[errItem,setErrItem]=useState("");
+  const[filterMes,setFilterMes]=useState("");
+  const[filterSup,setFilterSup]=useState("");
+
+  const load=()=>{
+    setLoading(true);
+    const ok=(r,def=[])=>r.status==="fulfilled"?r.value:def;
+    Promise.allSettled([
+      api.get("/consumo-impressao"),
+      api.get("/suppliers"),
+      api.get("/consumo-impressao/ativos-terceirizados"),
+    ]).then(([ci,sup,av])=>{
+      setItems(ok(ci));setSuppliers(ok(sup));setAtivosTer(ok(av));
+    }).finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+
+  const save=async()=>{
+    if(!modal.mesAno?.trim()){setErr("Mês/Ano é obrigatório.");return;}
+    try{
+      if(modal.id) await api.put(`/consumo-impressao/${modal.id}`,modal);
+      else         await api.post("/consumo-impressao",modal);
+      setModal(null);load();
+    }catch(e){setErr(e.message);}
+  };
+  const del=async()=>{
+    try{await api.delete(`/consumo-impressao/${delId}`);setDelId(null);load();}
+    catch(e){alert(e.message);}
+  };
+
+  const openItens=async(ci)=>{
+    const itens=await api.get(`/consumo-impressao/${ci.id}/itens`).catch(()=>[]);
+    setItensModal({ci,itens});
+  };
+  const reloadItens=async()=>{
+    if(!itensModal)return;
+    const itens=await api.get(`/consumo-impressao/${itensModal.ci.id}/itens`).catch(()=>[]);
+    setItensModal(m=>({...m,itens}));
+  };
+
+  const saveItem=async()=>{
+    if(!itemForm.ativoId){setErrItem("Selecione o Nº de Série.");return;}
+    try{
+      if(itemForm.id) await api.put(`/consumo-impressao/${itensModal.ci.id}/itens/${itemForm.id}`,itemForm);
+      else            await api.post(`/consumo-impressao/${itensModal.ci.id}/itens`,itemForm);
+      setItemForm(null);reloadItens();
+    }catch(e){setErrItem(e.message);}
+  };
+  const delItem=async()=>{
+    try{
+      await api.delete(`/consumo-impressao/${itensModal.ci.id}/itens/${delItemId}`);
+      setDelItemId(null);reloadItens();
+    }catch(e){alert(e.message);}
+  };
+
+  const autoFillAtivo=ativoId=>{
+    const a=ativosTer.find(x=>x.id===ativoId);
+    return{ativoId,nomeAtivo:a?.nome||"",tipoAtivo:a?.tipoAtivo||"",empresa:a?.empresa||"",marca:a?.marca||"",modelo:a?.modelo||""};
+  };
+
+  const blankItem=()=>({ativoId:"",nomeAtivo:"",tipoAtivo:"",empresa:"",marca:"",modelo:"",qtdeAnterior:"",qtdeAtual:"",categoria:""});
+
+  const doImport=async()=>{
+    if(!importModal?.rows?.length){alert("Nenhum dado válido.");return;}
+    setImportModal(m=>({...m,busy:true}));
+    try{
+      const r=await api.post(`/consumo-impressao/${itensModal.ci.id}/itens/importar`,{linhas:importModal.rows});
+      alert(`✅ Importação concluída!\nInseridos: ${r.inseridos}${r.ignorados?"\nNão encontrados: "+r.ignorados:""}${r.erros?.length?"\nErros:\n"+r.erros.map(e=>`Linha ${e.linha}: ${e.msg}`).join("\n"):""}`);
+      setImportModal(null);reloadItens();
+    }catch(e){alert("Erro: "+e.message);}
+    setImportModal(m=>m?({...m,busy:false}):m);
+  };
+
+  const canI=act=>user.permissions?.s70?.[act];
+  const filtered=items.filter(it=>{
+    if(filterMes&&!(it.mesAno||"").includes(filterMes))return false;
+    if(filterSup&&it.supplierId!==filterSup)return false;
+    return true;
+  });
+  const RO=(label,val)=>(
+    <div style={S.formRow}><label style={S.label}>{label}</label>
+      <input value={val||""} readOnly style={{...S.input,background:"#f5f5f5",color:"#888"}}/></div>
+  );
+
+  if(!user.permissions?.s70?.view)return<div style={S.emptyState}><Icon name="lock" size={32}/><br/>Sem permissão.</div>;
+
+  return(
+    <div>
+      <div style={S.card}>
+        <div style={S.cardHeader}>
+          <span style={S.cardTitle}>🖨️ Consumo de Impressão</span>
+          {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErr("");setModal({mesAno:"",supplierId:""});}}>+ Novo Registro</button>}
+        </div>
+        {/* Filtros */}
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",padding:"10px 0",marginBottom:4}}>
+          <input placeholder="Filtrar Mês/Ano (ex: 08/2026)" value={filterMes} onChange={e=>setFilterMes(e.target.value)}
+            style={{...S.input,flex:"1 1 200px",minWidth:160,marginBottom:0,padding:"6px 10px",fontSize:13}}/>
+          <select value={filterSup} onChange={e=>setFilterSup(e.target.value)}
+            style={{...S.input,flex:"1 1 200px",minWidth:160,marginBottom:0,padding:"6px 10px",fontSize:13}}>
+            <option value="">Todos os Fornecedores</option>
+            {suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        {loading?<Spinner/>:filtered.length===0
+          ?<div style={S.emptyState}><span style={S.emptyIcon}>🖨️</span>Nenhum registro.</div>
+          :<div style={{overflowX:"auto"}}>
+            <table style={S.table}><thead><tr>
+              {["Mês/Ano","Fornecedor","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            </tr></thead>
+            <tbody>{filtered.map(it=>(
+              <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                <td style={{...S.td,fontWeight:600}}>{it.mesAno}</td>
+                <td style={S.td}>{it.supplierName||"—"}</td>
+                <td style={S.td}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  <button style={{...S.actionBtn,background:"#E8F5E9",color:"#1B5E20",border:"0.5px solid #A5D6A7"}} onClick={()=>openItens(it)}>📋 Itens</button>
+                  {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>{setErr("");setModal({...it});}}>✏️</button>}
+                  {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/></button>}
+                </div></td>
+              </tr>
+            ))}</tbody></table>
+          </div>}
+      </div>
+
+      {/* Modal cabeçalho */}
+      {modal&&(
+        <Modal title={modal.id?"Editar Registro":"Novo Registro"} onClose={()=>setModal(null)}>
+          <div style={S.formRow}><label style={S.label}>Mês/Ano *</label>
+            <input value={modal.mesAno||""} onChange={e=>setModal(m=>({...m,mesAno:e.target.value}))}
+              placeholder="MM/AAAA" maxLength={7} style={S.input}/></div>
+          <SelectField label="Fornecedor" value={modal.supplierId||""} onChange={v=>setModal(m=>({...m,supplierId:v}))}
+            options={[{value:"",label:"Selecione"},...suppliers.map(s=>({value:s.id,label:s.name}))]}/>
+          {err&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{err}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setModal(null)}>Cancelar</button>
+            <button style={S.btnSave} onClick={save}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal itens */}
+      {itensModal&&(
+        <Modal title={`Itens — ${itensModal.ci.mesAno} / ${itensModal.ci.supplierName||"—"}`} onClose={()=>setItensModal(null)} extraWide>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginBottom:12}}>
+            {canI("insert")&&<button style={{...S.btnAdd,background:"#27AE60"}} onClick={()=>{setImportModal({rows:null,busy:false});}}>📥 Importar</button>}
+            {canI("insert")&&<button style={S.btnAdd} onClick={()=>{setErrItem("");setItemForm(blankItem());}}>+ Novo Item</button>}
+          </div>
+          {itensModal.itens.length===0
+            ?<div style={S.emptyState}><span style={S.emptyIcon}>📦</span>Nenhum item.</div>
+            :<div style={{overflowX:"auto"}}>
+              <table style={S.table}><thead><tr>
+                {["Nº de Série","Nome do Ativo","Tipo","Empresa","Marca","Modelo","Categoria","Qtde Ant.","Qtde Atual","Impressões","Ações"].map(h=><th key={h} style={{...S.th,fontSize:11}}>{h}</th>)}
+              </tr></thead>
+              <tbody>{itensModal.itens.map(item=>(
+                <tr key={item.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
+                  <td style={{...S.td,fontSize:11,fontFamily:"monospace"}}>{item.numeroSerie||"—"}</td>
+                  <td style={{...S.td,fontSize:11}}>{item.nomeAtivo||"—"}</td>
+                  <td style={{...S.td,fontSize:11}}>{item.tipoAtivo||"—"}</td>
+                  <td style={{...S.td,fontSize:11}}>{item.empresa||"—"}</td>
+                  <td style={{...S.td,fontSize:11}}>{item.marca||"—"}</td>
+                  <td style={{...S.td,fontSize:11}}>{item.modelo||"—"}</td>
+                  <td style={{...S.td,fontSize:11}}>{item.categoria||"—"}</td>
+                  <td style={{...S.td,fontSize:11,textAlign:"right"}}>{Math.round(item.qtdeAnterior??0)}</td>
+                  <td style={{...S.td,fontSize:11,textAlign:"right"}}>{Math.round(item.qtdeAtual??0)}</td>
+                  <td style={{...S.td,fontSize:11,textAlign:"right",fontWeight:600,color:C.primary}}>{Math.round(item.impressoes??0)}</td>
+                  <td style={S.td}><div style={{display:"flex",gap:4}}>
+                    {canI("edit")&&<button style={{...S.actionBtn,...S.btnEdit,fontSize:11}} onClick={()=>{setErrItem("");setItemForm({...item,qtdeAnterior:item.qtdeAnterior??0,qtdeAtual:item.qtdeAtual??0});}}>✏️</button>}
+                    {canI("delete")&&<button style={{...S.actionBtn,...S.btnDel,fontSize:11}} onClick={()=>setDelItemId(item.id)}><Icon name="trash" size={12}/></button>}
+                  </div></td>
+                </tr>
+              ))}</tbody></table>
+            </div>}
+          {delItemId&&<ConfirmModal msg="Excluir este item?" onConfirm={delItem} onCancel={()=>setDelItemId(null)}/>}
+        </Modal>
+      )}
+
+      {/* Modal form item */}
+      {itemForm&&(
+        <Modal title={itemForm.id?"Editar Item":"Novo Item"} onClose={()=>setItemForm(null)} extraWide>
+          {(()=>{
+            const g2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"};
+            const qtdAnt=parseFloat(itemForm.qtdeAnterior)||0;
+            const qtdAt=parseFloat(itemForm.qtdeAtual)||0;
+            const impressoes=qtdAt-qtdAnt;
+            return(<>
+              <SelectField label="Nº de Série *" value={itemForm.ativoId||""} onChange={v=>setItemForm(m=>({...m,...autoFillAtivo(v)}))}
+                options={[{value:"",label:"Selecione"},...ativosTer.map(a=>({value:a.id,label:`${a.numeroSerie}${a.nome?" — "+a.nome:""}`}))]}/>
+              <div style={g2}>{RO("Nome do Ativo",itemForm.nomeAtivo)}{RO("Tipo de Ativo",itemForm.tipoAtivo)}</div>
+              <div style={g2}>{RO("Empresa",itemForm.empresa)}{RO("Marca",itemForm.marca)}</div>
+              <div style={g2}>{RO("Modelo",itemForm.modelo)}
+                <SelectField label="Categoria" value={itemForm.categoria||""} onChange={v=>setItemForm(m=>({...m,categoria:v}))}
+                  options={[{value:"",label:"Selecione"},...CATEGORIA_OPTS.map(o=>({value:o,label:o}))]}/>
+              </div>
+              <div style={g2}>
+                <div style={S.formRow}><label style={S.label}>Qtde Anterior</label>
+                  <input type="number" value={itemForm.qtdeAnterior} onChange={e=>setItemForm(m=>({...m,qtdeAnterior:e.target.value}))} style={S.input}/></div>
+                <div style={S.formRow}><label style={S.label}>Qtde Atual</label>
+                  <input type="number" value={itemForm.qtdeAtual} onChange={e=>setItemForm(m=>({...m,qtdeAtual:e.target.value}))} style={S.input}/></div>
+              </div>
+              <div style={S.formRow}><label style={S.label}>Impressões (calculado)</label>
+                <input value={impressoes} readOnly style={{...S.input,background:"#f5f5f5",color:C.primary,fontWeight:600}}/></div>
+              {errItem&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{errItem}</div>}
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+                <button style={S.btnCancel} onClick={()=>setItemForm(null)}>Cancelar</button>
+                <button style={S.btnSave} onClick={saveItem}>Salvar</button>
+              </div>
+            </>);
+          })()}
+        </Modal>
+      )}
+
+      {/* Modal importar */}
+      {importModal&&(
+        <Modal title="Importar Itens via CSV" onClose={()=>setImportModal(null)}>
+          <p style={{fontSize:12,color:C.textLight,marginBottom:12}}>
+            Colunas esperadas: <strong>Nº de Série</strong>, <strong>Categoria</strong>, <strong>Qtde Anterior</strong>, <strong>Qtde Atual</strong><br/>
+            O campo Nº de Série deve corresponder a um ativo do tipo Terceirizado.
+          </p>
+          <label style={{...S.btnAdd,cursor:"pointer",display:"inline-block",marginBottom:12,background:"#27AE60"}}>
+            📂 Selecionar arquivo CSV
+            <input type="file" accept=".csv" style={{display:"none"}} onChange={e=>{
+              const file=e.target.files[0];e.target.value="";if(!file)return;
+              const reader=new FileReader();
+              reader.onload=ev=>{const{rows}=parseCSVGeneric(ev.target.result);setImportModal(m=>({...m,rows}));};
+              reader.readAsText(file,"UTF-8");
+            }}/>
+          </label>
+          {importModal.rows&&<div style={{fontSize:12,color:C.success,fontWeight:600,marginBottom:12}}>✅ {importModal.rows.length} linha(s) prontas para importar</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>setImportModal(null)}>Cancelar</button>
+            <button style={{...S.btnSave,background:C.success,opacity:(!importModal.rows||importModal.busy)?0.6:1}}
+              disabled={!importModal.rows||importModal.busy} onClick={doImport}>
+              {importModal.busy?"Processando...":"⚙️ Confirmar Importação"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {delId&&<ConfirmModal msg="Excluir este registro e todos os seus itens?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
     </div>
   );
 }
@@ -9195,17 +9916,24 @@ function FiliaisScreen({user}){
   const p=user.permissions?.s39;
   const[items,setItems]=useState([]);
   const[companies,setCompanies]=useState([]);
+  const[ccustos,setCcustos]=useState([]);
+  const[funcionarios,setFuncionarios]=useState([]);
   const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
   const[filters,setFilters]=useState({nome:"",empresaId:"",status:""});
-  const empty={id:null,nome:"",empresaId:"",logradouro:"",numero:"",bairro:"",cidade:"",estado:"",cep:"",complemento:"",active:true};
+  const[csvImpModal,setCsvImpModal]=useState(false);
+  const[csvImpRows,setCsvImpRows]=useState(null);
+  const[csvImpBusy,setCsvImpBusy]=useState(false);
+  const empty={id:null,nome:"",empresaId:"",logradouro:"",numero:"",bairro:"",cidade:"",estado:"",cep:"",complemento:"",observacao:"",active:true,centroCustoId:"",responsavelId:""};
   const[form,setForm]=useState(empty);
   useEffect(()=>{
     if(!p?.view)return;
     api.get("/filiais").then(setItems).catch(e=>alert(e.message)).finally(()=>setLoading(false));
     api.get("/companies").then(r=>setCompanies(Array.isArray(r)?r:[])).catch(()=>{});
+    api.get("/consumo-ccusto/basic").then(r=>setCcustos(Array.isArray(r)?r:[])).catch(()=>{});
+    api.get("/funcionarios/basic").then(r=>setFuncionarios(Array.isArray(r)?r:[])).catch(()=>{});
   },[]);
   const openAdd=()=>{setForm(empty);setModal(true);};
   const openEdit=i=>{setForm({...empty,...i});setModal(true);};
@@ -9219,6 +9947,25 @@ function FiliaisScreen({user}){
     }catch(e){alert(e.message);}finally{setSaving(false);}
   };
   const del=async()=>{try{await api.delete(`/filiais/${delId}`);setItems(is=>is.filter(i=>i.id!==delId));setDelId(null);}catch(e){alert(e.message);}};
+
+  const handleCsvFile=e=>{
+    const f=e.target.files[0];e.target.value="";if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>{const{rows}=parseCSVGeneric(ev.target.result);setCsvImpRows(rows);};
+    r.readAsText(f,"UTF-8");
+  };
+  const processarCsv=async()=>{
+    if(!csvImpRows?.length){alert("Nenhum dado válido no arquivo.");return;}
+    setCsvImpBusy(true);
+    try{
+      const res=await api.post("/filiais/importar",{linhas:csvImpRows});
+      alert(`✅ Importação concluída!\nInseridos: ${res.inseridos}\nDuplicados (ignorados): ${res.duplicados||0}${res.erros?.length?"\n\nErros:\n"+res.erros.join("\n"):""}`);
+      setCsvImpModal(false);setCsvImpRows(null);
+      api.get("/filiais").then(setItems).catch(()=>{});
+    }catch(e){alert("❌ "+(e?.error||e.message));}
+    setCsvImpBusy(false);
+  };
+
   const filtered=items.filter(it=>{
     if(filters.nome&&!(it.nome||"").toLowerCase().includes(filters.nome.toLowerCase()))return false;
     if(filters.empresaId&&String(it.empresaId||"")!==String(filters.empresaId))return false;
@@ -9231,15 +9978,20 @@ function FiliaisScreen({user}){
   if(loading)return<Spinner/>;
   return(
     <div style={S.card}>
-      <div style={S.cardHeader}><span style={S.cardTitle}>🏬 Filiais</span>{p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Nova Filial</button>}</div>
+      <div style={S.cardHeader}><span style={S.cardTitle}>🏬 Localizações</span>
+        <div style={{display:"flex",gap:8}}>
+          {user.isMaster&&<button style={{...S.btnAdd,background:"#27AE60"}} onClick={()=>{setCsvImpRows(null);setCsvImpModal(true);}}>📥 Importação</button>}
+          {p?.insert&&<button style={S.btnAdd} onClick={openAdd}>+ Nova Localização</button>}
+        </div>
+      </div>
       <div style={{padding:"12px 20px",display:"flex",flexWrap:"wrap",gap:10,borderBottom:`1px solid ${C.border}`}}>
         <div style={S.formRow}><label style={S.label}>Nome</label><input style={{...S.input,marginBottom:0,width:180}} value={filters.nome} onChange={e=>setFilters(f=>({...f,nome:e.target.value}))} placeholder="Filtrar..."/></div>
         <SelectField label="Empresa" value={filters.empresaId} onChange={v=>setFilters(f=>({...f,empresaId:v}))} options={companyOpts}/>
         <SelectField label="Status" value={filters.status} onChange={v=>setFilters(f=>({...f,status:v}))} options={[{value:"",label:"Todos"},{value:"Ativo",label:"Ativo"},{value:"Inativo",label:"Inativo"}]}/>
       </div>
-      {filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏬</span>Nenhuma filial.</div>:(
+      {filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🏬</span>Nenhuma localização.</div>:(
         <table style={S.table}><thead><tr>
-          {["Nome","Empresa","Cidade","Estado","CEP","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          {["Nome","Empresa","Cidade","Estado","CEP","Centro de Custo","Responsável","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
         <tbody>{filtered.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
@@ -9248,6 +10000,8 @@ function FiliaisScreen({user}){
             <td style={S.td}>{it.cidade||"—"}</td>
             <td style={S.td}>{it.estado||"—"}</td>
             <td style={S.td}>{it.cep||"—"}</td>
+            <td style={S.td}>{it.centroCustoLabel||"—"}</td>
+            <td style={S.td}>{it.responsavelNome||"—"}</td>
             <td style={S.td}><span style={{...S.badge,...(it.active?S.badgeActive:S.badgeInactive)}}>{it.active?"Ativo":"Inativo"}</span></td>
             <td style={S.td}>
               {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
@@ -9257,9 +10011,11 @@ function FiliaisScreen({user}){
         ))}</tbody></table>
       )}
       {modal&&(
-        <Modal title={form.id?"Editar Filial":"Nova Filial"} onClose={()=>setModal(false)}>
+        <Modal title={form.id?"Editar Localização":"Nova Localização"} onClose={()=>setModal(false)}>
           <Input label="Nome" value={form.nome} onChange={v=>setForm(f=>({...f,nome:v}))} required/>
           <SelectField label="Empresa" value={form.empresaId||""} onChange={v=>setForm(f=>({...f,empresaId:v}))} options={[{value:"",label:"Selecione"},...companies.map(c=>({value:String(c.id),label:c.name}))]}/>
+          <SelectField label="Centro de Custo" value={form.centroCustoId||""} onChange={v=>setForm(f=>({...f,centroCustoId:v}))} options={[{value:"",label:"Selecione"},...ccustos.map(c=>({value:c.id,label:c.centroCusto}))]}/>
+          <SelectField label="Responsável" value={form.responsavelId||""} onChange={v=>setForm(f=>({...f,responsavelId:v}))} options={[{value:"",label:"Selecione"},...funcionarios.map(f=>({value:f.id,label:f.nome}))]}/>
           <Input label="Logradouro" value={form.logradouro||""} onChange={v=>setForm(f=>({...f,logradouro:v}))}/>
           <div style={{display:"flex",gap:10}}>
             <div style={{flex:1}}><Input label="Número" value={form.numero||""} onChange={v=>setForm(f=>({...f,numero:v}))}/></div>
@@ -9271,6 +10027,9 @@ function FiliaisScreen({user}){
             <div style={{flex:1}}><Input label="CEP" value={form.cep||""} onChange={v=>setForm(f=>({...f,cep:v}))}/></div>
           </div>
           <Input label="Complemento" value={form.complemento||""} onChange={v=>setForm(f=>({...f,complemento:v}))}/>
+          <div style={S.formRow}><label style={S.label}>Observações</label>
+            <textarea value={form.observacao||""} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))}
+              style={{...S.input,minHeight:72,resize:"vertical"}}/></div>
           <div style={S.formRow}><label style={S.label}>STATUS</label>
             <div style={{display:"flex",gap:16}}>{[{v:true,l:"Ativo"},{v:false,l:"Inativo"}].map(o=>(
               <label key={String(o.v)} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
@@ -9284,7 +10043,29 @@ function FiliaisScreen({user}){
           </div>
         </Modal>
       )}
-      {delId&&<ConfirmModal msg="Deseja excluir esta filial?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+      {delId&&<ConfirmModal msg="Deseja excluir esta localização?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+
+      {csvImpModal&&(
+        <Modal title="Importação de Localizações via CSV" onClose={()=>{setCsvImpModal(false);setCsvImpRows(null);}}>
+          <p style={{fontSize:12,color:C.textLight,marginBottom:8}}>CSV com as colunas: <strong>Nome</strong>, Logradouro, Centro de Custo, Observações</p>
+          <ul style={{fontSize:11,color:C.textLight,marginBottom:12,paddingLeft:18,lineHeight:1.7}}>
+            <li><strong>Nome</strong> é obrigatório.</li>
+            <li>Localizações com o mesmo <strong>Nome</strong> já cadastrado serão ignoradas.</li>
+            <li><strong>Centro de Custo</strong> deve corresponder exatamente a um cadastro existente.</li>
+          </ul>
+          <label style={{...S.btnAdd,cursor:"pointer",display:"inline-block",marginBottom:12}}>
+            📂 Selecionar arquivo CSV
+            <input type="file" accept=".csv" style={{display:"none"}} onChange={handleCsvFile}/>
+          </label>
+          {csvImpRows&&<div style={{fontSize:12,color:C.success,fontWeight:600,marginBottom:12}}>✅ {csvImpRows.length} linha(s) prontas para importar</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button style={S.btnCancel} onClick={()=>{setCsvImpModal(false);setCsvImpRows(null);}}>Cancelar</button>
+            <button style={{...S.btnSave,background:C.success}} onClick={processarCsv} disabled={!csvImpRows||csvImpBusy}>
+              {csvImpBusy?"Processando...":"⚙️ Processar"}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -9401,7 +10182,7 @@ function LinksScreen({user}){
         <SelectField label="Tipo" value={filters.tipo} onChange={v=>setFilters(f=>({...f,tipo:v}))} options={[{value:"",label:"Todos"},...tipoOpts]}/>
         <SelectField label="Empresa Contratante" value={filters.empresaContratanteId} onChange={v=>setFilters(f=>({...f,empresaContratanteId:v}))} options={companyOpts}/>
         <SelectField label="Empresa Beneficiária" value={filters.empresaBeneficiariaId} onChange={v=>setFilters(f=>({...f,empresaBeneficiariaId:v}))} options={companyOpts}/>
-        <SelectField label="Filial" value={filters.filialId} onChange={v=>setFilters(f=>({...f,filialId:v}))} options={filialOpts}/>
+        <SelectField label="Localização" value={filters.filialId} onChange={v=>setFilters(f=>({...f,filialId:v}))} options={filialOpts}/>
         <SelectField label="Fornecedor" value={filters.fornecedorId} onChange={v=>setFilters(f=>({...f,fornecedorId:v}))} options={supplierOpts}/>
         <div style={S.formRow}><label style={S.label}>Nº Série</label><input style={{...S.input,marginBottom:0}} value={filters.numeroSerie} onChange={e=>setFilters(f=>({...f,numeroSerie:e.target.value}))} placeholder="Filtrar..."/></div>
         <div style={S.formRow}><label style={S.label}>Nº Conta</label><input style={{...S.input,marginBottom:0}} value={filters.numeroConta} onChange={e=>setFilters(f=>({...f,numeroConta:e.target.value}))} placeholder="Filtrar..."/></div>
@@ -9410,7 +10191,7 @@ function LinksScreen({user}){
       {filtered.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>🔗</span>Nenhum link encontrado.</div>:(
         <div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
-            {["Tipo","Empresa Contratante","CNPJ Contratante","Empresa Beneficiária","Filial","Fornecedor","Velocidade","Nº Série","Nº Conta","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            {["Tipo","Empresa Contratante","CNPJ Contratante","Empresa Beneficiária","Localização","Fornecedor","Velocidade","Nº Série","Nº Conta","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
           <tbody>{filtered.map(it=>(
             <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
@@ -9438,8 +10219,8 @@ function LinksScreen({user}){
           <SelectField label="Empresa Contratante" value={form.empresaContratanteId} onChange={handleEmpresaContratante} options={[{value:"",label:"Selecione"},...companies.map(c=>({value:String(c.id),label:c.name}))]}/>
           <Input label="CNPJ Contratante" value={form.cnpjContratante} onChange={()=>{}} disabled/>
           <SelectField label="Empresa Beneficiária" value={form.empresaBeneficiariaId} onChange={v=>setF({empresaBeneficiariaId:v})} options={[{value:"",label:"Selecione"},...companies.map(c=>({value:String(c.id),label:c.name}))]}/>
-          <SelectField label="Filial" value={form.filialId} onChange={handleFilial} options={[{value:"",label:"Selecione"},...filiais.map(f=>({value:String(f.id),label:f.nome}))]}/>
-          <Input label="Endereço Filial" value={form.enderecoFilial} onChange={()=>{}} disabled/>
+          <SelectField label="Localização" value={form.filialId} onChange={handleFilial} options={[{value:"",label:"Selecione"},...filiais.map(f=>({value:String(f.id),label:f.nome}))]}/>
+          <Input label="Endereço Localização" value={form.enderecoFilial} onChange={()=>{}} disabled/>
           <Input label="CC Custo" value={form.ccusto||""} onChange={v=>setF({ccusto:v})}/>
           <SelectField label="Fornecedor" value={form.fornecedorId} onChange={handleFornecedor} options={[{value:"",label:"Selecione"},...suppliers.map(s=>({value:String(s.id),label:s.name}))]}/>
           <Input label="Contato" value={form.contato||""} onChange={()=>{}} disabled/>
@@ -9709,7 +10490,7 @@ function FirewallScreen({user}){
           </div>
         ))}
         <div style={S.formRow}>
-          <label style={S.label}>Filial</label>
+          <label style={S.label}>Localização</label>
           <select style={{...S.input,width:150,padding:"4px 8px",fontSize:12}} value={filters.filialId} onChange={e=>setFilters(f=>({...f,filialId:e.target.value}))}>
             <option value="">Todas</option>
             {filiais.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
@@ -9729,7 +10510,7 @@ function FirewallScreen({user}){
       {items.length===0?<div style={S.emptyState}><Icon name="monitor" size={32}/><br/>Nenhum firewall encontrado.</div>
         :<div style={{overflowX:"auto"}}>
           <table style={S.table}><thead><tr>
-            {["Equipamento","Filial","Modelo","Nº Série","Firmware","Rede Nativa","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+            {["Equipamento","Localização","Modelo","Nº Série","Firmware","Rede Nativa","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
           </tr></thead>
           <tbody>{items.map(fw=>(
             <tr key={fw.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
@@ -9752,7 +10533,7 @@ function FirewallScreen({user}){
       {form&&<Modal title={form.id?"Editar Firewall":"Novo Firewall"} onClose={()=>setForm(null)}>
         <Input label="Equipamento *" value={form.equipamento} onChange={v=>setForm(f=>({...f,equipamento:v}))}/>
         <div style={S.formRow}>
-          <label style={S.label}>Filial</label>
+          <label style={S.label}>Localização</label>
           <select style={S.input} value={form.filialId||""} onChange={e=>setForm(f=>({...f,filialId:e.target.value}))}>
             <option value="">Selecione...</option>
             {filiais.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
@@ -11746,7 +12527,7 @@ const navConfig=[
     {id:"s3", label:"Empresas",                    icon:"building"},
     {id:"s22",label:"Funcionários",               icon:"user"},
     {id:"s12",label:"Fornecedores",               icon:"factory"},
-    {id:"s39",label:"Filiais",                    icon:"building"},
+    {id:"s39",label:"Localizações",               icon:"building"},
     {id:"s4", label:"Equipes",                     icon:"team"},
     {id:"s58",label:"Indicadores",                icon:"chart"},
     {id:"s44",label:"CCusto",                     icon:"coin"},
@@ -11777,6 +12558,8 @@ const navConfig=[
     {id:"s19",label:"Linhas Disponíveis",               icon:"signal"},
     {id:"s57",label:"Liberação de Linhas para Estoque", icon:"signal"},
     {id:"s21",label:"Controle de Ativos",               icon:"monitor"},
+    {id:"s69",label:"Controle de Ativos Terceirizados", icon:"monitor"},
+    {id:"s70",label:"Consumo de Impressão",             icon:"printer"},
     {id:"s29",label:"Histórico de Movimentações", icon:"history"},
     {id:"s38",label:"Endereços de Rede",          icon:"satellite"},
     {id:"s40",label:"Links",                      icon:"link"},
@@ -11900,12 +12683,13 @@ const screenTitles={
   s26:"Relatórios › Resumo de Ativos",
   s27:"Relatórios › Inventário de Ativos",
   s29:"Movimentações › Histórico de Movimentações de Ativos",
+  s70:"Movimentações › Consumo de Impressão",
   s31:"Relatórios › Relatório de Férias",
   s32:"Relatórios › Composição de Equipe",
   s33:"Cadastros › Configuração de Inventário",
   s34:"Movimentações › Inventário de Rede",
   s38:"Movimentações › Endereços de Rede",
-  s39:"Cadastros › Filiais",
+  s39:"Cadastros › Localizações",
   s40:"Movimentações › Links",
   s41:"Movimentações › Firewall",
   s42:"Relatórios › Firewall",
@@ -11985,6 +12769,8 @@ export default function App(){
     s57:<LiberacaoLinhasEstoqueScreen user={user}/>,
     s20:<AtivosScreen user={user}/>,
     s21:<ControleAtivosScreen user={user}/>,
+    s69:<ControleAtivosTerceirizadosScreen user={user}/>,
+    s70:<ConsumoImpressaoScreen user={user}/>,
     s22:<FuncionariosScreen user={user}/>,
     s23:<ModelosContratoScreen user={user}/>,
     s28:<ConfiguracaoEmailScreen user={user}/>,
