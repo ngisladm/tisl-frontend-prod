@@ -10047,7 +10047,7 @@ function FiliaisScreen({user}){
 
       {csvImpModal&&(
         <Modal title="Importação de Localizações via CSV" onClose={()=>{setCsvImpModal(false);setCsvImpRows(null);}}>
-          <p style={{fontSize:12,color:C.textLight,marginBottom:8}}>CSV com as colunas: <strong>Nome</strong>, Logradouro, Centro de Custo, Observações</p>
+          <p style={{fontSize:12,color:C.textLight,marginBottom:8}}>CSV com as colunas: <strong>Nome</strong>, Empresa, Logradouro, Centro de Custo, Observações</p>
           <ul style={{fontSize:11,color:C.textLight,marginBottom:12,paddingLeft:18,lineHeight:1.7}}>
             <li><strong>Nome</strong> é obrigatório.</li>
             <li>Localizações com o mesmo <strong>Nome</strong> já cadastrado serão ignoradas.</li>
