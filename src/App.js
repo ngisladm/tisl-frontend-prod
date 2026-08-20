@@ -5770,6 +5770,7 @@ function ControleAtivosScreen({user}){
               <SelectField label="Número Linha (Em estoque) *" value={itemForm.linhaId} onChange={v=>{
                 const l=linhasEstoqueForm.find(x=>x.id===v);
                 setItemForm(m=>({...m,linhaId:v,
+                  statusAtivo:v?"Em uso":"Em Estoque",
                   operadoraId:l?.operadoraId||m.operadoraId,
                   acesso:l?.acesso||"",estrutura:l?.estrutura||"",
                   iccid:l?.iccid||"",tipoPacote:l?.tipoPacote||"",
@@ -5790,6 +5791,7 @@ function ControleAtivosScreen({user}){
               <SelectField label="Nome do Ativo (Em Estoque) *" value={itemForm.ativoId} onChange={v=>{
                 const a=ativosEstoque.find(x=>x.id===v);
                 setItemForm(m=>({...m,ativoId:v,
+                  statusAtivo:v?"Em uso":"Em Estoque",
                   marca:a?.marca||"",modelo:a?.modelo||"",
                   numeroSerie:a?.numeroSerie||"",sistemaOperacional:a?.sistemaOperacional||"",
                   versao:a?.versao||"",processador:a?.processador||"",
