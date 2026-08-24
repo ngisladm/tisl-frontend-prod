@@ -2932,7 +2932,7 @@ function ComparativoIndicadoresScreen({user}){
 }
 
 // ── INDICADORES (s58) ────────────────────────────────────────
-const PERIODICIDADES=[{value:"Mensal",label:"Mensal"},{value:"Trimestral",label:"Trimestral"},{value:"Semestral",label:"Semestral"},{value:"Anual",label:"Anual"}];
+const PERIODICIDADES=[{value:"Quinzenal",label:"Quinzenal"},{value:"Mensal",label:"Mensal"},{value:"Trimestral",label:"Trimestral"},{value:"Semestral",label:"Semestral"},{value:"Anual",label:"Anual"}];
 const ORIGENS_INDICADOR=[{value:"Manual",label:"Manual"},{value:"Integração",label:"Integração"}];
 const DIRECOES_INDICADOR=[{value:"Maior",label:"Maior é melhor ▲"},{value:"Menor",label:"Menor é melhor ▼"}];
 const setaDirecao=direcao=>direcao==="Menor"?"▼":"▲";
