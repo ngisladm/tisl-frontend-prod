@@ -5216,6 +5216,7 @@ function ControleAtivosScreen({user}){
   const[delItemId,setDelItemId]=useState(null);
   const[err,setErr]=useState("");
   const[errItem,setErrItem]=useState("");
+  const[savingItem,setSavingItem]=useState(false);
   const[filterCA,setFilterCA]=useState({empresa:"",funcionario:"",cpf:"",operadora:"",numeroLinha:"",dataAquisicao:"",numeroSerie:"",numeroDocumento:"",patrimonio:"",imeiSlot1:""});
   const[movModal,setMovModal]=useState(null); // {item, controleId}
   const[cargaModal,setCargaModal]=useState(null);
@@ -5279,6 +5280,8 @@ function ControleAtivosScreen({user}){
   };
 
   const saveItem=async()=>{
+    if(savingItem) return;
+    setSavingItem(true);
     try{
       if(itemForm.id)
         await api.put(`/controle-ativos/${itensModal.controle.id}/itens/${itemForm.id}`,itemForm);
@@ -5286,6 +5289,7 @@ function ControleAtivosScreen({user}){
         await api.post(`/controle-ativos/${itensModal.controle.id}/itens`,itemForm);
       setItemForm(null);reloadItens();
     }catch(e){setErrItem(e.message);}
+    finally{setSavingItem(false);}
   };
   const delItem=async()=>{
     try{
@@ -5841,7 +5845,7 @@ function ControleAtivosScreen({user}){
             {errItem&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{errItem}</div>}
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <button style={S.btnCancel} onClick={()=>setItemForm(null)}>Cancelar</button>
-              <button style={S.btnSave} onClick={saveItem}>Salvar</button>
+              <button style={{...S.btnSave,opacity:savingItem?0.6:1}} onClick={saveItem} disabled={savingItem}>{savingItem?"Salvando...":"Salvar"}</button>
             </div>
           </Modal>
         );
@@ -7224,6 +7228,7 @@ function ControleAtivosTerceirizadosScreen({user}){
   const[delItemId,setDelItemId]=useState(null);
   const[err,setErr]=useState("");
   const[errItem,setErrItem]=useState("");
+  const[savingItem,setSavingItem]=useState(false);
   const[filterCA,setFilterCA]=useState({localizacao:"",empresa:"",numeroSerie:"",numeroDocumento:"",patrimonio:""});
   const[csvImpItensModal,setCsvImpItensModal]=useState(false);
   const[csvImpItensRows,setCsvImpItensRows]=useState(null);
@@ -7275,6 +7280,8 @@ function ControleAtivosTerceirizadosScreen({user}){
   };
 
   const saveItem=async()=>{
+    if(savingItem) return;
+    setSavingItem(true);
     try{
       if(itemForm.id)
         await api.put(`/controle-ativos-terceirizados/${itensModal.controle.id}/itens/${itemForm.id}`,itemForm);
@@ -7282,6 +7289,7 @@ function ControleAtivosTerceirizadosScreen({user}){
         await api.post(`/controle-ativos-terceirizados/${itensModal.controle.id}/itens`,itemForm);
       setItemForm(null);reloadItens();
     }catch(e){setErrItem(e.message);}
+    finally{setSavingItem(false);}
   };
   const delItem=async()=>{
     try{
@@ -7558,7 +7566,7 @@ function ControleAtivosTerceirizadosScreen({user}){
               {errItem&&<div style={{...S.errorMsg,textAlign:"left",marginBottom:8}}>{errItem}</div>}
               <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
                 <button style={S.btnCancel} onClick={()=>setItemForm(null)}>Cancelar</button>
-                <button style={S.btnSave} onClick={saveItem}>Salvar</button>
+                <button style={{...S.btnSave,opacity:savingItem?0.6:1}} onClick={saveItem} disabled={savingItem}>{savingItem?"Salvando...":"Salvar"}</button>
               </div>
             </>);
           })()}
