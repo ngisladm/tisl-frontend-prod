@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, Fragment, createElement } from "react";
+﻿import { useState, useEffect, useRef, useMemo, Fragment, createElement } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -2246,6 +2246,80 @@ function ValorKmScreen({user}){
   );
 }
 
+// ── MODAL DE ANEXOS — LANÇAMENTO DE INDICADOR ──────────────────
+function AnexosLancamentoModal({row, onClose, canEdit}){
+  const[anexos,setAnexos]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[uploading,setUploading]=useState(false);
+  const fileRef=useRef(null);
+
+  useEffect(()=>{
+    api.get("/indicadores/lancamentos/"+row.id+"/anexos")
+      .then(setAnexos).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[row.id]);
+
+  const upload=async e=>{
+    const files=e.target.files;
+    if(!files||files.length===0)return;
+    setUploading(true);
+    const fd=new FormData();
+    for(const f of files)fd.append("files",f);
+    try{
+      const novos=await api.upload("/indicadores/lancamentos/"+row.id+"/anexos",fd);
+      setAnexos(a=>[...a,...novos]);
+    }catch(e){alert(e.message);}
+    finally{setUploading(false);e.target.value="";}
+  };
+
+  const del=async id=>{
+    if(!window.confirm("Excluir este anexo?"))return;
+    try{await api.delete("/indicadores/lancamentos/anexos/"+id);setAnexos(a=>a.filter(x=>x.id!==id));}
+    catch(e){alert(e.message);}
+  };
+
+  const download=async anexo=>{
+    try{
+      const res=await fetch((process.env.REACT_APP_API_URL||"/api")+"/indicadores/lancamentos/anexos/"+anexo.id+"/download",
+        {headers:api.token?{Authorization:"Bearer "+api.token}:{}});
+      if(!res.ok)throw new Error("Erro ao baixar arquivo.");
+      const blob=await res.blob();
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");a.href=url;a.download=anexo.nomeOriginal;a.click();
+      URL.revokeObjectURL(url);
+    }catch(e){alert(e.message);}
+  };
+
+  const rows=anexos.map(a=>
+    createElement("tr",{key:a.id},
+      createElement("td",{style:S.td},a.nomeOriginal),
+      createElement("td",{style:{...S.td,whiteSpace:"nowrap"}},new Date(a.createdAt).toLocaleString("pt-BR")),
+      createElement("td",{style:S.td},
+        createElement("button",{style:{...S.actionBtn,...S.btnEdit},onClick:()=>download(a)},"⬇ Baixar"),
+        canEdit&&createElement("button",{style:{...S.actionBtn,...S.btnDel},onClick:()=>del(a.id)},"🗑 Excluir")
+      )
+    )
+  );
+
+  return(
+    <Modal title={"Anexos — "+row.indicadorNome+" ("+row.dataReferencia+")"} onClose={onClose}>
+      {loading?<Spinner/>:anexos.length===0
+        ?<div style={{color:C.textLight,textAlign:"center",padding:24}}>Nenhum anexo vinculado.</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Arquivo","Data","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead><tbody>{rows}</tbody></table>
+        </div>
+      }
+      {canEdit&&<div style={{marginTop:16}}>
+        <input ref={fileRef} type="file" multiple onChange={upload} style={{display:"none"}}/>
+        <button style={S.btnAdd} onClick={()=>fileRef.current&&fileRef.current.click()} disabled={uploading}>
+          {uploading?"Enviando...":"+ Adicionar Arquivos"}
+        </button>
+      </div>}
+    </Modal>
+  );
+}
+
 // ── LANÇAMENTO DE INDICADOR (s59) ──────────────────────────────
 function LancamentoIndicadorScreen({user}){
   const[rows,setRows]=useState([]);
@@ -2256,6 +2330,7 @@ function LancamentoIndicadorScreen({user}){
   const[delId,setDelId]=useState(null);
   const[saving,setSaving]=useState(false);
   const[filters,setFilters]=useState({dateFrom:"",dateTo:"",teamId:"",indicadorId:""});
+  const[anexosRow,setAnexosRow]=useState(null);
   const emptyForm={id:null,teamId:"",indicadorId:"",dataReferencia:"",valorRealizado:"",observacao:""};
   const[form,setForm]=useState(emptyForm);
   const p=user.permissions?.s59;
@@ -2334,6 +2409,7 @@ function LancamentoIndicadorScreen({user}){
             <td style={{...S.td,fontWeight:700,color:corStatus}}>{fmtPctIndicador(rp)}</td>
             <td style={{...S.td,color:C.textLight}}>{r.observacao||"—"}</td>
             <td style={S.td}>
+              <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}} onClick={()=>setAnexosRow(r)}>📎 Anexos</button>
               {r.periodoFechado?<span style={{...S.badge,background:"#FFEBEE",color:C.danger}}>🔒 Fechado</span>:<>{p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(r)}><Icon name="edit" size={13}/> Editar</button>}{p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(r.id)}><Icon name="trash" size={13}/> Excluir</button>}</>}
             </td>
           </tr>
@@ -2363,6 +2439,7 @@ function LancamentoIndicadorScreen({user}){
         </Modal>
       )}
       {delId&&<ConfirmModal msg="Deseja excluir este lançamento?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+      {anexosRow&&<AnexosLancamentoModal row={anexosRow} onClose={()=>setAnexosRow(null)} canEdit={!!p?.edit}/>}
     </div>
   );
 }
