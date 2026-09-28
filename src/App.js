@@ -941,7 +941,7 @@ function EquipeItensModal({equipe,user,onClose}){
                       <td style={S.td}>{it.centroCusto||"—"}</td>
                       <td style={S.td}>
                         {podeVerAvaliacao&&<button style={{...S.actionBtn,background:"#F3E5F5",color:"#7B1FA2",border:"1px solid #E1BEE7"}} onClick={()=>setAvaliacaoItem(it)}>📊 Avaliação</button>}
-                        {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
+          
                         {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
                       </td>
                     </tr>
@@ -2246,6 +2246,70 @@ function ValorKmScreen({user}){
   );
 }
 
+
+function MetasIndicadorModal({indicador, onClose, canEdit}){
+  const[metas,setMetas]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[saving,setSaving]=useState(false);
+  const[form,setForm]=useState({dataInicio:"",dataFim:"",meta:""});
+
+  useEffect(()=>{
+    api.get("/indicadores/"+indicador.id+"/metas")
+      .then(setMetas).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[indicador.id]);
+
+  const add=async()=>{
+    if(!form.dataInicio||!form.dataFim||form.meta==="")return alert("Preencha todos os campos.");
+    setSaving(true);
+    try{
+      const nova=await api.post("/indicadores/"+indicador.id+"/metas",form);
+      setMetas(m=>[...m,nova].sort((a,b)=>a.dataInicio.localeCompare(b.dataInicio)));
+      setForm({dataInicio:"",dataFim:"",meta:""});
+    }catch(e){alert(e.message);}finally{setSaving(false);}
+  };
+
+  const del=async id=>{
+    if(!window.confirm("Excluir esta vigência?"))return;
+    try{
+      await api.delete("/indicadores/"+indicador.id+"/metas/"+id);
+      setMetas(m=>m.filter(x=>x.id!==id));
+    }catch(e){alert(e.message);}
+  };
+
+  const rows=metas.map(m=>
+    createElement("tr",{key:m.id},
+      createElement("td",{style:S.td},m.dataInicio),
+      createElement("td",{style:S.td},m.dataFim),
+      createElement("td",{style:S.td},m.meta),
+      createElement("td",{style:S.td},
+        canEdit&&createElement("button",{style:{...S.actionBtn,...S.btnDel},onClick:()=>del(m.id)},"🗑 Excluir")
+      )
+    )
+  );
+
+  return(
+    <Modal title={"Metas — "+indicador.nome} onClose={onClose}>
+      {loading?<Spinner/>:metas.length===0
+        ?<div style={{color:C.textLight,textAlign:"center",padding:24}}>Nenhuma vigência cadastrada.</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={S.table}><thead><tr>
+            {["Data Início","Data Fim","Meta","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          </tr></thead><tbody>{rows}</tbody></table>
+        </div>
+      }
+      {canEdit&&<div style={{marginTop:16,padding:16,background:C.bg,borderRadius:8,border:"1px solid "+C.border}}>
+        <div style={{fontWeight:600,marginBottom:12,fontSize:13}}>Nova Vigência</div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end"}}>
+          <Input label="Data Início" type="date" value={form.dataInicio} onChange={v=>setForm(f=>({...f,dataInicio:v}))}/>
+          <Input label="Data Fim" type="date" value={form.dataFim} onChange={v=>setForm(f=>({...f,dataFim:v}))}/>
+          <Input label="Meta" type="number" value={form.meta} onChange={v=>setForm(f=>({...f,meta:v}))} placeholder="ex: 100"/>
+          <button style={{...S.btnSave,opacity:saving?0.7:1}} onClick={add} disabled={saving}>{saving?"Salvando...":"+ Adicionar"}</button>
+        </div>
+      </div>}
+    </Modal>
+  );
+}
+
 // ── MODAL DE ANEXOS — LANÇAMENTO DE INDICADOR ──────────────────
 function AnexosLancamentoModal({row, onClose, canEdit}){
   const[anexos,setAnexos]=useState([]);
@@ -3049,6 +3113,7 @@ function IndicadoresScreen({user}){
   const[loading,setLoading]=useState(true);
   const[modal,setModal]=useState(false);
   const[delId,setDelId]=useState(null);
+  const[metasRow,setMetasRow]=useState(null);
   const[saving,setSaving]=useState(false);
   const emptyForm={id:null,teamId:"",nome:"",unidade:"",meta:"",periodicidade:"Mensal",origem:"Manual",direcao:"Maior",limiteMaximo:"",observacao:"",ativo:true};
   const[form,setForm]=useState(emptyForm);
@@ -3090,20 +3155,20 @@ function IndicadoresScreen({user}){
       {items.length===0?<div style={S.emptyState}><span style={S.emptyIcon}>📈</span>Nenhum indicador cadastrado.</div>:(
         <div style={{overflowX:"auto"}}>
         <table style={S.table}><thead><tr>
-          {["Nome","Equipe","Unidade","Meta","Direção","Periodicidade","Origem","Observação","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
+          {["Nome","Equipe","Unidade","Direção","Periodicidade","Origem","Observação","Status","Ações"].map(h=><th key={h} style={S.th}>{h}</th>)}
         </tr></thead>
         <tbody>{items.map(it=>(
           <tr key={it.id} onMouseOver={e=>e.currentTarget.style.background=C.bg} onMouseOut={e=>e.currentTarget.style.background=C.white}>
             <td style={{...S.td,fontWeight:600}}>{it.nome} <span title={it.direcao==="Menor"?"Menor é melhor":"Maior é melhor"}>{setaDirecao(it.direcao)}</span></td>
             <td style={S.td}>{it.teamName||"—"}</td>
             <td style={S.td}>{it.unidade||"—"}</td>
-            <td style={S.td}>{it.meta??"—"}</td>
             <td style={S.td}>{it.direcao==="Menor"?"Menor é melhor":"Maior é melhor"}</td>
             <td style={S.td}>{it.periodicidade}</td>
             <td style={S.td}>{it.origem}</td>
             <td style={S.td}><RichTextCell html={it.observacao} label="Observação"/></td>
             <td style={S.td}><span style={{...S.badge,...(it.ativo?S.badgeActive:S.badgeInactive)}}>{it.ativo?"Ativo":"Inativo"}</span></td>
             <td style={S.td}>
+              <button style={{...S.actionBtn,background:"#E8F5E9",color:"#2E7D32",border:"1px solid #C8E6C9"}} onClick={()=>setMetasRow(it)}>Metas</button>
               {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
               {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
             </td>
@@ -3117,7 +3182,6 @@ function IndicadoresScreen({user}){
           <SelectField label="Equipe" value={form.teamId} onChange={v=>setForm(f=>({...f,teamId:v}))}
             options={teams.map(t=>({value:t.id,label:t.name}))} required/>
           <Input label="Unidade de Medida" value={form.unidade} onChange={v=>setForm(f=>({...f,unidade:v}))} placeholder="ex: %, chamados, horas"/>
-          <Input label="Meta" type="number" value={form.meta} onChange={v=>setForm(f=>({...f,meta:v}))}/>
           <SelectField label="Direção (o que é melhor)" value={form.direcao} onChange={v=>setForm(f=>({...f,direcao:v}))} options={DIRECOES_INDICADOR}/>
           {form.direcao==="Menor"&&(
             <Input label="Limite Máximo do % (opcional)" type="number" value={form.limiteMaximo} onChange={v=>setForm(f=>({...f,limiteMaximo:v}))} placeholder="ex: 200"/>
@@ -3141,6 +3205,7 @@ function IndicadoresScreen({user}){
         </Modal>
       )}
       {delId&&<ConfirmModal msg="Deseja excluir este indicador?" onConfirm={del} onCancel={()=>setDelId(null)}/>}
+      {metasRow&&<MetasIndicadorModal indicador={metasRow} onClose={()=>setMetasRow(null)} canEdit={!!p?.edit}/>}
     </div>
   );
 }
