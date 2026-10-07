@@ -905,7 +905,8 @@ function EquipeItensModal({equipe,user,onClose}){
     catch(e){alert(e.message);}
   };
 
-  const registrarCiencia=async itemId=>{
+  const confirmarCiencia=async itemId=>{
+    if(!window.confirm("Confirma que está ciente da sua Missão, Papel e Atribuições?"))return;
     try{
       const upd=await api.post(`/teams/${equipe.id}/itens/${itemId}/ciencia`,{});
       setItens(prev=>prev.map(it=>it.id===itemId?{...it,cienciaNome:upd.cienciaNome,cienciaAt:upd.cienciaAt}:it));
@@ -948,9 +949,11 @@ function EquipeItensModal({equipe,user,onClose}){
                       <td style={S.td}>{it.centroCusto||"—"}</td>
                       <td style={{...S.td,fontSize:12,color:it.cienciaNome?C.text:C.textLight,whiteSpace:"nowrap"}}>{it.cienciaNome?it.cienciaNome+" — "+it.cienciaAt:"—"}</td>
                       <td style={S.td}>
-                        {podeVerAvaliacao&&<button style={{...S.actionBtn,background:"#F3E5F5",color:"#7B1FA2",border:"1px solid #E1BEE7"}} onClick={()=>setAvaliacaoItem(it)}>📊 Avaliação</button>}
-                        <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}} onClick={()=>registrarCiencia(it.id)}>Ciencia</button>
-                        {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
+                        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                          {podeVerAvaliacao&&<button style={{...S.actionBtn,background:"#F3E5F5",color:"#7B1FA2",border:"1px solid #E1BEE7"}} onClick={()=>setAvaliacaoItem(it)}>📊 Avaliação</button>}
+                          <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}} onClick={()=>confirmarCiencia(it.id)}>Ciência</button>
+                          {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
+                        </div>
                       </td>
                     </tr>
                   ))}</tbody></table>
