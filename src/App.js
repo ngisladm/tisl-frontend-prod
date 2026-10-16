@@ -2482,7 +2482,7 @@ function LancamentoIndicadorScreen({user}){
             <td style={S.td}>{metaPrefixo(r.direcao)}{r.meta??"—"}</td>
             <td style={{...S.td,fontWeight:700,color:corStatus}}>{r.valorRealizado}</td>
             <td style={{...S.td,fontWeight:700,color:corStatus}}>{fmtPctIndicador(rp)}</td>
-            <td style={{...S.td,color:C.textLight}}>{r.observacao||"—"}</td>
+            <td style={S.td}><RichTextCell html={r.observacao} label="Observação"/></td>
             <td style={S.td}>
               <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}} onClick={()=>setAnexosRow(r)}>📎 Anexos</button>
               {r.periodoFechado?<span style={{...S.badge,background:"#FFEBEE",color:C.danger}}>🔒 Fechado</span>:<>{p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(r)}><Icon name="edit" size={13}/> Editar</button>}{p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(r.id)}><Icon name="trash" size={13}/> Excluir</button>}</>}
@@ -6970,6 +6970,7 @@ function InventarioAtivosScreen({user}){
   const[filtIccid,setFiltIccid]=useState("");
   const[filtAcesso,setFiltAcesso]=useState("");
   const[filtEstrutura,setFiltEstrutura]=useState("");
+  const[filtFornecedor,setFiltFornecedor]=useState("");
   const[searched,setSearched]=useState(false);
 
   useEffect(()=>{
@@ -6981,6 +6982,7 @@ function InventarioAtivosScreen({user}){
   const empOpts=useMemo(()=>[...new Set(allData.map(r=>r.companyName||"").filter(Boolean))].sort(),[allData]);
   const stOpts=useMemo(()=>[...new Set(allData.map(r=>r.statusAtivo||"").filter(Boolean))].sort(),[allData]);
   const opOpts=useMemo(()=>[...new Set(allData.map(r=>r.operadoraName||"").filter(Boolean))].sort(),[allData]);
+  const fornOpts=useMemo(()=>[...new Set(allData.map(r=>r.supplierName||"").filter(Boolean))].sort(),[allData]);
 
   const filtered=useMemo(()=>{
     let d=allData;
@@ -6988,10 +6990,10 @@ function InventarioAtivosScreen({user}){
     const fe=(f,fn)=>{if(f)d=d.filter(r=>r[fn]===f);};
     fi(filtNome,"nomeFuncionario");fi(filtCpf,"cpf");fe(filtTipo,"tipoAtivoName");fe(filtEmp,"companyName");
     fi(filtAtivo,"ativoNome");fi(filtSerie,"numeroSerie");fi(filtDoc,"numeroDocumento");
-    fe(filtStatus,"statusAtivo");fe(filtOp,"operadoraName");
+    fe(filtStatus,"statusAtivo");fe(filtOp,"operadoraName");fe(filtFornecedor,"supplierName");
     fi(filtLinha,"numeroLinha");fi(filtIccid,"iccid");fi(filtAcesso,"acesso");fi(filtEstrutura,"estrutura");
     return d;
-  },[allData,filtNome,filtCpf,filtTipo,filtEmp,filtAtivo,filtSerie,filtDoc,filtStatus,filtOp,filtLinha,filtIccid,filtAcesso,filtEstrutura]);
+  },[allData,filtNome,filtCpf,filtTipo,filtEmp,filtAtivo,filtSerie,filtDoc,filtStatus,filtOp,filtFornecedor,filtLinha,filtIccid,filtAcesso,filtEstrutura]);
 
   const grouped=useMemo(()=>{
     const map=new Map();
@@ -7080,6 +7082,9 @@ function InventarioAtivosScreen({user}){
         </select>
         <select value={filtOp} onChange={e=>setFiltOp(e.target.value)} style={{...S.select,width:"auto",minWidth:140}}>
           <option value="">Todas as operadoras</option>{opOpts.map(o=><option key={o}>{o}</option>)}
+        </select>
+        <select value={filtFornecedor} onChange={e=>setFiltFornecedor(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
+          <option value="">Todos os fornecedores</option>{fornOpts.map(f=><option key={f}>{f}</option>)}
         </select>
         <input placeholder="Nº Linha..." value={filtLinha} onChange={e=>setFiltLinha(e.target.value)} style={{...S.input,width:"auto",minWidth:110,padding:"6px 10px",fontSize:13}}/>
         <input placeholder="ICCID..." value={filtIccid} onChange={e=>setFiltIccid(e.target.value)} style={{...S.input,width:"auto",minWidth:110,padding:"6px 10px",fontSize:13}}/>
@@ -7225,6 +7230,7 @@ function InventarioAtivosTercScreen({user}){
   const[filtAtivo,setFiltAtivo]=useState("");
   const[filtSerie,setFiltSerie]=useState("");
   const[filtStatus,setFiltStatus]=useState("");
+  const[filtFornecedor,setFiltFornecedor]=useState("");
   const[searched,setSearched]=useState(false);
   useEffect(()=>{
     if(!p?.view)return;
@@ -7233,6 +7239,7 @@ function InventarioAtivosTercScreen({user}){
   const tipoOpts=useMemo(()=>[...new Set(allData.map(r=>r.tipoAtivoName||"").filter(Boolean))].sort(),[allData]);
   const empOpts=useMemo(()=>[...new Set(allData.map(r=>r.companyName||r.empresaLocalizacao||"").filter(Boolean))].sort(),[allData]);
   const stOpts=useMemo(()=>[...new Set(allData.map(r=>r.statusAtivo||"").filter(Boolean))].sort(),[allData]);
+  const fornOpts=useMemo(()=>[...new Set(allData.map(r=>r.supplierName||"").filter(Boolean))].sort(),[allData]);
   const filtered=useMemo(()=>{
     let d=allData;
     if(filtLoc)d=d.filter(r=>(r.filialNome||"").toLowerCase().includes(filtLoc.toLowerCase()));
@@ -7241,8 +7248,9 @@ function InventarioAtivosTercScreen({user}){
     if(filtAtivo)d=d.filter(r=>(r.ativoNome||"").toLowerCase().includes(filtAtivo.toLowerCase()));
     if(filtSerie)d=d.filter(r=>(r.numeroSerie||"").toLowerCase().includes(filtSerie.toLowerCase()));
     if(filtStatus)d=d.filter(r=>r.statusAtivo===filtStatus);
+    if(filtFornecedor)d=d.filter(r=>r.supplierName===filtFornecedor);
     return d;
-  },[allData,filtLoc,filtTipo,filtEmp,filtAtivo,filtSerie,filtStatus]);
+  },[allData,filtLoc,filtTipo,filtEmp,filtAtivo,filtSerie,filtStatus,filtFornecedor]);
   const grouped=useMemo(()=>{
     const map=new Map();
     for(const r of filtered){
@@ -7293,6 +7301,9 @@ function InventarioAtivosTercScreen({user}){
         <input placeholder="Nº de Série..." value={filtSerie} onChange={e=>setFiltSerie(e.target.value)} style={{...S.input,width:"auto",minWidth:120,padding:"6px 10px",fontSize:13}}/>
         <select value={filtStatus} onChange={e=>setFiltStatus(e.target.value)} style={{...S.select,width:"auto",minWidth:120}}>
           <option value="">Todos os status</option>{stOpts.map(s=><option key={s}>{s}</option>)}
+        </select>
+        <select value={filtFornecedor} onChange={e=>setFiltFornecedor(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
+          <option value="">Todos os fornecedores</option>{fornOpts.map(f=><option key={f}>{f}</option>)}
         </select>
         <button style={S.btnSave} onClick={()=>setSearched(true)}>Filtrar</button>
       </div>
@@ -7382,7 +7393,7 @@ function ControleAtivosTerceirizadosScreen({user}){
   const[err,setErr]=useState("");
   const[errItem,setErrItem]=useState("");
   const[savingItem,setSavingItem]=useState(false);
-  const[filterCA,setFilterCA]=useState({localizacao:"",empresa:"",numeroSerie:"",numeroDocumento:"",patrimonio:""});
+  const[filterCA,setFilterCA]=useState({localizacao:"",empresa:"",fornecedor:"",numeroSerie:"",numeroDocumento:"",patrimonio:""});
   const[csvImpItensModal,setCsvImpItensModal]=useState(false);
   const[csvImpItensRows,setCsvImpItensRows]=useState(null);
   const[csvImpItensBusy,setCsvImpItensBusy]=useState(false);
@@ -7559,11 +7570,12 @@ function ControleAtivosTerceirizadosScreen({user}){
     };
   };
 
-  const hasItemFilter=filterCA.empresa||filterCA.operadora||filterCA.numeroLinha||filterCA.numeroSerie||filterCA.numeroDocumento||filterCA.patrimonio;
+  const hasItemFilter=filterCA.empresa||filterCA.operadora||filterCA.fornecedor||filterCA.numeroLinha||filterCA.numeroSerie||filterCA.numeroDocumento||filterCA.patrimonio;
   const matchingIds=hasItemFilter?new Set(
     allItens.filter(i=>{
       if(filterCA.empresa&&i.companyId!==filterCA.empresa)return false;
       if(filterCA.operadora&&i.operadoraId!==filterCA.operadora)return false;
+      if(filterCA.fornecedor&&i.supplierId!==filterCA.fornecedor)return false;
       if(filterCA.numeroLinha&&!(i.numeroLinha||"").toLowerCase().includes(filterCA.numeroLinha.toLowerCase()))return false;
       if(filterCA.numeroSerie&&!(i.numeroSerie||"").toLowerCase().includes(filterCA.numeroSerie.toLowerCase()))return false;
       if(filterCA.numeroDocumento&&!(i.numeroDocumento||"").toLowerCase().includes(filterCA.numeroDocumento.toLowerCase()))return false;
@@ -7597,7 +7609,10 @@ function ControleAtivosTerceirizadosScreen({user}){
             <option value="">Empresa</option>
             {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <input placeholder="Nº Série" value={filterCA.numeroSerie} onChange={e=>setFilterCA(f=>({...f,numeroSerie:e.target.value}))} style={{...caFilterStyle,minWidth:110}}/>
+          <select value={filterCA.fornecedor} onChange={e=>setFilterCA(f=>({...f,fornecedor:e.target.value}))} style={caFilterStyle}>
+            <option value="">Fornecedor</option>
+            {suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
           <input placeholder="Nº Série" value={filterCA.numeroSerie} onChange={e=>setFilterCA(f=>({...f,numeroSerie:e.target.value}))} style={{...caFilterStyle,minWidth:110}}/>
           <input placeholder="Nº Documento" value={filterCA.numeroDocumento} onChange={e=>setFilterCA(f=>({...f,numeroDocumento:e.target.value}))} style={{...caFilterStyle,minWidth:120}}/>
           <input placeholder="Patrimônio" value={filterCA.patrimonio} onChange={e=>setFilterCA(f=>({...f,patrimonio:e.target.value}))} style={{...caFilterStyle,minWidth:110}}/>
