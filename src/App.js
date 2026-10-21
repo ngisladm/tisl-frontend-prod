@@ -951,6 +951,7 @@ function EquipeItensModal({equipe,user,onClose}){
                       <td style={S.td}>
                         <div style={{display:"flex",flexDirection:"column",gap:6}}>
                           {podeVerAvaliacao&&<button style={{...S.actionBtn,background:"#F3E5F5",color:"#7B1FA2",border:"1px solid #E1BEE7"}} onClick={()=>setAvaliacaoItem(it)}>📊 Avaliação</button>}
+                          {p?.edit&&<button style={{...S.actionBtn,...S.btnEdit}} onClick={()=>openEdit(it)}><Icon name="edit" size={13}/> Editar</button>}
                           <button style={{...S.actionBtn,background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB"}} onClick={()=>confirmarCiencia(it.id)}>Ciência</button>
                           {p?.delete&&<button style={{...S.actionBtn,...S.btnDel}} onClick={()=>setDelId(it.id)}><Icon name="trash" size={13}/> Excluir</button>}
                         </div>
