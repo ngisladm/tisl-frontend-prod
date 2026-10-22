@@ -202,7 +202,7 @@ function defaultTurnoTimes(dateStr, turno, isFeriado){
   const d=new Date(dateStr+"T12:00:00Z"); const dow=d.getUTCDay();
   const isWE = dow===0||dow===6||isFeriado;
   if(!isWE) return turno==="turno1"?{hi:"00:00",hf:"07:30"}:{hi:"17:30",hf:"00:00"};
-  return turno==="turno1"?{hi:"00:00",hf:"12:00"}:{hi:"12:00",hf:"00:00"};
+  return turno==="turno1"?{hi:"00:00",hf:"07:30"}:{hi:"07:30",hf:"00:00"};
 }
 
 function parseDateBR(str){ if(!str)return null; const[d,m,y]=str.split("/"); return`${y}-${m}-${d}`; }
@@ -1654,14 +1654,14 @@ function TurnoDetalheModal({dateStr,turno,turnoData,teamUsers,loggedUser,onSave,
   const[extraFim,setExtraFim]=useState(turnoData?.extraFim||"");
   const[observacao,setObservacao]=useState(turnoData?.observacao||"");
   const[saving,setSaving]=useState(false);
+  const feriadoMounted=useRef(false);
 
-  // Recalculate defaults when feriado changes
+  // Recalculate hours whenever feriado is toggled (skip first render)
   useEffect(()=>{
+    if(!feriadoMounted.current){feriadoMounted.current=true;return;}
     const isWE=dow===0||dow===6||isFeriado;
-    if(!turnoData?.horaInicio){
-      if(!isWE){setHoraInicio(turno==="turno1"?"00:00":"17:30");setHoraFim(turno==="turno1"?"07:30":"00:00");}
-      else{setHoraInicio(turno==="turno1"?"00:00":"12:00");setHoraFim(turno==="turno1"?"12:00":"00:00");}
-    }
+    if(!isWE){setHoraInicio(turno==="turno1"?"00:00":"17:30");setHoraFim(turno==="turno1"?"07:30":"00:00");}
+    else{setHoraInicio(turno==="turno1"?"00:00":"07:30");setHoraFim(turno==="turno1"?"07:30":"00:00");}
   },[isFeriado]);
 
   // Only the assigned user (or Master) can edit extras
