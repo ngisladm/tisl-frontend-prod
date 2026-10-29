@@ -7335,14 +7335,46 @@ function InventarioAtivosTercScreen({user}){
   );
 }
 
+// ── MULTISELECT DROPDOWN ──────────────────────────────────────
+function MultiSelect({options,value,onChange,placeholder,minWidth}){
+  const[open,setOpen]=useState(false);
+  const ref=useRef(null);
+  useEffect(()=>{
+    const handle=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener("mousedown",handle);
+    return()=>document.removeEventListener("mousedown",handle);
+  },[]);
+  const toggle=opt=>{
+    if(value.includes(opt))onChange(value.filter(v=>v!==opt));
+    else onChange([...value,opt]);
+  };
+  const label=value.length===0?placeholder:value.length===1?value[0]:value.length+" selecionados";
+  const checkItems=options.map(opt=>
+    createElement("label",{key:opt,style:{display:"flex",alignItems:"center",gap:8,padding:"7px 12px",cursor:"pointer",fontSize:13,color:C.text,userSelect:"none"}},
+      createElement("input",{type:"checkbox",checked:value.includes(opt),onChange:()=>toggle(opt),style:{width:14,height:14,accentColor:C.primary,cursor:"pointer"}}),
+      opt
+    )
+  );
+  const dropdown=open?createElement("div",{style:{position:"absolute",top:"100%",left:0,zIndex:200,background:C.white,border:"1px solid "+C.border,borderRadius:6,minWidth:"100%",maxHeight:240,overflowY:"auto",boxShadow:"0 4px 12px rgba(0,0,0,0.15)",marginTop:2}},checkItems):null;
+  return(
+    <div ref={ref} style={{position:"relative",minWidth:minWidth||160}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{...S.select,cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",fontFamily:"inherit"}}>
+        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,color:value.length?C.text:C.textLight}}>{label}</span>
+        <span style={{marginLeft:6,fontSize:10,color:C.textLight,flexShrink:0}}>{open?"▲":"▼"}</span>
+      </button>
+      {dropdown}
+    </div>
+  );
+}
+
 // ── RELATÓRIO ATIVOS POR COLIGADA (s73) ──────────────────────
 function RelatorioAtivosPorColigadaScreen({user}){
   const p=user.permissions?.s73;
   const[allData,setAllData]=useState([]);
   const[loading,setLoading]=useState(true);
-  const[filtColigada,setFiltColigada]=useState("");
-  const[filtTipo,setFiltTipo]=useState("");
-  const[filtAtivoOp,setFiltAtivoOp]=useState("");
+  const[filtColigada,setFiltColigada]=useState([]);
+  const[filtTipo,setFiltTipo]=useState([]);
+  const[filtAtivoOp,setFiltAtivoOp]=useState([]);
   const[filtFuncionario,setFiltFuncionario]=useState("");
   const[searched,setSearched]=useState(false);
 
@@ -7357,9 +7389,9 @@ function RelatorioAtivosPorColigadaScreen({user}){
 
   const filtered=useMemo(()=>{
     let d=allData;
-    if(filtColigada)d=d.filter(r=>(r.coligada||"")===filtColigada);
-    if(filtTipo)d=d.filter(r=>r.tipoAtivoName===filtTipo);
-    if(filtAtivoOp)d=d.filter(r=>(r.ativoNome||r.operadoraName||"")===filtAtivoOp);
+    if(filtColigada.length)d=d.filter(r=>filtColigada.includes(r.coligada||""));
+    if(filtTipo.length)d=d.filter(r=>filtTipo.includes(r.tipoAtivoName||""));
+    if(filtAtivoOp.length)d=d.filter(r=>filtAtivoOp.includes(r.ativoNome||r.operadoraName||""));
     if(filtFuncionario)d=d.filter(r=>(r.nomeFuncionario||"").toLowerCase().includes(filtFuncionario.toLowerCase()));
     return d;
   },[allData,filtColigada,filtTipo,filtAtivoOp,filtFuncionario]);
@@ -7449,15 +7481,9 @@ function RelatorioAtivosPorColigadaScreen({user}){
         </div>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
-        <select value={filtColigada} onChange={e=>setFiltColigada(e.target.value)} style={{...S.select,width:"auto",minWidth:160}}>
-          <option value="">Todas as coligadas</option>{coligadaOpts.map(c=><option key={c}>{c}</option>)}
-        </select>
-        <select value={filtTipo} onChange={e=>setFiltTipo(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
-          <option value="">Todos os tipos</option>{tipoOpts.map(t=><option key={t}>{t}</option>)}
-        </select>
-        <select value={filtAtivoOp} onChange={e=>setFiltAtivoOp(e.target.value)} style={{...S.select,width:"auto",minWidth:170}}>
-          <option value="">Todos os ativos/operadoras</option>{ativoOpOpts.map(a=><option key={a}>{a}</option>)}
-        </select>
+        <MultiSelect options={coligadaOpts} value={filtColigada} onChange={setFiltColigada} placeholder="Todas as coligadas" minWidth={170}/>
+        <MultiSelect options={tipoOpts} value={filtTipo} onChange={setFiltTipo} placeholder="Todos os tipos" minWidth={150}/>
+        <MultiSelect options={ativoOpOpts} value={filtAtivoOp} onChange={setFiltAtivoOp} placeholder="Todos os ativos/operadoras" minWidth={200}/>
         <input placeholder="Funcionário..." value={filtFuncionario} onChange={e=>setFiltFuncionario(e.target.value)} style={{...S.input,width:"auto",minWidth:150}}/>
         <button style={S.btnSave} onClick={()=>setSearched(true)}>Filtrar</button>
       </div>
