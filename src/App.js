@@ -7335,6 +7335,137 @@ function InventarioAtivosTercScreen({user}){
   );
 }
 
+// ── RELATÓRIO ATIVOS POR COLIGADA (s73) ──────────────────────
+function RelatorioAtivosPorColigadaScreen({user}){
+  const p=user.permissions?.s73;
+  const[allData,setAllData]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[filtColigada,setFiltColigada]=useState("");
+  const[filtTipo,setFiltTipo]=useState("");
+  const[filtAtivoOp,setFiltAtivoOp]=useState("");
+  const[filtFuncionario,setFiltFuncionario]=useState("");
+  const[searched,setSearched]=useState(false);
+
+  useEffect(()=>{
+    if(!p?.view)return;
+    api.get("/controle-ativos/itens/relatorio").then(setAllData).catch(e=>alert(e.message)).finally(()=>setLoading(false));
+  },[]);
+
+  const coligadaOpts=useMemo(()=>[...new Set(allData.map(r=>r.coligada||"").filter(Boolean))].sort(),[allData]);
+  const tipoOpts=useMemo(()=>[...new Set(allData.map(r=>r.tipoAtivoName||"").filter(Boolean))].sort(),[allData]);
+  const ativoOpOpts=useMemo(()=>[...new Set(allData.map(r=>r.ativoNome||r.operadoraName||"").filter(Boolean))].sort(),[allData]);
+
+  const filtered=useMemo(()=>{
+    let d=allData;
+    if(filtColigada)d=d.filter(r=>(r.coligada||"")===filtColigada);
+    if(filtTipo)d=d.filter(r=>r.tipoAtivoName===filtTipo);
+    if(filtAtivoOp)d=d.filter(r=>(r.ativoNome||r.operadoraName||"")===filtAtivoOp);
+    if(filtFuncionario)d=d.filter(r=>(r.nomeFuncionario||"").toLowerCase().includes(filtFuncionario.toLowerCase()));
+    return d;
+  },[allData,filtColigada,filtTipo,filtAtivoOp,filtFuncionario]);
+
+  const grouped=useMemo(()=>{
+    const map=new Map();
+    for(const r of filtered){
+      const coligada=r.coligada||"(sem coligada)";
+      const tipo=r.tipoAtivoName||"(sem tipo)";
+      const ativoOp=r.ativoNome||r.operadoraName||"(sem ativo/operadora)";
+      const key=coligada+"|"+tipo+"|"+ativoOp;
+      if(!map.has(key))map.set(key,{coligada,tipo,ativoOp,count:0});
+      map.get(key).count++;
+    }
+    return[...map.values()].sort((a,b)=>a.coligada.localeCompare(b.coligada)||a.tipo.localeCompare(b.tipo)||a.ativoOp.localeCompare(b.ativoOp));
+  },[filtered]);
+
+  const exportPDF=()=>{
+    const doc=new jsPDF({orientation:"landscape"});
+    doc.setFontSize(14);doc.text("Relatório de Ativos por Coligada",14,14);
+    autoTable(doc,{startY:20,
+      head:[["Coligada","Tipo de Ativo","Operadora/Ativo","Qtd"]],
+      body:grouped.map(r=>[r.coligada,r.tipo,r.ativoOp,r.count]),
+      styles:{fontSize:9},headStyles:{fillColor:[97,97,97]}});
+    doc.save("relatorio-ativos-coligada.pdf");
+  };
+  const exportExcel=()=>{
+    const ws=XLSX.utils.json_to_sheet(grouped.map(r=>({"Coligada":r.coligada,"Tipo de Ativo":r.tipo,"Operadora/Ativo":r.ativoOp,"Quantidade":r.count})));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Ativos Coligada");
+    XLSX.writeFile(wb,"relatorio-ativos-coligada.xlsx");
+  };
+
+  if(!p?.view)return<div style={S.emptyState}><span style={S.emptyIcon}>🔒</span>Sem permissão.</div>;
+  if(loading)return<Spinner/>;
+
+  const tableRows=grouped.map((r,i)=>{
+    const showColigada=i===0||grouped[i-1].coligada!==r.coligada;
+    const showTipo=i===0||grouped[i-1].coligada!==r.coligada||grouped[i-1].tipo!==r.tipo;
+    return createElement("tr",{key:i,
+        onMouseOver:e=>{e.currentTarget.style.background=C.bg;},
+        onMouseOut:e=>{e.currentTarget.style.background=C.white;}},
+      createElement("td",{style:{...S.td,fontWeight:showColigada?700:400,color:showColigada?C.accent:C.text}},showColigada?r.coligada:""),
+      createElement("td",{style:{...S.td,fontWeight:showTipo?600:400,color:showTipo?C.text:C.textLight}},showTipo?r.tipo:""),
+      createElement("td",{style:S.td},r.ativoOp),
+      createElement("td",{style:{...S.td,textAlign:"center"}},
+        createElement("span",{style:{...S.badge,background:"#EBF5FB",color:"#2980B9",fontWeight:700}},r.count)
+      )
+    );
+  });
+
+  let content;
+  if(!searched){
+    content=createElement("div",{style:S.emptyState},
+      createElement("span",{style:S.emptyIcon},"📊"),
+      "Use os filtros e clique em Filtrar."
+    );
+  } else if(grouped.length===0){
+    content=createElement("div",{style:S.emptyState},
+      createElement("span",{style:S.emptyIcon},"📊"),
+      "Nenhum dado encontrado."
+    );
+  } else {
+    content=createElement("div",{style:{overflowX:"auto"}},
+      createElement("div",{style:{fontSize:12,color:C.textLight,marginBottom:8}},
+        filtered.length+" item(ns) · "+grouped.length+" grupo(s)"
+      ),
+      createElement("table",{style:S.table},
+        createElement("thead",null,
+          createElement("tr",null,
+            ["Coligada","Tipo de Ativo","Operadora/Ativo","Qtd"].map(h=>
+              createElement("th",{key:h,style:S.th},h)
+            )
+          )
+        ),
+        createElement("tbody",null,tableRows)
+      )
+    );
+  }
+
+  return(
+    <div style={S.card}>
+      <div style={S.cardHeader}>
+        <span style={S.cardTitle}>📊 Relatório de Ativos por Coligada</span>
+        <div style={{display:"flex",gap:8}}>
+          <button style={S.btnSave} onClick={exportPDF} disabled={grouped.length===0}>⬇ PDF</button>
+          <button style={S.btnSave} onClick={exportExcel} disabled={grouped.length===0}>⬇ Excel</button>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+        <select value={filtColigada} onChange={e=>setFiltColigada(e.target.value)} style={{...S.select,width:"auto",minWidth:160}}>
+          <option value="">Todas as coligadas</option>{coligadaOpts.map(c=><option key={c}>{c}</option>)}
+        </select>
+        <select value={filtTipo} onChange={e=>setFiltTipo(e.target.value)} style={{...S.select,width:"auto",minWidth:150}}>
+          <option value="">Todos os tipos</option>{tipoOpts.map(t=><option key={t}>{t}</option>)}
+        </select>
+        <select value={filtAtivoOp} onChange={e=>setFiltAtivoOp(e.target.value)} style={{...S.select,width:"auto",minWidth:170}}>
+          <option value="">Todos os ativos/operadoras</option>{ativoOpOpts.map(a=><option key={a}>{a}</option>)}
+        </select>
+        <input placeholder="Funcionário..." value={filtFuncionario} onChange={e=>setFiltFuncionario(e.target.value)} style={{...S.input,width:"auto",minWidth:150}}/>
+        <button style={S.btnSave} onClick={()=>setSearched(true)}>Filtrar</button>
+      </div>
+      {content}
+    </div>
+  );
+}
+
 // ── CONTROLE DE ATIVOS TERCEIRIZADOS (s69) ────────────────────
 function MovimentacoesModalTerc({movModal,onClose,itensModal,localizacoes,onDone}){
   const[tipoMov,setTipoMov]=useState("Transferência");
@@ -13004,6 +13135,7 @@ const navConfig=[
     {id:"s25",label:"Resumo de Linhas",           icon:"signal"},
     {id:"s26",label:"Resumo de Ativos",                        icon:"package"},
     {id:"s27",label:"Inventário de Ativos",                    icon:"archive"},
+    {id:"s73",label:"Ativos por Coligada",                     icon:"chart"},
     {id:"s71",label:"Resumo de Ativos Terceirizados",          icon:"package"},
     {id:"s72",label:"Inventário de Ativos Terceirizados",      icon:"archive"},
     {id:"s42",label:"Firewall",                               icon:"monitor"},
@@ -13101,6 +13233,7 @@ const screenTitles={
   s25:"Relatórios › Resumo de Linhas",
   s26:"Relatórios › Resumo de Ativos",
   s27:"Relatórios › Inventário de Ativos",
+  s73:"Relatórios › Ativos por Coligada",
   s71:"Relatórios › Resumo de Ativos Terceirizados",
   s72:"Relatórios › Inventário de Ativos Terceirizados",
   s29:"Movimentações › Histórico de Movimentações de Ativos",
@@ -13201,6 +13334,7 @@ export default function App(){
     s27:<InventarioAtivosScreen user={user}/>,
     s71:<ResumoAtivosTercScreen user={user}/>,
     s72:<InventarioAtivosTercScreen user={user}/>,
+    s73:<RelatorioAtivosPorColigadaScreen user={user}/>,
     s29:<HistoricoMovimentacoesScreen user={user}/>,
     s30:<FeriasScreen user={user}/>,
     s31:<RelatorioFeriasScreen user={user}/>,
